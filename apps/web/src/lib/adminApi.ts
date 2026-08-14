@@ -1,0 +1,111 @@
+import type {
+  CreateZoneInput,
+  CreateMonsterInput,
+  CreateItemInput,
+  CreateCharacterClassInput,
+  ItemType,
+  StatKey,
+  CoreStatKey,
+  SkillKind,
+  SkillEffectType,
+  PotionConfig,
+} from "@mmo/shared";
+import { apiFetch } from "./apiClient";
+
+export interface ZoneDto {
+  id: string;
+  name: string;
+  description: string;
+  minLevel: number;
+  maxLevel: number;
+  monsters: { id: string; monsterId: string; spawnWeight: number; maxCount: number; monster: { id: string; name: string; level: number } }[];
+  drops: { id: string; itemId: string; dropChance: number; item: { id: string; name: string; type: string } }[];
+}
+
+export interface MonsterDto {
+  id: string;
+  name: string;
+  level: number;
+  hp: number;
+  stats: Partial<Record<StatKey, number>>;
+  skills: { name: string; description: string; power: number }[];
+  expReward: number;
+  goldReward: number;
+  drops: { id: string; itemId: string; dropChance: number; minQty: number; maxQty: number; item: { id: string; name: string; type: string } }[];
+}
+
+export interface ItemDto {
+  id: string;
+  name: string;
+  type: ItemType;
+  minLevel: number;
+  stackable: boolean;
+  maxStack: number;
+  description: string;
+  baseStats: Partial<Record<StatKey, number>>;
+  possibleStatRanges: { stat: StatKey; min: number; max: number; weight: number }[];
+  upgradeRequirements: { id: string; targetLevel: number; requiredItemId: string; requiredQty: number; requiredItem: { id: string; name: string } }[];
+  potionTrigger: PotionConfig["trigger"] | null;
+  potionThresholdPct: number | null;
+  potionIntervalSec: number | null;
+  potionEffect: PotionConfig["effect"] | null;
+  potionMagnitudePct: number | null;
+  potionDurationSec: number | null;
+}
+
+export interface ClassSkillDto {
+  id: string;
+  name: string;
+  description: string;
+  kind: SkillKind;
+  scalingStat: CoreStatKey;
+  scalingFactor: number;
+  maxLevel: number;
+  targetStat: StatKey | null;
+  effectType: SkillEffectType | null;
+  cooldownSeconds: number | null;
+}
+
+export interface ClassDto {
+  id: string;
+  name: string;
+  description: string;
+  primaryStat: CoreStatKey;
+  skills: ClassSkillDto[];
+}
+
+// Zones
+export const listZones = () => apiFetch<ZoneDto[]>("/api/admin/zones");
+export const createZone = (input: CreateZoneInput) =>
+  apiFetch<ZoneDto>("/api/admin/zones", { method: "POST", body: JSON.stringify(input) });
+export const updateZone = (id: string, input: CreateZoneInput) =>
+  apiFetch<ZoneDto>(`/api/admin/zones/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteZone = (id: string) =>
+  apiFetch<void>(`/api/admin/zones/${id}`, { method: "DELETE" });
+
+// Monsters
+export const listMonsters = () => apiFetch<MonsterDto[]>("/api/admin/monsters");
+export const createMonster = (input: CreateMonsterInput) =>
+  apiFetch<MonsterDto>("/api/admin/monsters", { method: "POST", body: JSON.stringify(input) });
+export const updateMonster = (id: string, input: CreateMonsterInput) =>
+  apiFetch<MonsterDto>(`/api/admin/monsters/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteMonster = (id: string) =>
+  apiFetch<void>(`/api/admin/monsters/${id}`, { method: "DELETE" });
+
+// Items
+export const listItems = () => apiFetch<ItemDto[]>("/api/admin/items");
+export const createItem = (input: CreateItemInput) =>
+  apiFetch<ItemDto>("/api/admin/items", { method: "POST", body: JSON.stringify(input) });
+export const updateItem = (id: string, input: CreateItemInput) =>
+  apiFetch<ItemDto>(`/api/admin/items/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteItem = (id: string) =>
+  apiFetch<void>(`/api/admin/items/${id}`, { method: "DELETE" });
+
+// Classes
+export const listClasses = () => apiFetch<ClassDto[]>("/api/admin/classes");
+export const createClass = (input: CreateCharacterClassInput) =>
+  apiFetch<ClassDto>("/api/admin/classes", { method: "POST", body: JSON.stringify(input) });
+export const updateClass = (id: string, input: CreateCharacterClassInput) =>
+  apiFetch<ClassDto>(`/api/admin/classes/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteClass = (id: string) =>
+  apiFetch<void>(`/api/admin/classes/${id}`, { method: "DELETE" });

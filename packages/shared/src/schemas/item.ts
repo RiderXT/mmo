@@ -1,0 +1,54 @@
+import { z } from "zod";
+import { ItemTypeSchema, StatKeySchema, PotionTriggerSchema, PotionEffectSchema } from "./enums.js";
+
+export const StatRangeSchema = z.object({
+  stat: StatKeySchema,
+  min: z.number(),
+  max: z.number(),
+  weight: z.number().min(0).max(1000).default(1),
+});
+export type StatRange = z.infer<typeof StatRangeSchema>;
+
+export const UpgradeRequirementInputSchema = z.object({
+  targetLevel: z.number().int().min(1).max(50),
+  requiredItemId: z.string(),
+  requiredQty: z.number().int().min(1).max(999),
+});
+export type UpgradeRequirementInput = z.infer<typeof UpgradeRequirementInputSchema>;
+
+// Only meaningful when type === "consumable" and the item sits in an active-item slot.
+export const PotionConfigSchema = z.object({
+  trigger: PotionTriggerSchema,
+  thresholdPct: z.number().min(0).max(1).optional(), // for hp_below / mana_below
+  intervalSeconds: z.number().int().min(1).max(3600).optional(), // for interval
+  effect: PotionEffectSchema,
+  magnitudePct: z.number().min(0).max(5).default(0.3),
+  durationSeconds: z.number().int().min(0).max(3600).optional(), // for buff_* effects
+});
+export type PotionConfig = z.infer<typeof PotionConfigSchema>;
+
+export const CreateItemSchema = z
+  .object({
+    name: z.string().trim().min(2).max(60),
+    type: ItemTypeSchema,
+    minLevel: z.number().int().min(1).max(999),
+    stackable: z.boolean().default(false),
+    maxStack: z.number().int().min(1).max(9999).default(1),
+    description: z.string().trim().max(2000).optional().default(""),
+    baseStats: z.record(StatKeySchema, z.number()).default({}),
+    possibleStatRanges: z.array(StatRangeSchema).default([]),
+    upgradeRequirements: z.array(UpgradeRequirementInputSchema).default([]),
+    potion: PotionConfigSchema.optional(),
+  })
+  .refine((val) => val.stackable || val.maxStack === 1, {
+    message: "Przedmiot niestakujący się musi mieć maxStack = 1",
+    path: ["maxStack"],
+  })
+  .refine((val) => val.type !== "consumable" || !!val.potion, {
+    message: "Przedmiot typu consumable musi mieć skonfigurowane działanie potionu",
+    path: ["potion"],
+  });
+export type CreateItemInput = z.infer<typeof CreateItemSchema>;
+
+export const UpdateItemSchema = CreateItemSchema;
+export type UpdateItemInput = z.infer<typeof UpdateItemSchema>;

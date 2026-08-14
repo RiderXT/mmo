@@ -1,0 +1,327 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CreateZoneSchema, type CreateZoneInput } from "@mmo/shared";
+import { AppShell } from "../../components/AppShell";
+import { Field, inputClass } from "../../components/admin/Field";
+import { ApiError } from "../../lib/apiClient";
+import {
+  listZones,
+  createZone,
+  updateZone,
+  deleteZone,
+  listMonsters,
+  listItems,
+  type ZoneDto,
+} from "../../lib/adminApi";
+
+function emptyForm(): CreateZoneInput {
+  return { name: "", description: "", minLevel: 1, maxLevel: 10, monsters: [], drops: [] };
+}
+
+function fromDto(zone: ZoneDto): CreateZoneInput {
+  return {
+    name: zone.name,
+    description: zone.description,
+    minLevel: zone.minLevel,
+    maxLevel: zone.maxLevel,
+    monsters: zone.monsters.map((m) => ({
+      monsterId: m.monsterId,
+      spawnWeight: m.spawnWeight,
+      maxCount: m.maxCount,
+    })),
+    drops: zone.drops.map((d) => ({ itemId: d.itemId, dropChance: d.dropChance })),
+  };
+}
+
+export function ZonesAdminPage() {
+  const queryClient = useQueryClient();
+  const zonesQuery = useQuery({ queryKey: ["admin-zones"], queryFn: listZones });
+  const monstersQuery = useQuery({ queryKey: ["admin-monsters"], queryFn: listMonsters });
+  const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
+  const [editingId, setEditingId] = useState<string | null | "new">(null);
+  const [form, setForm] = useState<CreateZoneInput>(emptyForm());
+  const [error, setError] = useState<string | null>(null);
+
+  const saveMutation = useMutation({
+    mutationFn: (input: CreateZoneInput) =>
+      editingId && editingId !== "new" ? updateZone(editingId, input) : createZone(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-zones"] });
+      setEditingId(null);
+      setError(null);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Błąd zapisu"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteZone,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-zones"] }),
+    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
+  });
+
+  function openCreate() {
+    setForm(emptyForm());
+    setError(null);
+    setEditingId("new");
+  }
+
+  function openEdit(zone: ZoneDto) {
+    setForm(fromDto(zone));
+    setError(null);
+    setEditingId(zone.id);
+  }
+
+  function handleSubmit() {
+    const parsed = CreateZoneSchema.safeParse(form);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Nieprawidłowe dane");
+      return;
+    }
+    saveMutation.mutate(parsed.data);
+  }
+
+  const monsters = monstersQuery.data ?? [];
+  const items = itemsQuery.data ?? [];
+
+  return (
+    <AppShell>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-slate-100">Krainy</h1>
+        <button
+          onClick={openCreate}
+          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+        >
+          + Nowa kraina
+        </button>
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="bg-slate-900 text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Nazwa</th>
+              <th className="px-3 py-2">Poziomy</th>
+              <th className="px-3 py-2">Potwory</th>
+              <th className="px-3 py-2">Dropy krainy</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800 bg-slate-950">
+            {zonesQuery.data?.map((zone) => (
+              <tr key={zone.id}>
+                <td className="px-3 py-2 text-slate-200">{zone.name}</td>
+                <td className="px-3 py-2 text-slate-400">
+                  {zone.minLevel}–{zone.maxLevel}
+                </td>
+                <td className="px-3 py-2 text-slate-400">{zone.monsters.length}</td>
+                <td className="px-3 py-2 text-slate-400">{zone.drops.length}</td>
+                <td className="space-x-2 px-3 py-2 text-right">
+                  <button onClick={() => openEdit(zone)} className="text-indigo-400 hover:underline">
+                    Edytuj
+                  </button>
+                  <button
+                    onClick={() => confirm(`Usunąć "${zone.name}"?`) && deleteMutation.mutate(zone.id)}
+                    className="text-red-400 hover:underline"
+                  >
+                    Usuń
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {zonesQuery.data?.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                  Brak krain. Dodaj pierwszą.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {editingId !== null && (
+        <div className="mt-6 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <h2 className="font-medium text-slate-100">
+            {editingId === "new" ? "Nowa kraina" : "Edycja krainy"}
+          </h2>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Nazwa">
+              <input
+                className={inputClass}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </Field>
+            <Field label="Poziom min">
+              <input
+                type="number"
+                className={inputClass}
+                value={form.minLevel}
+                onChange={(e) => setForm({ ...form, minLevel: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Poziom max">
+              <input
+                type="number"
+                className={inputClass}
+                value={form.maxLevel}
+                onChange={(e) => setForm({ ...form, maxLevel: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+
+          <Field label="Opis">
+            <textarea
+              className={inputClass}
+              rows={2}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </Field>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-slate-400">
+              Potwory w tej krainie (jakie i ile)
+            </p>
+            <div className="space-y-2">
+              {form.monsters.map((zm, idx) => (
+                <div key={idx} className="flex flex-wrap items-center gap-2">
+                  <select
+                    className={`${inputClass} w-48`}
+                    value={zm.monsterId}
+                    onChange={(e) => {
+                      const next = [...form.monsters];
+                      next[idx] = { ...zm, monsterId: e.target.value };
+                      setForm({ ...form, monsters: next });
+                    }}
+                  >
+                    <option value="">wybierz potwora</option>
+                    {monsters.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} (lvl {m.level})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="waga spawnu"
+                    className={`${inputClass} w-32`}
+                    value={zm.spawnWeight}
+                    onChange={(e) => {
+                      const next = [...form.monsters];
+                      next[idx] = { ...zm, spawnWeight: Number(e.target.value) };
+                      setForm({ ...form, monsters: next });
+                    }}
+                  />
+                  <input
+                    type="number"
+                    placeholder="maks. liczba"
+                    className={`${inputClass} w-32`}
+                    value={zm.maxCount}
+                    onChange={(e) => {
+                      const next = [...form.monsters];
+                      next[idx] = { ...zm, maxCount: Number(e.target.value) };
+                      setForm({ ...form, monsters: next });
+                    }}
+                  />
+                  <button
+                    onClick={() => setForm({ ...form, monsters: form.monsters.filter((_, i) => i !== idx) })}
+                    className="text-red-400 hover:underline"
+                  >
+                    Usuń
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    monsters: [...form.monsters, { monsterId: "", spawnWeight: 10, maxCount: 5 }],
+                  })
+                }
+                className="text-sm text-indigo-400 hover:underline"
+              >
+                + Dodaj potwora
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-slate-400">
+              Dodatkowe dropy krainy (niezależne od konkretnego potwora)
+            </p>
+            <div className="space-y-2">
+              {form.drops.map((drop, idx) => (
+                <div key={idx} className="flex flex-wrap items-center gap-2">
+                  <select
+                    className={`${inputClass} w-48`}
+                    value={drop.itemId}
+                    onChange={(e) => {
+                      const next = [...form.drops];
+                      next[idx] = { ...drop, itemId: e.target.value };
+                      setForm({ ...form, drops: next });
+                    }}
+                  >
+                    <option value="">wybierz item</option>
+                    {items.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min={0}
+                    max={1}
+                    placeholder="szansa 0-1"
+                    className={`${inputClass} w-28`}
+                    value={drop.dropChance}
+                    onChange={(e) => {
+                      const next = [...form.drops];
+                      next[idx] = { ...drop, dropChance: Number(e.target.value) };
+                      setForm({ ...form, drops: next });
+                    }}
+                  />
+                  <button
+                    onClick={() => setForm({ ...form, drops: form.drops.filter((_, i) => i !== idx) })}
+                    className="text-red-400 hover:underline"
+                  >
+                    Usuń
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() =>
+                  setForm({ ...form, drops: [...form.drops, { itemId: "", dropChance: 0.01 }] })
+                }
+                className="text-sm text-indigo-400 hover:underline"
+              >
+                + Dodaj drop
+              </button>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleSubmit}
+              disabled={saveMutation.isPending}
+              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              Zapisz
+            </button>
+            <button
+              onClick={() => setEditingId(null)}
+              className="rounded-lg border border-slate-700 px-4 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              Anuluj
+            </button>
+          </div>
+        </div>
+      )}
+    </AppShell>
+  );
+}

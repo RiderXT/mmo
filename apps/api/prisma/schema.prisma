@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Local dev uses SQLite (zero-install: no enums, no native Json type, so
+  // enums and JSON-shaped fields below are plain String columns, serialized
+  // by the application layer). Swap to "postgresql" before deploying and
+  // these can become native enum + Json columns — see docs/architecture.md.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Valid values (enforced in app code via @mmo/shared zod enums): player | moderator | admin
+// Valid values: debug | info | warn | error
+// Valid values: in_progress | completed | claimed
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  role              String   @default("player")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  characters        Character[]
+  refreshTokens     RefreshToken[]
+  gameLogs          GameLog[]
+
+  @@index([role])
+}
+
+model RefreshToken {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedBy  String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Character {
+  id                 String   @id @default(cuid())
+  userId             String
+  name               String   @unique
+  level              Int      @default(1)
+  exp                Int      @default(0)
+  gold               Int      @default(0)
+  classId            String?
+  strength           Int      @default(5)
+  vitality           Int      @default(5)
+  dexterity          Int      @default(5)
+  intelligence       Int      @default(5)
+  unspentStatPoints  Int      @default(0)
+  unspentSkillPoints Int      @default(0)
+  currentZoneId      String?
+  activeExpeditionId String?  @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class       CharacterClass? @relation(fields: [classId], references: [id])
+  currentZone Zone?           @relation(fields: [currentZoneId], references: [id])
+  inventory   InventoryItem[]
+  skills      CharacterSkill[]
+  expeditions Expedition[]    @relation("CharacterExpeditions")
+
+  @@index([userId])
+  @@index([classId])
+}
+
+model CharacterClass {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @default("")
+  primaryStat String // CoreStatKey: strength | vitality | dexterity | intelligence
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  skills     ClassSkill[]
+  characters Character[]
+}
+
+model ClassSkill {
+  id              String  @id @default(cuid())
+  classId         String
+  name            String
+  description     String  @default("")
+  kind            String // "passive" | "active"
+  scalingStat     String // CoreStatKey
+  scalingFactor   Float   @default(1)
+  maxLevel        Int     @default(10)
+  targetStat      String? // StatKey — passive only
+  effectType      String? // "damage" | "heal" — active only
+  cooldownSeconds Int? // active only
+
+  class           CharacterClass   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  characterSkills CharacterSkill[]
+
+  @@unique([classId, name])
+}
+
+model CharacterSkill {
+  id           String @id @default(cuid())
+  characterId  String
+  classSkillId String
+  level        Int    @default(0)
+
+  character  Character  @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  classSkill ClassSkill @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, classSkillId])
+}
+
+model Zone {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @default("")
+  minLevel    Int
+  maxLevel    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  monsters    ZoneMonster[]
+  drops       ZoneDrop[]
+  characters  Character[]
+  expeditions Expedition[]
+
+  @@index([minLevel, maxLevel])
+}
+
+model Monster {
+  id         String   @id @default(cuid())
+  name       String
+  level      Int
+  hp         Int
+  stats      String   @default("{}") // JSON: StatBlock
+  skills     String   @default("[]") // JSON: MonsterSkill[]
+  expReward  Int      @default(0)
+  goldReward Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  zones      ZoneMonster[]
+  drops      MonsterDrop[]
+
+  @@index([level])
+}
+
+model ZoneMonster {
+  id           String  @id @default(cuid())
+  zoneId       String
+  monsterId    String
+  spawnWeight  Int     @default(1)
+  maxCount     Int     @default(1)
+
+  zone         Zone    @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  monster      Monster @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, monsterId])
+}
+
+model Item {
+  id                  String   @id @default(cuid())
+  name                String
+  type                String
+  minLevel            Int      @default(1)
+  stackable           Boolean  @default(false)
+  maxStack            Int      @default(1)
+  description         String   @default("")
+  baseStats           String   @default("{}") // JSON: StatBlock
+  possibleStatRanges  String   @default("[]") // JSON: StatRange[]
+  // Potion behavior — only meaningful when type === "consumable".
+  potionTrigger       String? // "hp_below" | "mana_below" | "interval"
+  potionThresholdPct  Float?
+  potionIntervalSec   Int?
+  potionEffect        String? // "restore_hp" | "restore_mana" | "buff_attack_speed" | "buff_attack" | "buff_defense"
+  potionMagnitudePct  Float?
+  potionDurationSec   Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  monsterDrops        MonsterDrop[]
+  zoneDrops           ZoneDrop[]
+  inventoryItems      InventoryItem[]
+  upgradeRequirements ItemUpgradeRequirement[] @relation("ItemUpgradeFor")
+  usedInUpgrades      ItemUpgradeRequirement[] @relation("ItemUpgradeMaterial")
+
+  @@index([type])
+}
+
+model ItemUpgradeRequirement {
+  id              String @id @default(cuid())
+  itemId          String
+  targetLevel     Int
+  requiredItemId  String
+  requiredQty     Int
+
+  item            Item   @relation("ItemUpgradeFor", fields: [itemId], references: [id], onDelete: Cascade)
+  requiredItem    Item   @relation("ItemUpgradeMaterial", fields: [requiredItemId], references: [id])
+
+  @@unique([itemId, targetLevel, requiredItemId])
+}
+
+model MonsterDrop {
+  id          String  @id @default(cuid())
+  monsterId   String
+  itemId      String
+  dropChance  Float
+  minQty      Int     @default(1)
+  maxQty      Int     @default(1)
+
+  monster     Monster @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  item        Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([monsterId, itemId])
+}
+
+model ZoneDrop {
+  id          String @id @default(cuid())
+  zoneId      String
+  itemId      String
+  dropChance  Float
+
+  zone        Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, itemId])
+}
+
+model InventoryItem {
+  id            String   @id @default(cuid())
+  characterId   String
+  itemId        String
+  slotIndex     Int
+  quantity      Int      @default(1)
+  rolledStats   String   @default("{}") // JSON: StatBlock
+  upgradeLevel  Int      @default(0)
+  equippedSlot  String?
+  activeSlotIndex Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  character     Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  item          Item      @relation(fields: [itemId], references: [id])
+
+  @@unique([characterId, slotIndex])
+  @@unique([characterId, activeSlotIndex])
+  @@index([characterId])
+}
+
+model Expedition {
+  id          String   @id @default(cuid())
+  characterId String
+  zoneId      String
+  status      String   @default("in_progress")
+  startedAt   DateTime @default(now())
+  endsAt      DateTime
+  result      String? // JSON: ExpeditionResult, computed server-side at start
+
+  character   Character @relation("CharacterExpeditions", fields: [characterId], references: [id], onDelete: Cascade)
+  zone        Zone      @relation(fields: [zoneId], references: [id])
+
+  @@index([characterId, status])
+}
+
+model GameLog {
+  id                String   @id @default(cuid())
+  module            String
+  level             String   @default("info")
+  action            String
+  actorUserId       String?
+  actorCharacterId  String?
+  payload           String   @default("{}") // JSON
+  requestId         String?
+  createdAt         DateTime @default(now())
+
+  actorUser         User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([module])
+  @@index([level])
+  @@index([createdAt])
+  @@index([actorUserId])
+}
+
+model Settings {
+  key       String   @id
+  value     String // JSON
+  updatedAt DateTime @updatedAt
+}
