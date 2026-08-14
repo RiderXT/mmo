@@ -6,6 +6,7 @@ skonfigurowany czas i wraca z expem, złotem i itemami. Cała treść gry (krain
 dropy) jest tworzona przez panele administracyjne.
 
 Pełny opis architektury: [docs/architecture.md](docs/architecture.md).
+Wdrożenie na VPS krok po kroku: [docs/deployment.md](docs/deployment.md).
 
 ## Struktura repo
 

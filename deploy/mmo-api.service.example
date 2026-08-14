@@ -1,0 +1,20 @@
+; systemd unit for the API process. Copy to /etc/systemd/system/mmo-api.service
+; on the VPS, adjust the paths/user, then:
+;   sudo systemctl daemon-reload
+;   sudo systemctl enable --now mmo-api
+
+[Unit]
+Description=MMO API (Fastify)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/var/www/mmo/apps/api
+EnvironmentFile=/var/www/mmo/apps/api/.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

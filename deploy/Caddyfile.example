@@ -1,0 +1,42 @@
+# Reverse proxy config for Caddy (https://caddyserver.com).
+# Copy to /etc/caddy/Caddyfile on the VPS and replace the placeholders.
+#
+# - If you have a domain pointed at the VPS: use it as the site address below —
+#   Caddy automatically provisions and renews a Let's Encrypt TLS certificate.
+# - If you don't have a domain yet: replace the domain line with ":80" and drop
+#   the automatic-HTTPS behavior (see the commented alternative below).
+
+your-domain.example.com {
+	# API + health check → Node process (see deploy/mmo-api.service.example)
+	handle /api/* {
+		reverse_proxy localhost:4000
+	}
+	handle /health {
+		reverse_proxy localhost:4000
+	}
+
+	# Everything else → the built React app (static files)
+	handle {
+		root * /var/www/mmo/apps/web/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	encode gzip
+}
+
+# --- No domain yet? Use this instead of the block above: ---
+# :80 {
+# 	handle /api/* {
+# 		reverse_proxy localhost:4000
+# 	}
+# 	handle /health {
+# 		reverse_proxy localhost:4000
+# 	}
+# 	handle {
+# 		root * /var/www/mmo/apps/web/dist
+# 		try_files {path} /index.html
+# 		file_server
+# 	}
+# 	encode gzip
+# }
