@@ -1,4 +1,4 @@
-import type { StatBlock, StatKey, CoreStatKey, ExpeditionResult } from "@mmo/shared";
+import type { StatBlock, StatKey, CoreStatKey, ExpeditionResult, CombatEvent } from "@mmo/shared";
 
 export interface CharacterCoreStats {
   strength: number;
@@ -28,6 +28,7 @@ export interface PassiveSkillBonus {
 
 export interface ActiveSkillDef {
   id: string;
+  name: string;
   power: number; // scalingFactor * coreStat * level, precomputed by the caller
   manaCost: number;
   effectType: "damage" | "heal";
@@ -36,6 +37,7 @@ export interface ActiveSkillDef {
 
 export interface PotionSlot {
   inventoryItemId: string;
+  itemName: string;
   quantity: number;
   trigger: "hp_below" | "mana_below" | "interval";
   thresholdPct: number | null;
@@ -47,6 +49,7 @@ export interface PotionSlot {
 
 export interface SimMonster {
   monsterId: string;
+  name: string;
   hp: number;
   attack: number;
   defense: number;
@@ -65,6 +68,8 @@ export interface SimulationOutcome {
   result: ExpeditionResult;
   /** inventoryItemId -> quantity consumed, to be decremented from inventory at expedition start. */
   potionsConsumed: Map<string, number>;
+  /** Full timeline, revealed progressively client-side in sync with the countdown. */
+  events: CombatEvent[];
 }
 
 /**
@@ -137,6 +142,7 @@ export function simulateExpedition(
   let goldGained = 0;
   let monstersDefeated = 0;
 
+  const events: CombatEvent[] = [];
   const lootMap = new Map<string, number>();
   const potionsConsumed = new Map<string, number>();
   const potionRemaining = new Map(potions.map((p) => [p.inventoryItemId, p.quantity]));
@@ -182,6 +188,7 @@ export function simulateExpedition(
         defenseBuffPct = p.magnitudePct;
         break;
     }
+    events.push({ t: second, type: "potion_used", itemName: p.itemName, effect: p.effect });
     return true;
   }
 
@@ -226,6 +233,8 @@ export function simulateExpedition(
     const monster = pickWeighted(zone.monsters, (m) => m.spawnWeight);
     if (!monster) continue;
 
+    events.push({ t: second, type: "encounter_start", monsterName: monster.name, monsterHp: monster.hp });
+
     let burstDamage = 0;
     for (const skill of activeSkills) {
       const nextAt = skillNextAvailable.get(skill.id) ?? 0;
@@ -234,6 +243,13 @@ export function simulateExpedition(
       skillNextAvailable.set(skill.id, second + skill.cooldownSeconds);
       if (skill.effectType === "damage") burstDamage += skill.power;
       else hp = Math.min(stats.maxHp, hp + skill.power);
+      events.push({
+        t: second,
+        type: "skill_activated",
+        skillName: skill.name,
+        effectType: skill.effectType,
+        power: Math.round(skill.power),
+      });
     }
 
     const effectiveAttack = stats.attack * (1 + (second <= attackBuffUntil ? attackBuffPct : 0));
@@ -253,21 +269,59 @@ export function simulateExpedition(
 
     const roundsToKill = Math.max(1, Math.ceil(monster.hp / characterDamage));
     const roundsSurvivable = effectiveMonsterDamage > 0 ? Math.ceil(hp / effectiveMonsterDamage) : Infinity;
+    const won = roundsToKill <= roundsSurvivable;
+    const monsterRoundsLanded = won ? Math.max(0, roundsToKill - 1) : roundsSurvivable;
 
-    if (roundsToKill <= roundsSurvivable) {
-      hp = Math.max(1, hp - effectiveMonsterDamage * Math.max(0, roundsToKill - 1));
+    events.push({
+      t: second,
+      type: "player_attack",
+      baseAttack: Math.round(effectiveAttack),
+      monsterDefense: monster.defense,
+      skillBonus: Math.round(burstDamage),
+      damagePerRound: Math.round(characterDamage),
+      rounds: won ? roundsToKill : roundsSurvivable,
+      crit,
+    });
+    events.push({
+      t: second,
+      type: "monster_attack",
+      monsterAttack: monster.attack,
+      characterDefense: Math.round(effectiveDefense),
+      damagePerRound: Math.round(effectiveMonsterDamage),
+      rounds: monsterRoundsLanded,
+      evaded: !monsterHits,
+    });
+
+    if (won) {
+      hp = Math.max(1, hp - effectiveMonsterDamage * monsterRoundsLanded);
       monstersDefeated += 1;
       expGained += monster.expReward;
       goldGained += monster.goldReward;
       for (const drop of monster.drops) {
-        if (Math.random() < drop.dropChance) addLoot(drop.itemId, randomInt(drop.minQty, drop.maxQty));
+        if (Math.random() < drop.dropChance) {
+          const qty = randomInt(drop.minQty, drop.maxQty);
+          addLoot(drop.itemId, qty);
+          events.push({ t: second, type: "loot", itemId: drop.itemId, quantity: qty });
+        }
       }
       for (const zoneDrop of zone.drops) {
-        if (Math.random() < zoneDrop.dropChance) addLoot(zoneDrop.itemId, 1);
+        if (Math.random() < zoneDrop.dropChance) {
+          addLoot(zoneDrop.itemId, 1);
+          events.push({ t: second, type: "loot", itemId: zoneDrop.itemId, quantity: 1 });
+        }
       }
     } else {
       hp = Math.max(0, hp - effectiveMonsterDamage * roundsSurvivable);
     }
+
+    events.push({
+      t: second,
+      type: "encounter_result",
+      won,
+      monsterName: monster.name,
+      expGained: won ? monster.expReward : 0,
+      goldGained: won ? monster.goldReward : 0,
+    });
   }
 
   return {
@@ -278,5 +332,6 @@ export function simulateExpedition(
       loot: Array.from(lootMap.entries()).map(([itemId, quantity]) => ({ itemId, quantity })),
     },
     potionsConsumed,
+    events,
   };
 }

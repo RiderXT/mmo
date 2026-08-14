@@ -7,4 +7,5 @@ export * from "./schemas/monster.js";
 export * from "./schemas/item.js";
 export * from "./schemas/inventory.js";
 export * from "./schemas/expedition.js";
+export * from "./schemas/combatEvent.js";
 export * from "./schemas/gameLog.js";

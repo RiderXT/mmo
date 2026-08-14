@@ -10,6 +10,7 @@ import {
   getExpeditionDuration,
   type ExpeditionClaimResult,
 } from "../../lib/expeditionsApi";
+import { CombatLog } from "./CombatLog";
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -42,8 +43,11 @@ export function ExpeditionPanel({
   const durationQuery = useQuery({ queryKey: ["expedition-duration"], queryFn: getExpeditionDuration });
 
   const expedition = activeQuery.data ?? null;
+  const startedAtMs = expedition ? new Date(expedition.startedAt).getTime() : null;
   const endsAtMs = expedition ? new Date(expedition.endsAt).getTime() : null;
   const isReadyToClaim = endsAtMs !== null && now >= endsAtMs;
+  const elapsedSeconds = startedAtMs !== null ? Math.floor((now - startedAtMs) / 1000) : 0;
+  const revealedEvents = expedition ? expedition.events.filter((e) => e.t <= elapsedSeconds) : [];
 
   useEffect(() => {
     if (!expedition || isReadyToClaim) return;
@@ -130,6 +134,7 @@ export function ExpeditionPanel({
           </p>
         )}
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        <CombatLog events={revealedEvents} itemNameFor={itemNameFor} />
       </div>
     );
   }

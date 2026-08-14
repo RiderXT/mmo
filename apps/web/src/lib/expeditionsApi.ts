@@ -1,3 +1,4 @@
+import type { CombatEvent } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
 export interface ExpeditionDto {
@@ -8,6 +9,7 @@ export interface ExpeditionDto {
   startedAt: string;
   endsAt: string;
   result: null;
+  events: CombatEvent[];
 }
 
 export interface ExpeditionLoot {

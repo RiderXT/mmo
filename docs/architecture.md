@@ -196,6 +196,34 @@ na potiony — `handleDragEnd` rozróżnia trzy typy drop-targetu (`grid`/`equip
 `ItemsAdminPage.tsx` ma warunkową sekcję konfiguracji potionu widoczną tylko dla
 `type === "consumable"`.
 
+## Dziennik walki na żywo (post-Etap 5)
+
+Gracz widzi w panelu "Ekspedycja w toku" szczegółowy, na żywo odsłaniany zapis starć (atak vs
+obrona z liczbami, bonus z umiejętności, krytyk, unik, zdobyty łup, zużyte potiony) zamiast
+gołego licznika czasu — plus bieżące sumy (pokonani/exp/złoto), aktualizowane w miarę
+odsłaniania.
+
+**Mechanizm**: `simulateExpedition` (`apps/api/src/modules/expeditions/combat.ts`) już liczy
+całą ekspedycję deterministycznie na starcie — rozszerzony teraz o emitowanie `CombatEvent[]`
+(dyskryminowana unia w `packages/shared/src/schemas/combatEvent.ts`) w tych samych punktach,
+gdzie i tak liczy liczby do wyniku zbiorczego (żadna nowa logika walki, tylko dodatkowe
+`events.push(...)`). Każde zdarzenie ma znacznik `t` (sekundy od startu ekspedycji). Cały log
+jest zapisywany w `Expedition.eventLog` przy starcie (`startExpedition`) i zwracany w całości
+przez `GET /api/expeditions/:characterId/active` — **celowo bez ukrywania**, w przeciwieństwie
+do `result`, bo tu ryzyko to tylko spoiler w UI, nie anti-cheat (wynik i tak jest już
+przesądzony).
+
+Front (`ExpeditionPanel.tsx` + `CombatLog.tsx`) pobiera log **raz**, po czym co sekundę (ten
+sam `setInterval`, który już napędza licznik) filtruje `events.filter(e => e.t <=
+elapsedSeconds)` i pokazuje tylko to, co "już się wydarzyło" — **bez dodatkowego pollingu ani
+WebSocketów**. Wygląda jak walka na żywo, choć serwer nic nie liczy w tle. To ten sam wzorzec
+"policz raz na starcie, odsłaniaj stopniowo", którego już używa `result`/`ExpeditionResult` —
+tylko zastosowany do granularnych zdarzeń zamiast jednej zbiorczej sumy.
+
+Zweryfikowane: curl (kształt eventów z realnymi liczbami — atak/obrona/bonus umiejętności/
+krytyk/unik), przeglądarka (log odsłania się dokładnie w momencie przekroczenia znacznika `t`
+przez licznik, nie wcześniej; bieżące sumy Pokonano/Exp/Złoto rosną wraz z odsłanianiem).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

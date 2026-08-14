@@ -263,6 +263,7 @@ model Expedition {
   startedAt   DateTime @default(now())
   endsAt      DateTime
   result      String? // JSON: ExpeditionResult, computed server-side at start
+  eventLog    String? // JSON: CombatEvent[], computed server-side at start, revealed progressively client-side
 
   character   Character @relation("CharacterExpeditions", fields: [characterId], references: [id], onDelete: Cascade)
   zone        Zone      @relation(fields: [zoneId], references: [id])

@@ -11,7 +11,7 @@ import {
   type PotionSlot,
   type SimZone,
 } from "./combat.js";
-import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey } from "@mmo/shared";
+import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey, CombatEvent } from "@mmo/shared";
 
 export class ExpeditionError extends Error {
   constructor(
@@ -83,6 +83,7 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
     .filter((cs) => cs.classSkill.kind === "active" && cs.level > 0 && cs.classSkill.effectType && cs.classSkill.cooldownSeconds)
     .map((cs) => ({
       id: cs.classSkillId,
+      name: cs.classSkill.name,
       power: cs.classSkill.scalingFactor * core[cs.classSkill.scalingStat as CoreStatKey] * cs.level,
       manaCost: ACTIVE_SKILL_MANA_COST(cs.level),
       effectType: cs.classSkill.effectType as "damage" | "heal",
@@ -93,6 +94,7 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
     .filter((inv) => inv.item.type === "consumable" && inv.item.potionTrigger)
     .map((inv) => ({
       inventoryItemId: inv.id,
+      itemName: inv.item.name,
       quantity: inv.quantity,
       trigger: inv.item.potionTrigger as PotionSlot["trigger"],
       thresholdPct: inv.item.potionThresholdPct,
@@ -109,6 +111,7 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
       const monsterStats = JSON.parse(zm.monster.stats) as StatBlock;
       return {
         monsterId: zm.monster.id,
+        name: zm.monster.name,
         hp: zm.monster.hp,
         attack: monsterStats.attack ?? 0,
         defense: monsterStats.defense ?? 0,
@@ -165,6 +168,7 @@ export async function startExpedition(
         startedAt,
         endsAt,
         result: JSON.stringify(outcome.result),
+        eventLog: JSON.stringify(outcome.events),
       },
     });
     await tx.character.update({
@@ -210,6 +214,7 @@ export async function startExpedition(
     startedAt: expedition.startedAt.toISOString(),
     endsAt: expedition.endsAt.toISOString(),
     result: null,
+    events: outcome.events,
   };
 }
 
@@ -229,6 +234,7 @@ export async function getActiveExpedition(characterId: string, userId: string) {
     startedAt: expedition.startedAt.toISOString(),
     endsAt: expedition.endsAt.toISOString(),
     result: null,
+    events: expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [],
   };
 }
 
