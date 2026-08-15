@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CreateCharacterClassSchema,
@@ -11,6 +11,7 @@ import {
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import { listClasses, createClass, updateClass, deleteClass, listItems, type ClassDto } from "../../lib/adminApi";
+import { TYPE_LABELS } from "../../lib/statFormat";
 
 const CORE_STATS = CoreStatKeySchema.options;
 const SKILL_KINDS = SkillKindSchema.options;
@@ -70,6 +71,19 @@ export function ClassesAdminPage() {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateCharacterClassInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
+  const [itemSearch, setItemSearch] = useState("");
+  const [itemTypeFilter, setItemTypeFilter] = useState<string>("all");
+  const [itemClassFilter, setItemClassFilter] = useState<string>("all");
+
+  const filteredItemOptions = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase();
+    return (itemsQuery.data ?? []).filter(
+      (i) =>
+        (itemTypeFilter === "all" || i.type === itemTypeFilter) &&
+        (itemClassFilter === "all" || i.classId === itemClassFilter) &&
+        (!q || i.name.toLowerCase().includes(q)),
+    );
+  }, [itemsQuery.data, itemSearch, itemTypeFilter, itemClassFilter]);
 
   const saveMutation = useMutation({
     mutationFn: (input: CreateCharacterClassInput) =>
@@ -223,6 +237,42 @@ export function ClassesAdminPage() {
             <p className="mb-2 text-xs font-medium text-parchment-dim">
               Przedmioty startowe (trafiają do ekwipunku raz, przy utworzeniu postaci)
             </p>
+            <div className="mb-2 flex flex-wrap gap-2">
+              <input
+                className={`${inputClass} w-40`}
+                placeholder="Szukaj itemu..."
+                value={itemSearch}
+                onChange={(e) => setItemSearch(e.target.value)}
+              />
+              <select
+                className={`${inputClass} w-36`}
+                value={itemTypeFilter}
+                onChange={(e) => setItemTypeFilter(e.target.value)}
+              >
+                <option value="all">Wszystkie typy</option>
+                {Object.entries(TYPE_LABELS).map(([type, label]) => (
+                  <option key={type} value={type}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={`${inputClass} w-36`}
+                value={itemClassFilter}
+                onChange={(e) => setItemClassFilter(e.target.value)}
+              >
+                <option value="all">Wszystkie klasy</option>
+                <option value="">Uniwersalne</option>
+                {classesQuery.data?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <span className="self-center text-xs text-parchment-faint">
+                {filteredItemOptions.length} / {itemsQuery.data?.length ?? 0}
+              </span>
+            </div>
             <div className="space-y-2">
               {form.starterItems.map((entry, idx) => (
                 <div key={idx} className="flex flex-wrap items-center gap-2">
@@ -236,7 +286,7 @@ export function ClassesAdminPage() {
                     }}
                   >
                     <option value="">wybierz item</option>
-                    {itemsQuery.data?.map((i) => (
+                    {filteredItemOptions.map((i) => (
                       <option key={i.id} value={i.id}>
                         {i.name}
                       </option>

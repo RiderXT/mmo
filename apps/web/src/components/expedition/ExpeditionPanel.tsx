@@ -18,6 +18,7 @@ import { CombatLog } from "./CombatLog";
 import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
+import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 
 function formatDuration(ms: number): string {
@@ -228,6 +229,7 @@ export function ExpeditionPanel({
         )}
         <div className="mt-3">
           <MonsterEncounterPanel events={revealedEvents} />
+          <LootBar events={revealedEvents} itemFor={itemFor} />
         </div>
         <CombatLog events={revealedEvents} itemFor={itemFor} />
       </div>

@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import type { CombatEvent, ItemType } from "@mmo/shared";
-import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 
 const EFFECT_LABEL: Record<string, string> = {
   damage: "obrażeń",
@@ -52,15 +51,10 @@ function EventLine({
           ✅ Zwycięstwo nad {event.monsterName}! +{event.expGained} exp, +{event.goldGained} złota
         </p>
       );
-    case "loot": {
-      const item = itemFor(event.itemId);
-      return (
-        <p className="flex items-center gap-1.5 text-amber-300">
-          <ItemTypeIcon type={item?.type ?? "material"} className="h-4 w-4 shrink-0" />
-          Wypadło: {item?.name ?? event.itemId} ×{event.quantity}
-        </p>
-      );
-    }
+    case "loot":
+      // Rendered as a running icon strip (LootBar, under MonsterEncounterPanel) instead of a
+      // text line per drop — nothing to add to the scrolling log itself.
+      return null;
     case "potion_used":
       return (
         <p className="text-cyan-300">

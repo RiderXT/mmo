@@ -382,14 +382,24 @@ export function ItemsAdminPage() {
                 )}
               </div>
             </Field>
-            <Field label="Cena sprzedaży (złoto za 1 szt., 0 = nie do sprzedania)">
-              <input
-                type="number"
-                min={0}
-                className={inputClass}
-                value={form.sellPrice}
-                onChange={(e) => setForm({ ...form, sellPrice: Number(e.target.value) })}
-              />
+            <Field label="Możliwość sprzedaży">
+              <div className="flex items-center gap-3 pt-1.5">
+                <input
+                  type="checkbox"
+                  checked={form.sellPrice > 0}
+                  onChange={(e) => setForm({ ...form, sellPrice: e.target.checked ? form.sellPrice || 1 : 0 })}
+                />
+                {form.sellPrice > 0 && (
+                  <input
+                    type="number"
+                    min={1}
+                    className={`${inputClass} w-28`}
+                    value={form.sellPrice}
+                    onChange={(e) => setForm({ ...form, sellPrice: Number(e.target.value) })}
+                    placeholder="złoto za 1 szt."
+                  />
+                )}
+              </div>
             </Field>
           </div>
 
