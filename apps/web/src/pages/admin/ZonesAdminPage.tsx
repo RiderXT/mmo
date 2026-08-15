@@ -15,7 +15,7 @@ import {
 } from "../../lib/adminApi";
 
 function emptyForm(): CreateZoneInput {
-  return { name: "", description: "", minLevel: 1, maxLevel: 10, monsters: [], drops: [] };
+  return { name: "", description: "", minLevel: 1, maxLevel: 10, travelTimeSeconds: 30, monsters: [], drops: [] };
 }
 
 function fromDto(zone: ZoneDto): CreateZoneInput {
@@ -24,6 +24,7 @@ function fromDto(zone: ZoneDto): CreateZoneInput {
     description: zone.description,
     minLevel: zone.minLevel,
     maxLevel: zone.maxLevel,
+    travelTimeSeconds: zone.travelTimeSeconds,
     monsters: zone.monsters.map((m) => ({
       monsterId: m.monsterId,
       spawnWeight: m.spawnWeight,
@@ -101,6 +102,7 @@ export function ZonesAdminPage() {
             <tr>
               <th className="px-3 py-2">Nazwa</th>
               <th className="px-3 py-2">Poziomy</th>
+              <th className="px-3 py-2">Podróż</th>
               <th className="px-3 py-2">Potwory</th>
               <th className="px-3 py-2">Dropy krainy</th>
               <th className="px-3 py-2" />
@@ -113,6 +115,7 @@ export function ZonesAdminPage() {
                 <td className="px-3 py-2 text-parchment-dim">
                   {zone.minLevel}–{zone.maxLevel}
                 </td>
+                <td className="px-3 py-2 text-parchment-dim">{zone.travelTimeSeconds}s</td>
                 <td className="px-3 py-2 text-parchment-dim">{zone.monsters.length}</td>
                 <td className="px-3 py-2 text-parchment-dim">{zone.drops.length}</td>
                 <td className="space-x-2 px-3 py-2 text-right">
@@ -130,7 +133,7 @@ export function ZonesAdminPage() {
             ))}
             {zonesQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-parchment-faint">
+                <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
                   Brak krain. Dodaj pierwszą.
                 </td>
               </tr>
@@ -145,7 +148,7 @@ export function ZonesAdminPage() {
             {editingId === "new" ? "Nowa kraina" : "Edycja krainy"}
           </h2>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <Field label="Nazwa">
               <input
                 className={inputClass}
@@ -167,6 +170,14 @@ export function ZonesAdminPage() {
                 className={inputClass}
                 value={form.maxLevel}
                 onChange={(e) => setForm({ ...form, maxLevel: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Czas podróży (s)">
+              <input
+                type="number"
+                className={inputClass}
+                value={form.travelTimeSeconds}
+                onChange={(e) => setForm({ ...form, travelTimeSeconds: Number(e.target.value) })}
               />
             </Field>
           </div>

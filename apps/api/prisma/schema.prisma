@@ -118,13 +118,15 @@ model CharacterSkill {
 }
 
 model Zone {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String   @default("")
-  minLevel    Int
-  maxLevel    Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String   @default("")
+  minLevel          Int
+  maxLevel          Int
+  // Base one-way travel time from the village, in seconds, before movementSpeed reduction.
+  travelTimeSeconds Int      @default(30)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   monsters    ZoneMonster[]
   drops       ZoneDrop[]
@@ -259,8 +261,10 @@ model Expedition {
   characterId String
   zoneId      String
   status      String   @default("in_progress")
-  startedAt   DateTime @default(now())
-  endsAt      DateTime
+  startedAt   DateTime @default(now()) // departs the village
+  arrivedAt   DateTime // travel-there complete, combat begins
+  fightEndsAt DateTime // combat simulation complete, travel-back begins
+  endsAt      DateTime // travel-back complete, rewards claimable
   result      String? // JSON: ExpeditionResult, computed server-side at start
   eventLog    String? // JSON: CombatEvent[], computed server-side at start, revealed progressively client-side
 

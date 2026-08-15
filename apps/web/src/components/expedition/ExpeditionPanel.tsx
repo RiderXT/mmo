@@ -44,11 +44,29 @@ export function ExpeditionPanel({
   const durationQuery = useQuery({ queryKey: ["expedition-duration"], queryFn: getExpeditionDuration });
 
   const expedition = activeQuery.data ?? null;
-  const startedAtMs = expedition ? new Date(expedition.startedAt).getTime() : null;
+  const arrivedAtMs = expedition ? new Date(expedition.arrivedAt).getTime() : null;
+  const fightEndsAtMs = expedition ? new Date(expedition.fightEndsAt).getTime() : null;
   const endsAtMs = expedition ? new Date(expedition.endsAt).getTime() : null;
   const isReadyToClaim = endsAtMs !== null && now >= endsAtMs;
-  const elapsedSeconds = startedAtMs !== null ? Math.floor((now - startedAtMs) / 1000) : 0;
+  // Combat events are timestamped relative to arrival, not departure — negative elapsed time
+  // while still traveling there naturally reveals zero events (all event.t are positive).
+  const elapsedSeconds = arrivedAtMs !== null ? Math.floor((now - arrivedAtMs) / 1000) : 0;
   const revealedEvents = expedition ? expedition.events.filter((e) => e.t <= elapsedSeconds) : [];
+
+  const phase: "traveling_there" | "fighting" | "traveling_back" | "ready" | null = !expedition
+    ? null
+    : isReadyToClaim
+      ? "ready"
+      : arrivedAtMs !== null && now < arrivedAtMs
+        ? "traveling_there"
+        : fightEndsAtMs !== null && now < fightEndsAtMs
+          ? "fighting"
+          : "traveling_back";
+  const PHASE_LABELS = {
+    traveling_there: "W drodze do krainy…",
+    fighting: "Walczy w krainie…",
+    traveling_back: "Wraca do wioski…",
+  } as const;
 
   useEffect(() => {
     if (!expedition || isReadyToClaim) return;
@@ -139,16 +157,19 @@ export function ExpeditionPanel({
           </button>
         ) : (
           <>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-parchment">
+            {phase && phase !== "ready" && (
+              <p className="mt-2 text-xs uppercase tracking-wide text-parchment-faint">{PHASE_LABELS[phase]}</p>
+            )}
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-parchment">
               {formatDuration((endsAtMs ?? now) - now)}
             </p>
             <button
               onClick={() => {
-                if (
-                  confirm(
-                    "Opuścić ekspedycję teraz? Odbierzesz tylko to, co widać już w dzienniku walki poniżej — reszta czasu przepadnie.",
-                  )
-                ) {
+                const message =
+                  phase === "traveling_there"
+                    ? "Zawrócić teraz? Nic jeszcze się nie wydarzyło — nie odbierzesz żadnych nagród."
+                    : "Opuścić ekspedycję teraz? Odbierzesz tylko to, co widać już w dzienniku walki poniżej — reszta czasu przepadnie.";
+                if (confirm(message)) {
                   leaveMutation.mutate(expedition.id);
                 }
               }}
@@ -192,7 +213,7 @@ export function ExpeditionPanel({
             >
               <span className="font-medium text-parchment">{zone.name}</span>
               <span className="ml-2 text-xs text-parchment-faint">
-                poziom {zone.minLevel}-{zone.maxLevel}
+                poziom {zone.minLevel}-{zone.maxLevel} · ~{zone.travelTimeSeconds}s podróży (tam i z powrotem)
               </span>
             </button>
           );

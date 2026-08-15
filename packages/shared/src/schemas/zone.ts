@@ -18,6 +18,8 @@ export const CreateZoneSchema = z.object({
   description: z.string().trim().max(2000).optional().default(""),
   minLevel: z.number().int().min(1).max(999),
   maxLevel: z.number().int().min(1).max(999),
+  // Base one-way travel time from the village, in seconds, before movementSpeed reduction.
+  travelTimeSeconds: z.number().int().min(0).max(3600).default(30),
   monsters: z.array(ZoneMonsterInputSchema).default([]),
   drops: z.array(ZoneDropInputSchema).default([]),
 }).refine((z) => z.maxLevel >= z.minLevel, {

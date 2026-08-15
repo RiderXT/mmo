@@ -49,6 +49,12 @@ export function VitalsPanel({ characterId }: { characterId: string }) {
         <VitalBar label="HP" value={stats.maxHp} max={stats.maxHp} barClassName="bg-hp" />
         <VitalBar label="MP" value={stats.maxMana} max={stats.maxMana} barClassName="bg-mp" />
       </div>
+      {stats.movementSpeedPct > 0 && (
+        <p className="mt-2 text-xs text-parchment-faint">
+          Prędkość ruchu: <span className="text-gold-bright">+{Math.round(stats.movementSpeedPct * 100)}%</span>{" "}
+          (skraca podróż do krain)
+        </p>
+      )}
     </div>
   );
 }

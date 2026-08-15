@@ -18,6 +18,7 @@ export interface ZoneDto {
   description: string;
   minLevel: number;
   maxLevel: number;
+  travelTimeSeconds: number;
   monsters: { id: string; monsterId: string; spawnWeight: number; maxCount: number; monster: { id: string; name: string; level: number } }[];
   drops: { id: string; itemId: string; dropChance: number; item: { id: string; name: string; type: string } }[];
 }

@@ -46,6 +46,9 @@ export const StatKeySchema = z.enum([
   "attackSpeed",
   "evasion",
   "damageReduction",
+  // Out-of-combat only: shortens travel time to/from a zone. Equipment/passive-skill only, no
+  // core-stat baseline (unlike attackSpeed) — see computeDerivedStats in combat.ts.
+  "movementSpeed",
 ]);
 export type StatKey = z.infer<typeof StatKeySchema>;
 

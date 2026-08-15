@@ -186,6 +186,7 @@ async function seedWorldContent() {
       name: "Wilcze Uroczysko",
       minLevel: 1,
       maxLevel: 10,
+      travelTimeSeconds: 30,
       monsters: { create: [{ monsterId: wolf.id, spawnWeight: 10, maxCount: 5 }] },
       drops: { create: [{ itemId: sword.id, dropChance: 0.01 }] },
     },

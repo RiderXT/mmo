@@ -17,6 +17,8 @@ export interface DerivedStats {
   critDamage: number;
   evasion: number;
   damageReduction: number;
+  /** Out-of-combat only: shortens travel time to/from a zone. See startExpedition in service.ts. */
+  movementSpeedPct: number;
 }
 
 export interface PassiveSkillBonus {
@@ -99,6 +101,8 @@ export function computeDerivedStats(
     critDamage: Math.max(1, 1.5 + bonus("critDamage")),
     evasion: Math.min(0.6, Math.max(0, 0.02 + core.dexterity * 0.001 + bonus("evasion"))),
     damageReduction: Math.min(0.7, Math.max(0, bonus("damageReduction"))),
+    // Equipment/passive-skill only — no core-stat baseline, unlike attackSpeed.
+    movementSpeedPct: Math.min(0.75, Math.max(0, bonus("movementSpeed"))),
   };
 }
 

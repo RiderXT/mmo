@@ -22,6 +22,7 @@ export interface CombatStatsDto {
   critDamage: number;
   evasion: number;
   damageReduction: number;
+  movementSpeedPct: number;
 }
 
 export const getCombatStats = (characterId: string) =>

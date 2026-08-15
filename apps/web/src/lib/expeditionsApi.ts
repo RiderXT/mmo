@@ -7,6 +7,8 @@ export interface ExpeditionDto {
   zoneId: string;
   status: "in_progress" | "completed" | "claimed";
   startedAt: string;
+  arrivedAt: string;
+  fightEndsAt: string;
   endsAt: string;
   result: null;
   events: CombatEvent[];

@@ -157,7 +157,7 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
   }
 
   const outcome = simulateExpedition(simZone, stats, activeSkills, potions, durationMinutes);
-  return { character, zone, outcome };
+  return { character, zone, stats, outcome };
 }
 
 export async function startExpedition(
@@ -171,10 +171,19 @@ export async function startExpedition(
   }
 
   const durationMinutes = await getExpeditionDurationMinutes();
-  const { character, zone, outcome } = await buildAndSimulate(input.characterId, input.zoneId, durationMinutes);
+  const { character, zone, stats, outcome } = await buildAndSimulate(
+    input.characterId,
+    input.zoneId,
+    durationMinutes,
+  );
 
+  // Travel time (village <-> zone) is computed once here, same as combat — reduced by the
+  // character's current movementSpeedPct, identical for both legs of the round trip.
+  const travelSeconds = Math.max(1, Math.round(zone.travelTimeSeconds * (1 - stats.movementSpeedPct)));
   const startedAt = new Date();
-  const endsAt = new Date(startedAt.getTime() + durationMinutes * 60_000);
+  const arrivedAt = new Date(startedAt.getTime() + travelSeconds * 1000);
+  const fightEndsAt = new Date(arrivedAt.getTime() + durationMinutes * 60_000);
+  const endsAt = new Date(fightEndsAt.getTime() + travelSeconds * 1000);
 
   const expedition = await prisma.$transaction(async (tx) => {
     const created = await tx.expedition.create({
@@ -183,6 +192,8 @@ export async function startExpedition(
         zoneId: zone.id,
         status: "in_progress",
         startedAt,
+        arrivedAt,
+        fightEndsAt,
         endsAt,
         result: JSON.stringify(outcome.result),
         eventLog: JSON.stringify(outcome.events),
@@ -229,6 +240,8 @@ export async function startExpedition(
     zoneId: expedition.zoneId,
     status: expedition.status,
     startedAt: expedition.startedAt.toISOString(),
+    arrivedAt: expedition.arrivedAt.toISOString(),
+    fightEndsAt: expedition.fightEndsAt.toISOString(),
     endsAt: expedition.endsAt.toISOString(),
     result: null,
     events: outcome.events,
@@ -249,6 +262,8 @@ export async function getActiveExpedition(characterId: string, userId: string) {
     zoneId: expedition.zoneId,
     status: expedition.status,
     startedAt: expedition.startedAt.toISOString(),
+    arrivedAt: expedition.arrivedAt.toISOString(),
+    fightEndsAt: expedition.fightEndsAt.toISOString(),
     endsAt: expedition.endsAt.toISOString(),
     result: null,
     events: expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [],
@@ -355,7 +370,11 @@ export async function claimExpedition(expeditionId: string, userId: string, requ
 
 /** Ends an expedition before its scheduled endsAt, granting rewards only for the encounters
  * that had already happened by now (derived from the same pre-computed event timeline the
- * player sees in the combat log — nothing is recomputed, just summed over a shorter slice). */
+ * player sees in the combat log — nothing is recomputed, just summed over a shorter slice).
+ * Elapsed time is measured from arrivedAt (combat start), not startedAt (village departure) —
+ * leaving mid-travel-there naturally yields zero events/reward, leaving mid-travel-back
+ * naturally yields the full combat result, and either way the character is home instantly
+ * instead of waiting out the remaining travel. */
 export async function leaveExpedition(expeditionId: string, userId: string, requestId?: string) {
   const expedition = await prisma.expedition.findUnique({
     where: { id: expeditionId },
@@ -377,7 +396,7 @@ export async function leaveExpedition(expeditionId: string, userId: string, requ
     throw new ExpeditionError("Ta ekspedycja jest już zakończona", 409);
   }
 
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - expedition.startedAt.getTime()) / 1000));
+  const elapsedSeconds = Math.floor((Date.now() - expedition.arrivedAt.getTime()) / 1000);
   const allEvents = expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [];
   const result = deriveResultFromEvents(allEvents.filter((e) => e.t <= elapsedSeconds));
 

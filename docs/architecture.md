@@ -316,6 +316,38 @@ Zweryfikowane: `pnpm typecheck` czysty; przeglądarka z odczytem `getComputedSty
 materiałowego `rgba(138,132,119,…)` (rarity-common), złote narożniki `.panel::before` —
 wszystkie zgodne co do piksela z tokenami w `tailwind.config.js`.
 
+## Czas podróży do krain (Etap 6)
+
+Ekspedycja to teraz podróż w trzech fazach zamiast jednego bloku czasu: **wioska → (podróż) →
+kraina → (walka) → kraina → (podróż) → wioska**. Wynikało to z planowania balansu setów pod
+krainy 1-99 — użytkownik chciał, żeby ekwipunek (nowy stat `movementSpeed`, wyłącznie z gearu,
+bez bazowego wkładu ze statów rdzenia) skracał czas dotarcia do krainy i powrotu.
+
+**Model**: `Zone.travelTimeSeconds` (bazowy czas jednej strony, admin-konfigurowalny w
+`/admin/zones`) + trzy nowe znaczniki czasu na `Expedition` obok istniejącego `startedAt`:
+`arrivedAt` (koniec podróży tam, start walki), `fightEndsAt` (koniec symulacji, start podróży
+powrotnej), `endsAt` (koniec podróży powrotnej — moment odbioru nagród; guard w
+`claimExpedition` się nie zmienił, bo semantyka "wszystko gotowe" pozostała ta sama, tylko
+teraz obejmuje więcej). Wszystkie cztery liczone raz przy starcie
+(`travelSeconds = round(zone.travelTimeSeconds × (1 − movementSpeedPct))`, ten sam wynik
+użyty dla obu odcinków podróży) — zgodnie z istniejącym wzorcem "policz raz, odsłaniaj w
+czasie".
+
+**Opuszczenie ekspedycji w nowym modelu**: `leaveExpedition` liczy upłynięty czas walki
+względem `arrivedAt` zamiast `startedAt` — jedna zmiana w kodzie, trzy naturalnie poprawne
+zachowania z tego samego filtra `events.filter(e => e.t <= elapsedSeconds)`: opuszczenie w
+trakcie podróży tam daje zerową nagrodę (elapsed ujemny), w trakcie walki nagrodę cząstkową
+(jak dotychczas), a po zakończeniu walki — pełną nagrodę natychmiast, bez czekania na koniec
+podróży powrotnej. To spójne z pierwotnym celem funkcji "opuść w dowolnym momencie".
+
+Zweryfikowane: curl — postać z butami niosącymi `movementSpeed: 0.3` miała podróż 21s
+(30s × 0.7) w obie strony vs 30s dla postaci bez ekwipunku; `leave` przed przybyciem → 0
+nagrody, w trakcie walki → nagroda za dokładnie 1 starcie, po zakończeniu walki → pełna
+nagroda (30 starć, awans z poziomu 1 na 8) natychmiast. Przeglądarka: etykieta fazy "W drodze
+do krainy…" nad licznikiem, lista krain pokazuje "~30s podróży (tam i z powrotem)" przed
+wysłaniem, opuszczenie w trakcie podróży pokazuje odrębny komunikat potwierdzenia i daje
+zerowe podsumowanie nagród.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
