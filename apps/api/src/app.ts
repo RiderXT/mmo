@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { isProd } from "./config/env.js";
+import { APP_VERSION } from "./lib/appVersion.js";
 import { registerSecurityPlugins } from "./plugins/security.js";
 import { registerErrorHandler } from "./plugins/errorHandler.js";
 import { authRoutes } from "./modules/auth/routes.js";
@@ -39,6 +40,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerErrorHandler(app);
 
   app.get("/health", async () => ({ status: "ok", time: new Date().toISOString() }));
+  app.get("/api/version", async () => ({ version: APP_VERSION }));
 
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(logsRoutes, { prefix: "/api/admin/logs" });

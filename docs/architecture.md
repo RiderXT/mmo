@@ -755,6 +755,36 @@ skonfigurowane przedmioty z poprawną ilością; próba usunięcia itemu użyteg
 409. Przeglądarka: formularz edycji klasy poprawnie ładuje istniejące złoto/przedmioty startowe,
 tabela pokazuje "50 / 2" dla Maga.
 
+## Baner "wyszła nowa wersja" po `deploy.sh` (Etap 12)
+
+Żądanie: po uruchomieniu `./deploy/deploy.sh` na VPS, gracze z otwartą kartą przeglądarki mają
+zobaczyć komunikat o dostępnej aktualizacji z możliwością odświeżenia.
+
+**Zasada działania — porównanie wersji, bez żadnej nowej infrastruktury**: `deploy.sh` zawsze
+robi `git pull` przed restartem usługi, więc commit `HEAD`, na którym stoi repo w momencie
+startu procesu, JEST wdrożoną wersją — nie trzeba żadnego osobnego pliku/licznika wersji.
+`apps/api/src/lib/appVersion.ts` odczytuje `git rev-parse HEAD` **raz, przy starcie serwera**
+(`execSync`) i trzyma w stałej `APP_VERSION`; nowy publiczny endpoint `GET /api/version`
+(`app.ts`, wzorem istniejącego `/health`) go zwraca. Frontend robi dokładnie to samo przy
+buildzie: `vite.config.ts` woła `git rev-parse HEAD` w `define: { __APP_VERSION__: ... }`, więc
+hash commita, z którego zbudowano bundel, jest w nim zaszyty na stałe (typ zadeklarowany w
+`vite-env.d.ts`).
+
+**Wykrywanie** (`apps/web/src/components/UpdateBanner.tsx`, zamontowany raz w `AppShell.tsx`
+— widoczny więc na każdym ekranie gry): odpytuje `GET /api/version` przy montowaniu i co 60s
+(`setInterval`, bez żadnej nowej biblioteki). Gdy zwrócona wersja różni się od `__APP_VERSION__`
+wbudowanej w bieżący bundel (a obie są znane, nie `"unknown"` — środowiska bez `.git` nie
+generują fałszywych alarmów), pokazuje stały baner na dole ekranu: "Wyszła nowa wersja gry —
+odśwież, żeby zobaczyć zmiany." z przyciskiem "Odśwież" (`window.location.reload()`). Świadomie
+bez przycisku "później"/wyciszania — baner jest wąski, nie blokuje reszty ekranu, a odstęp 60s
+między sprawdzeniami wystarcza, żeby nie był nachalny.
+
+Zweryfikowane: curl `GET /api/version` zwraca aktualny hash `HEAD`, identyczny z lokalnym `git
+rev-parse HEAD`. Przeglądarka: przy zgodnych wersjach baner się nie pojawia; po podmianie
+(w konsoli, symulując wdrożenie w tle) odpowiedzi `/api/version` na inny hash i przemontowaniu
+`AppShell` (nawigacja SPA między ekranami gry) baner poprawnie się pojawił z właściwym tekstem
+i przyciskiem "Odśwież".
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

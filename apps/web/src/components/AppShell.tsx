@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { logoutRequest } from "../lib/authApi";
 import { useAuthStore } from "../store/authStore";
+import { UpdateBanner } from "./UpdateBanner";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `block px-3 py-2 text-sm transition ${
@@ -86,6 +87,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="flex-1 px-4 py-6 md:px-8">
         <div className="mx-auto max-w-5xl">{children}</div>
       </main>
+
+      <UpdateBanner />
     </div>
   );
 }
