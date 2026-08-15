@@ -37,6 +37,7 @@ function emptyForm(): CreateItemInput {
     classId: null,
     upgradeRequirements: [],
     chestLoot: [],
+    sellPrice: 0,
   };
 }
 
@@ -63,6 +64,7 @@ function fromDto(item: ItemDto): CreateItemInput {
       minQty: c.minQty,
       maxQty: c.maxQty,
     })),
+    sellPrice: item.sellPrice,
     potion:
       item.type === "consumable" && item.potionTrigger && item.potionEffect
         ? {
@@ -379,6 +381,15 @@ export function ItemsAdminPage() {
                   />
                 )}
               </div>
+            </Field>
+            <Field label="Cena sprzedaży (złoto za 1 szt., 0 = nie do sprzedania)">
+              <input
+                type="number"
+                min={0}
+                className={inputClass}
+                value={form.sellPrice}
+                onChange={(e) => setForm({ ...form, sellPrice: Number(e.target.value) })}
+              />
             </Field>
           </div>
 

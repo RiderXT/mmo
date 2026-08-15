@@ -30,6 +30,16 @@ export const OpenChestSchema = z.object({
 });
 export type OpenChestInput = z.infer<typeof OpenChestSchema>;
 
+export const SellItemSchema = z.object({
+  inventoryItemId: z.string(),
+});
+export type SellItemInput = z.infer<typeof SellItemSchema>;
+
+export const DiscardItemSchema = z.object({
+  inventoryItemId: z.string(),
+});
+export type DiscardItemInput = z.infer<typeof DiscardItemSchema>;
+
 export const SetActiveSlotSchema = z.object({
   inventoryItemId: z.string(),
   slotIndex: z.number().int().min(0).max(ACTIVE_SLOT_COUNT - 1),

@@ -5,6 +5,7 @@ import { ApiError } from "../../lib/apiClient";
 import { listPlayerZones } from "../../lib/zonesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
 import { startTravel } from "../../lib/travelApi";
+import { getCombatStats } from "../../lib/charactersApi";
 import {
   getActiveExpedition,
   startExpedition,
@@ -16,6 +17,8 @@ import {
 import { CombatLog } from "./CombatLog";
 import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
+import { PlayerVitalsBar } from "./PlayerVitalsBar";
+import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -47,6 +50,7 @@ export function ExpeditionPanel({
   const zonesQuery = useQuery({ queryKey: ["player-zones"], queryFn: listPlayerZones });
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
   const durationQuery = useQuery({ queryKey: ["expedition-duration"], queryFn: getExpeditionDuration });
+  const combatStatsQuery = useQuery({ queryKey: ["combat-stats", characterId], queryFn: () => getCombatStats(characterId) });
 
   const expedition = character.activeExpeditionId ? (activeQuery.data ?? null) : null;
   const arrivedAtMs = expedition ? new Date(expedition.arrivedAt).getTime() : null;
@@ -135,7 +139,8 @@ export function ExpeditionPanel({
   });
 
   const zones = zonesQuery.data ?? [];
-  const itemNameFor = (itemId: string) => itemsQuery.data?.find((i) => i.id === itemId)?.name ?? itemId;
+  const itemFor = (itemId: string) => itemsQuery.data?.find((i) => i.id === itemId);
+  const itemNameFor = (itemId: string) => itemFor(itemId)?.name ?? itemId;
   const zoneNameFor = (zoneId: string | null) => (zoneId ? zones.find((z) => z.id === zoneId)?.name ?? zoneId : "wioski");
 
   if (claimResult) {
@@ -154,7 +159,8 @@ export function ExpeditionPanel({
         {claimResult.result.loot.length > 0 ? (
           <ul className="mt-2 space-y-1 text-sm text-parchment-dim">
             {claimResult.result.loot.map((l) => (
-              <li key={l.itemId}>
+              <li key={l.itemId} className="flex items-center gap-1.5">
+                <ItemTypeIcon type={itemFor(l.itemId)?.type ?? "material"} className="h-4 w-4 shrink-0" />
                 {itemNameFor(l.itemId)} ×{l.quantity}
               </li>
             ))}
@@ -211,10 +217,19 @@ export function ExpeditionPanel({
           </>
         )}
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {combatStatsQuery.data && (
+          <div className="mt-3">
+            <PlayerVitalsBar
+              events={revealedEvents}
+              maxHp={combatStatsQuery.data.maxHp}
+              maxMana={combatStatsQuery.data.maxMana}
+            />
+          </div>
+        )}
         <div className="mt-3">
           <MonsterEncounterPanel events={revealedEvents} />
         </div>
-        <CombatLog events={revealedEvents} itemNameFor={itemNameFor} />
+        <CombatLog events={revealedEvents} itemFor={itemFor} />
       </div>
     );
   }

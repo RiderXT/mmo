@@ -57,6 +57,7 @@ export interface ItemDto {
   classId: string | null;
   upgradeRequirements: { id: string; targetLevel: number; requiredItemId: string; requiredQty: number; requiredItem: { id: string; name: string } }[];
   chestLoot: { id: string; rewardItemId: string; dropChance: number; minQty: number; maxQty: number; rewardItem: { id: string; name: string } }[];
+  sellPrice: number;
   potionTrigger: PotionConfig["trigger"] | null;
   potionThresholdPct: number | null;
   potionIntervalSec: number | null;

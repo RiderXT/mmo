@@ -98,6 +98,7 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
       maxUpgradeStats: JSON.stringify(input.maxUpgradeStats),
       possibleStatRanges: JSON.stringify(input.possibleStatRanges),
       classId: input.classId ?? null,
+      sellPrice: input.sellPrice,
       ...potionData(input),
       upgradeRequirements: {
         create: input.upgradeRequirements.map((r) => ({
@@ -158,6 +159,7 @@ export async function updateItem(
         maxUpgradeStats: JSON.stringify(input.maxUpgradeStats),
         possibleStatRanges: JSON.stringify(input.possibleStatRanges),
         classId: input.classId ?? null,
+        sellPrice: input.sellPrice,
         ...potionData(input),
         upgradeRequirements: {
           create: input.upgradeRequirements.map((r) => ({

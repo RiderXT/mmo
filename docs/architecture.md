@@ -839,6 +839,58 @@ wykryty przez `revert` jako w pełni odwracalny); `revert` na zwykłej, wcześni
 ekspedycji poprawnie odjął dokładnie tyle exp/złota, ile wcześniej przyznano, bez naruszania
 innych danych postaci.
 
+## Pasek HP/MP gracza w walce, ikony lootu, menu kontekstowe itemu (Etap 14)
+
+### Kontekst
+
+Trzy niezależne poprawki UX zgłoszone razem z incydentem z Etapu 13: (1) dziennik walki
+pokazywał aktualne HP/HP potwora wyłącznie jako tekst w każdej linijce rundy — brak żywego,
+ciągłego wskaźnika; (2) event `loot` w dzienniku walki i lista nagród na ekranie odbioru
+pokazywały gołą nazwę przedmiotu zamiast ikony (mimo że siatka ekwipunku ma ikony od Etapu 10);
+(3) prawy klik na przedmiocie od razu otwierał skrzynię (Etap 10) bez żadnego wyboru — brakowało
+ogólnego menu kontekstowego z opcjami Otwórz/Sprzedaj/Usuń.
+
+### A) Pasek HP/MP gracza
+
+Nowy `apps/web/src/components/expedition/PlayerVitalsBar.tsx`: wyprowadza aktualne HP/MP z
+ostatniego odsłoniętego zdarzenia (`round` aktualizuje tylko HP, `skill_activated`/`potion_used`
+aktualizują oba — regeneracja many jest liczona po cichu w symulacji i nie ma własnego zdarzenia
+w logu, więc wartość many po prostu nie zmienia się między zdarzeniami, które ją niosą).
+Renderowany w `ExpeditionPanel.tsx` nad `MonsterEncounterPanel` (który już miał pasek HP
+potwora od Etapu 10) — max HP/MP pobierane z istniejącego `GET /api/characters/:id/combat-stats`.
+Linie rundy w `CombatLog.tsx` skrócone (nie powtarzają już "Twoje HP: X"/"potwór: Y HP" — to
+teraz pokazują paski na żywo, log narracyjnie opisuje tylko co się stało w danej rundzie).
+
+### B) Ikony zamiast tekstu w logu lootu
+
+`CombatLog.tsx`: event `loot` renderuje `ItemTypeIcon` (już istniejący komponent z Etapu 10)
+obok nazwy, zamiast gołego tekstu — wymaga przekazania pełnego `ItemDto` (typ przedmiotu), nie
+tylko nazwy, więc `itemNameFor: (id) => string` w `ExpeditionPanel.tsx` zostało rozszerzone o
+`itemFor: (id) => ItemDto | undefined`. To samo zastosowane w liście nagród na ekranie
+"Ekspedycja zakończona".
+
+### C) Menu kontekstowe przedmiotu (Otwórz / Sprzedaj / Usuń)
+
+Nowy `Item.sellPrice Int @default(0)` (addytywne) — cena sprzedaży za 1 sztukę, 0 = nie do
+sprzedania. Edytowalne w `ItemsAdminPage.tsx`. Nowe akcje w `inventory/service.ts`:
+- `sellItem` — sprzedaje **cały stos** za `sellPrice × quantity` złota, wymaga zdjęcia
+  przedmiotu (equipped nie można sprzedać wprost — częsty błąd w grach z tym wzorcem).
+- `discardItem` — trwale usuwa stos bez nagrody, też wymaga zdjęcia.
+
+Nowy `apps/web/src/components/inventory/ItemContextMenu.tsx`: pozycjonowane menu (`fixed`, przy
+kursorze, zamyka się na klik poza/Escape) z opcjami zależnymi od przedmiotu — "Otwórz" tylko dla
+`type==="chest"`, "Sprzedaj" wyszarzone gdy `sellPrice<=0`, "Usuń" zawsze (z potwierdzeniem).
+`ItemBox.tsx`'s `onContextMenu` nie otwiera już skrzyni bezpośrednio — woła callback z pozycją
+kliknięcia, `GamePage.tsx` trzyma stan otwartego menu i routuje wybraną akcję do odpowiedniej
+mutacji.
+
+Zweryfikowane w przeglądarce: nowa postać (klasa Mag) dostała poprawnie 50 złota + 2 przedmioty
+startowe (potwierdza też, że panel "Złoto/Przedmioty startowe" z wcześniejszego etapu faktycznie
+działa w grze); prawy klik na Miksturze Życia (ustawione `sellPrice: 5`, stos ×3) pokazał menu
+bez "Otwórz" (nie skrzynia), kliknięcie "Sprzedaj" sprzedało cały stos za 15 złota (50→65) i
+usunęło slot; prawy klik na Różdżce Wilków → "Usuń" (z potwierdzeniem) trwale usunął przedmiot
+bez żadnej nagrody.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

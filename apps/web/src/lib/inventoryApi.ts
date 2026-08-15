@@ -23,6 +23,7 @@ export interface InventoryItemDto {
     maxUpgradeStats: Partial<Record<StatKey, number>>;
     classId: string | null;
     class: { id: string; name: string } | null;
+    sellPrice: number;
   };
 }
 
@@ -67,6 +68,18 @@ export const setActiveSlot = (characterId: string, inventoryItemId: string, slot
 
 export const clearActiveSlot = (characterId: string, inventoryItemId: string) =>
   apiFetch<void>(`/api/inventory/${characterId}/clear-active-slot`, {
+    method: "POST",
+    body: JSON.stringify({ inventoryItemId }),
+  });
+
+export const sellItem = (characterId: string, inventoryItemId: string) =>
+  apiFetch<{ goldEarned: number }>(`/api/inventory/${characterId}/sell`, {
+    method: "POST",
+    body: JSON.stringify({ inventoryItemId }),
+  });
+
+export const discardItem = (characterId: string, inventoryItemId: string) =>
+  apiFetch<void>(`/api/inventory/${characterId}/discard`, {
     method: "POST",
     body: JSON.stringify({ inventoryItemId }),
   });

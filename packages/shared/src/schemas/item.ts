@@ -55,6 +55,8 @@ export const CreateItemSchema = z
     // Only meaningful when type === "chest".
     chestLoot: z.array(ChestLootInputSchema).default([]),
     potion: PotionConfigSchema.optional(),
+    // Gold for selling one unit via the inventory context menu. 0 = not sellable.
+    sellPrice: z.number().int().min(0).max(999999).default(0),
   })
   .refine((val) => val.stackable || val.maxStack === 1, {
     message: "Przedmiot niestakujący się musi mieć maxStack = 1",

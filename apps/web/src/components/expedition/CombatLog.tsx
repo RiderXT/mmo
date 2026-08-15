@@ -1,12 +1,24 @@
 import { useEffect, useRef } from "react";
-import type { CombatEvent } from "@mmo/shared";
+import type { CombatEvent, ItemType } from "@mmo/shared";
+import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 
 const EFFECT_LABEL: Record<string, string> = {
   damage: "obrażeń",
   heal: "leczenia",
 };
 
-function EventLine({ event, itemNameFor }: { event: CombatEvent; itemNameFor: (id: string) => string }) {
+export interface LootItemLookup {
+  name: string;
+  type: ItemType;
+}
+
+function EventLine({
+  event,
+  itemFor,
+}: {
+  event: CombatEvent;
+  itemFor: (id: string) => LootItemLookup | undefined;
+}) {
   switch (event.type) {
     case "encounter_start":
       return (
@@ -16,23 +28,22 @@ function EventLine({ event, itemNameFor }: { event: CombatEvent; itemNameFor: (i
         </p>
       );
     case "round":
+      // HP/monster HP are shown live via PlayerVitalsBar / MonsterEncounterPanel above the
+      // log — this line only narrates what happened this round, not the resulting totals.
       return (
         <>
           <p className="text-emerald-300">
-            🗡️ Zadano {event.playerDamage} obrażeń{event.playerCrit ? " (KRYTYK!)" : ""} — potwór: {event.monsterHpAfter} HP
+            🗡️ Zadano {event.playerDamage} obrażeń{event.playerCrit ? " (KRYTYK!)" : ""}
           </p>
           <p className={event.monsterEvaded ? "text-sky-300" : "text-red-300"}>
-            {event.monsterEvaded
-              ? "🛡️ Unik! Potwór nie trafił."
-              : `💢 Otrzymano ${event.monsterDamage} obrażeń — Twoje HP: ${event.playerHpAfter}`}
+            {event.monsterEvaded ? "🛡️ Unik! Potwór nie trafił." : `💢 Otrzymano ${event.monsterDamage} obrażeń`}
           </p>
         </>
       );
     case "skill_activated":
       return (
         <p className="text-violet-300">
-          ✨ {event.skillName}: +{event.power} {EFFECT_LABEL[event.effectType]} — HP: {event.playerHpAfter}, Mana:{" "}
-          {event.playerManaAfter}
+          ✨ {event.skillName}: +{event.power} {EFFECT_LABEL[event.effectType]}
         </p>
       );
     case "encounter_result":
@@ -41,16 +52,19 @@ function EventLine({ event, itemNameFor }: { event: CombatEvent; itemNameFor: (i
           ✅ Zwycięstwo nad {event.monsterName}! +{event.expGained} exp, +{event.goldGained} złota
         </p>
       );
-    case "loot":
+    case "loot": {
+      const item = itemFor(event.itemId);
       return (
-        <p className="text-amber-300">
-          💰 Wypadło: {itemNameFor(event.itemId)} ×{event.quantity}
+        <p className="flex items-center gap-1.5 text-amber-300">
+          <ItemTypeIcon type={item?.type ?? "material"} className="h-4 w-4 shrink-0" />
+          Wypadło: {item?.name ?? event.itemId} ×{event.quantity}
         </p>
       );
+    }
     case "potion_used":
       return (
         <p className="text-cyan-300">
-          🧪 Użyto: {event.itemName} (+{event.amount}) — HP: {event.playerHpAfter}, Mana: {event.playerManaAfter}
+          🧪 Użyto: {event.itemName} (+{event.amount})
         </p>
       );
     case "character_died":
@@ -62,10 +76,10 @@ function EventLine({ event, itemNameFor }: { event: CombatEvent; itemNameFor: (i
 
 export function CombatLog({
   events,
-  itemNameFor,
+  itemFor,
 }: {
   events: CombatEvent[];
-  itemNameFor: (id: string) => string;
+  itemFor: (id: string) => LootItemLookup | undefined;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -93,7 +107,7 @@ export function CombatLog({
       <div className="mt-2 h-48 overflow-y-auto  border border-line bg-ink/60 p-2 font-mono text-xs leading-relaxed">
         {events.length === 0 && <p className="text-parchment-faint">Ekspedycja się rozpoczyna…</p>}
         {events.map((event, idx) => (
-          <EventLine key={idx} event={event} itemNameFor={itemNameFor} />
+          <EventLine key={idx} event={event} itemFor={itemFor} />
         ))}
         <div ref={bottomRef} />
       </div>

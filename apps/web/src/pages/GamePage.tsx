@@ -8,6 +8,7 @@ import { GridSlot } from "../components/inventory/GridSlot";
 import { EquipSlotBox } from "../components/inventory/EquipSlotBox";
 import { ActiveItemSlotBox } from "../components/inventory/ActiveItemSlotBox";
 import { ItemBox } from "../components/inventory/ItemBox";
+import { ItemContextMenu, type ItemContextMenuTarget } from "../components/inventory/ItemContextMenu";
 import { ExpeditionPanel } from "../components/expedition/ExpeditionPanel";
 import { StatsPanel } from "../components/character/StatsPanel";
 import { SkillsPanel } from "../components/character/SkillsPanel";
@@ -26,6 +27,8 @@ import {
   setActiveSlot,
   clearActiveSlot,
   openChest,
+  sellItem,
+  discardItem,
   type InventoryItemDto,
 } from "../lib/inventoryApi";
 
@@ -42,6 +45,7 @@ export function GamePage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [chestResult, setChestResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [contextMenu, setContextMenu] = useState<ItemContextMenuTarget | null>(null);
   // Require a small pointer movement before a drag starts, so a plain click/tap
   // (to select an item and show its details) still fires instead of being
   // swallowed by the drag sensor.
@@ -115,6 +119,39 @@ export function GamePage() {
     },
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się otworzyć skrzyni"),
   });
+
+  const sellMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => sellItem(characterId!, inventoryItemId),
+    onSuccess: (data) => {
+      invalidateInventory();
+      queryClient.invalidateQueries({ queryKey: ["character", characterId] });
+      setActionError(null);
+      setChestResult(`Sprzedano za ${data.goldEarned} złota.`);
+      setTimeout(() => setChestResult(null), 4000);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się sprzedać przedmiotu"),
+  });
+
+  const discardMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => discardItem(characterId!, inventoryItemId),
+    onSuccess: () => {
+      invalidateInventory();
+      setActionError(null);
+      if (selectedId) setSelectedId(null);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się usunąć przedmiotu"),
+  });
+
+  function handleItemContextMenu(item: InventoryItemDto, x: number, y: number) {
+    setContextMenu({
+      inventoryItemId: item.id,
+      name: item.item.name,
+      canOpen: item.item.type === "chest",
+      canSell: item.item.sellPrice > 0 && !item.equippedSlot,
+      x,
+      y,
+    });
+  }
 
   const setActiveSlotMutation = useMutation({
     mutationFn: (vars: { inventoryItemId: string; slotIndex: number }) =>
@@ -228,7 +265,7 @@ export function GamePage() {
                         inventoryItem={item}
                         selected={item.id === selectedId}
                         onSelect={() => setSelectedId(item.id)}
-                        onOpenChest={(id) => openChestMutation.mutate(id)}
+                        onContextMenu={handleItemContextMenu}
                       />
                     )}
                   </EquipSlotBox>
@@ -249,7 +286,7 @@ export function GamePage() {
                         inventoryItem={item}
                         selected={item.id === selectedId}
                         onSelect={() => setSelectedId(item.id)}
-                        onOpenChest={(id) => openChestMutation.mutate(id)}
+                        onContextMenu={handleItemContextMenu}
                       />
                     )}
                   </ActiveItemSlotBox>
@@ -289,7 +326,7 @@ export function GamePage() {
                         inventoryItem={item}
                         selected={item.id === selectedId}
                         onSelect={() => setSelectedId(item.id)}
-                        onOpenChest={(id) => openChestMutation.mutate(id)}
+                        onContextMenu={handleItemContextMenu}
                       />
                     )}
                   </GridSlot>
@@ -343,6 +380,16 @@ export function GamePage() {
             </button>
           )}
         </div>
+      )}
+
+      {contextMenu && (
+        <ItemContextMenu
+          target={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onOpen={(id) => openChestMutation.mutate(id)}
+          onSell={(id) => sellMutation.mutate(id)}
+          onDiscard={(id) => discardMutation.mutate(id)}
+        />
       )}
     </AppShell>
   );

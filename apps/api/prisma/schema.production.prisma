@@ -201,6 +201,8 @@ model Item {
   potionEffect        String? // "restore_hp" | "restore_mana" | "buff_attack_speed" | "buff_attack" | "buff_defense"
   potionMagnitudePct  Float?
   potionDurationSec   Int?
+  // Gold received for selling one unit via the inventory context menu. 0 = not sellable.
+  sellPrice           Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

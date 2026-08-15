@@ -7,6 +7,8 @@ import {
   SetActiveSlotSchema,
   ClearActiveSlotSchema,
   OpenChestSchema,
+  SellItemSchema,
+  DiscardItemSchema,
 } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
 import {
@@ -18,6 +20,8 @@ import {
   setActiveSlot,
   clearActiveSlot,
   openChest,
+  sellItem,
+  discardItem,
   InventoryError,
 } from "./service.js";
 
@@ -110,6 +114,30 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
     try {
       const result = await openChest({ characterId, ...body }, request.user!.sub, request.id);
       return reply.send(result);
+    } catch (err) {
+      if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:characterId/sell", { preHandler: requireAuth }, async (request, reply) => {
+    const { characterId } = request.params as { characterId: string };
+    const body = SellItemSchema.parse(request.body);
+    try {
+      const result = await sellItem({ characterId, ...body }, request.user!.sub, request.id);
+      return reply.send(result);
+    } catch (err) {
+      if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:characterId/discard", { preHandler: requireAuth }, async (request, reply) => {
+    const { characterId } = request.params as { characterId: string };
+    const body = DiscardItemSchema.parse(request.body);
+    try {
+      await discardItem({ characterId, ...body }, request.user!.sub, request.id);
+      return reply.code(204).send();
     } catch (err) {
       if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;

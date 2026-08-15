@@ -356,6 +356,81 @@ export async function openChest(
   return { awarded };
 }
 
+/** Sells the whole stack for item.sellPrice × quantity gold. Equipped items must be unequipped
+ * first — selling straight out of a slot is a common source of accidental gear loss in games
+ * with this pattern, so it's blocked here rather than silently unequipping. */
+export async function sellItem(
+  input: { characterId: string; inventoryItemId: string },
+  userId: string,
+  requestId?: string,
+) {
+  await assertCharacterOwnership(input.characterId, userId);
+
+  const inventoryItem = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: true },
+  });
+  if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
+    throw new InventoryError("Nie znaleziono przedmiotu", 404);
+  }
+  if (inventoryItem.equippedSlot) {
+    throw new InventoryError("Zdejmij przedmiot przed sprzedażą", 400);
+  }
+  if (inventoryItem.item.sellPrice <= 0) {
+    throw new InventoryError("Ten przedmiot nie ma ustalonej wartości sprzedaży", 400);
+  }
+
+  const goldEarned = inventoryItem.item.sellPrice * inventoryItem.quantity;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.inventoryItem.delete({ where: { id: inventoryItem.id } });
+    await tx.character.update({
+      where: { id: input.characterId },
+      data: { gold: { increment: goldEarned } },
+    });
+  });
+
+  await logAction({
+    module: "inventory",
+    action: "sell",
+    actorUserId: userId,
+    actorCharacterId: input.characterId,
+    requestId,
+    payload: { inventoryItemId: input.inventoryItemId, itemId: inventoryItem.itemId, quantity: inventoryItem.quantity, goldEarned },
+  });
+
+  return { goldEarned };
+}
+
+/** Permanently removes an item stack from the inventory with no reward — for junk the player
+ * wants gone. Equipped items must be unequipped first (same reasoning as sellItem). */
+export async function discardItem(
+  input: { characterId: string; inventoryItemId: string },
+  userId: string,
+  requestId?: string,
+) {
+  await assertCharacterOwnership(input.characterId, userId);
+
+  const inventoryItem = await prisma.inventoryItem.findUnique({ where: { id: input.inventoryItemId } });
+  if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
+    throw new InventoryError("Nie znaleziono przedmiotu", 404);
+  }
+  if (inventoryItem.equippedSlot) {
+    throw new InventoryError("Zdejmij przedmiot przed usunięciem", 400);
+  }
+
+  await prisma.inventoryItem.delete({ where: { id: inventoryItem.id } });
+
+  await logAction({
+    module: "inventory",
+    action: "discard",
+    actorUserId: userId,
+    actorCharacterId: input.characterId,
+    requestId,
+    payload: { inventoryItemId: input.inventoryItemId, itemId: inventoryItem.itemId, quantity: inventoryItem.quantity },
+  });
+}
+
 /** A narrow range (e.g. critChance 0.01-0.03) is a fractional/percentage stat and must not be
  * rounded to an integer first — that would floor it to 0. A wide range (e.g. attack 20-40) is
  * a whole-number stat and should roll a clean integer, not a stray float like 23.647. */

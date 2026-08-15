@@ -22,12 +22,12 @@ export function ItemBox({
   inventoryItem,
   onSelect,
   selected,
-  onOpenChest,
+  onContextMenu,
 }: {
   inventoryItem: InventoryItemDto;
   onSelect: () => void;
   selected: boolean;
-  onOpenChest?: (inventoryItemId: string) => void;
+  onContextMenu?: (inventoryItem: InventoryItemDto, x: number, y: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inventoryItem.id,
@@ -54,9 +54,9 @@ export function ItemBox({
         {...attributes}
         onClick={onSelect}
         onContextMenu={(e) => {
-          if (inventoryItem.item.type !== "chest" || !onOpenChest) return;
+          if (!onContextMenu) return;
           e.preventDefault();
-          onOpenChest(inventoryItem.id);
+          onContextMenu(inventoryItem, e.clientX, e.clientY);
         }}
         style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
         className={`relative flex h-14 w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-[10px] font-medium text-parchment active:cursor-grabbing ${
