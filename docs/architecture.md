@@ -381,6 +381,75 @@ realną motywacją, a nie formalnością.
 To pierwszy przebieg — dane celowo nazwane "bazą do dostosowania" (cytat użytkownika), nie
 finalnym balansem; kolejne poprawki po realnym playtestingu.
 
+## Ulepszenia +0..+9, itemy per klasa, gęstsza treść 1-99 (Etap 7)
+
+Po pierwszym przebiegu balansu krain 1-99 (Etap 6) użytkownik chciał gęstszą, bardziej
+autentyczną treść opartą na realnych danych z Metin2 wiki (tabela bonusów, lista potworów per
+przedział poziomowy, strony broni/zbroi/hełmów per klasa) — więcej krain (węższe przedziały),
+więcej potworów per krainę o zróżnicowanych poziomach, ulepszanie +0..+9 faktycznie
+wpływające na staty (dotąd `InventoryItem.upgradeLevel` był zapisywany, ale nigdy nieczytany
+przez silnik walki), oraz sety ograniczone do konkretnej klasy postaci.
+
+**Model danych**: `Item` dostał `classId` (nullable FK do `CharacterClass` — null = uniwersalny,
+stosowane tylko do `weapon`/`armor`/`helmet`) i `maxUpgradeStats` (JSON `StatBlock`, staty przy
++9 — `baseStats` teraz reprezentuje +0). Oba pola mają defaulty, więc `prisma db push` przeszedł
+bez utraty danych (bez resetu `dev.db`, w przeciwieństwie do Etapów 5-6).
+
+**Interpolacja ulepszenia**: `interpolateUpgrade(base, max, level)` w `combat.ts` — liniowa
+interpolacja między +0 a +9 per stat, brak wpisu w `maxUpgradeStats` = stat nie rośnie z
+ulepszeniem. Użyta w `gatherCombatBuild` (`expeditions/service.ts`) do liczenia realnych statów
+ekwipunku (zamiast płaskiego `item.baseStats`), oraz zduplikowana we froncie
+(`apps/web/src/lib/statMath.ts`) do pokazywania graczowi realnej, przeliczonej wartości w
+panelu przedmiotu i tooltipie `ItemBox`. **Pułapka znaleziona przy weryfikacji**: pierwsza
+wersja robiła `Math.round()` na każdym stacie — dla dużych statów (attack/defense/hp) to
+poprawne, ale dla ułamkowych (`movementSpeed`, `critChance`, ...) zaokrąglało np. 0.1 w dół do
+0, cichym zerowaniem stou. Naprawione przez usunięcie zaokrąglania z `interpolateUpgrade` —
+`computeDerivedStats` i tak zaokrągla finalne, zsumowane staty tam gdzie to ma sens.
+
+**Ograniczenie klasą**: `equipItem` (`inventory/service.ts`) odrzuca (400) próbę założenia
+itemu z ustawionym `classId` przez postać innej klasy — jedna sprawdzana linijka, bo
+`assertCharacterOwnership` już zwracała postać. `deleteCharacterClass` dodatkowo blokuje
+usunięcie klasy, do której przypisane są itemy (analogicznie do istniejącego blokowania przy
+przypisanych postaciach).
+
+**Druga pułapka, niezwiązana z tym etapem wprost, ale odkryta przy testowaniu bogatszej puli
+losowych bonusów**: `rollItemStats` (`inventory/service.ts`, dropowanie itemów) od zawsze
+zaokrąglał `min`/`max` zakresu do liczb całkowitych PRZED losowaniem — dla zakresów w rodzaju
+`critChance: 0.01-0.03` dawało to `randomInt(0, 0)`, czyli **zawsze 0**. Bug był niewidoczny
+wcześniej, bo dotąd prawie nikt nie definiował ułamkowych `possibleStatRanges`. Naprawione
+nowym `randomInRange` — zakresy węższe niż 2 (ułamkowe/procentowe staty) losowane bez
+zaokrąglania pośredniego (wynik zaokrąglony do 4 miejsc), szersze (staty całkowitoliczbowe)
+zachowują się jak dawniej.
+
+**Generator treści** (`apps/api/prisma/seed-zones.ts`, pełna przebudowa): 10 węższych krain
+(1-10, 11-20, ..., 91-99, zamiast dawnych 6 szerszych) zamiast dawnych 5 nowych + ręcznie
+zasianej pierwszej — teraz **wszystkie 10, łącznie z Wilczym Uroczyskiem, generowane tym samym
+kodem** (stary, ręcznie zasiany potwór/itemy Wilcze Uroczysko usuwane jednorazowo przez
+`clearLegacySeedContent`). Per krainę: **5 potworów** rozłożonych równomiernie po poziomach w
+przedziale (nie tylko końce), każdy z osobno policzonym hp/atakiem/exp/dropem (funkcja
+`monsterStatsForLevel`, ewaluowana per-poziom zamiast raz na `zone.minLevel` jak w Etapie 6);
+**16 itemów** — broń+zbroja+hełm dla każdej z 4 klas (nazwy w dopełniaczu, np. "Miecz
+Mokradeł", "Hełm Wojownika Mokradeł" — dopełniacz celowo omija polską zgodność
+przymiotnik-rzeczownik rodzajowo, bo działa identycznie po rzeczowniku męskim i żeńskim) +
+uniwersalne buty/naszyjnik/kolczyki/pierścień; **jeden uniwersalny kamień wzmocnienia na
+krainę** + pętla `ItemUpgradeRequirement` dla poziomów 1-9 na wszystkich 16 itemach (rosnąca
+ilość, `qty = poziom × 2`) zamiast ręcznych wpisów. Skrypt pozostaje bezpieczny do
+wielokrotnego uruchomienia (usuń-po-nazwie-i-odtwórz), bo użytkownik będzie dalej stroił
+liczby.
+
+**Świadomie poza zakresem** (nowe mechaniki silnika, nie tylko treść): odporności na typy
+przeciwników, szansa na podwójny drop/yang, szanse na debuff przy trafieniu, bonusowe punkty
+statystyk z itemu — bonusy losowe ograniczone do istniejących `StatKey`.
+
+Zweryfikowane: curl — item z `classId` ustawionym na Wojownika odrzucony (400) przy próbie
+equip przez Maga, przechodzi na Wojowniku; `combat-stats` rośnie dokładnie liniowo z
+`upgradeLevel` (test: attack 28 przy +0, 68 przy +4, 118 przy +9, dla `baseStats.attack=10` →
+`maxUpgradeStats.attack=100`); pełna ekspedycja w środkowej krainie (Krwawy Wąwóz, postać
+poziom 30 w kompletnym secie Wojownika tej krainy) — 30/30 wygranych na wszystkich 5 wariantach
+potwora, potwierdzając że wzór trudności z Etapu 6 skaluje się poprawnie przy nowej, gęstszej
+strukturze. Przeglądarka: formularz admina pokazuje select klasy i oba edytory statów
+(bazowe/+9) dla itemu typu weapon z poprawnie wypełnionymi wartościami.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

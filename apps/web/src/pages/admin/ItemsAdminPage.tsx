@@ -11,12 +11,13 @@ import {
 import { AppShell } from "../../components/AppShell";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
-import { listItems, createItem, updateItem, deleteItem, type ItemDto } from "../../lib/adminApi";
+import { listItems, createItem, updateItem, deleteItem, listClasses, type ItemDto } from "../../lib/adminApi";
 
 const ITEM_TYPES = ItemTypeSchema.options;
 const STAT_KEYS = StatKeySchema.options;
 const POTION_TRIGGERS = PotionTriggerSchema.options;
 const POTION_EFFECTS = PotionEffectSchema.options;
+const CLASS_RESTRICTABLE_TYPES = new Set<CreateItemInput["type"]>(["weapon", "armor", "helmet"]);
 
 function defaultPotion(): NonNullable<CreateItemInput["potion"]> {
   return { trigger: "hp_below", thresholdPct: 0.3, effect: "restore_hp", magnitudePct: 0.3 };
@@ -31,7 +32,9 @@ function emptyForm(): CreateItemInput {
     maxStack: 99,
     description: "",
     baseStats: {},
+    maxUpgradeStats: {},
     possibleStatRanges: [],
+    classId: null,
     upgradeRequirements: [],
   };
 }
@@ -45,7 +48,9 @@ function fromDto(item: ItemDto): CreateItemInput {
     maxStack: item.maxStack,
     description: item.description,
     baseStats: item.baseStats,
+    maxUpgradeStats: item.maxUpgradeStats,
     possibleStatRanges: item.possibleStatRanges,
+    classId: item.classId,
     upgradeRequirements: item.upgradeRequirements.map((r) => ({
       targetLevel: r.targetLevel,
       requiredItemId: r.requiredItemId,
@@ -65,9 +70,79 @@ function fromDto(item: ItemDto): CreateItemInput {
   };
 }
 
+/** Flat key -> value editor for a Record<StatKey, number>, e.g. baseStats/maxUpgradeStats — a
+ * simpler cousin of the possibleStatRanges editor (no min/max/weight, just one value per row). */
+function StatValueEditor({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: Partial<Record<(typeof STAT_KEYS)[number], number>>;
+  onChange: (next: Partial<Record<(typeof STAT_KEYS)[number], number>>) => void;
+}) {
+  const entries = Object.entries(value) as [(typeof STAT_KEYS)[number], number][];
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-medium text-parchment-dim">{label}</p>
+      <div className="space-y-2">
+        {entries.map(([stat, val], idx) => (
+          <div key={idx} className="flex flex-wrap items-center gap-2">
+            <select
+              className={`${inputClass} w-32`}
+              value={stat}
+              onChange={(e) => {
+                const nextStat = e.target.value as (typeof STAT_KEYS)[number];
+                const next = { ...value };
+                delete next[stat];
+                next[nextStat] = val;
+                onChange(next);
+              }}
+            >
+              {STAT_KEYS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              placeholder="wartość"
+              className={`${inputClass} w-24`}
+              value={val}
+              onChange={(e) => onChange({ ...value, [stat]: Number(e.target.value) })}
+            />
+            <button
+              onClick={() => {
+                const next = { ...value };
+                delete next[stat];
+                onChange(next);
+              }}
+              className="text-red-400 hover:underline"
+            >
+              Usuń
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            const unused = STAT_KEYS.find((s) => !(s in value)) ?? STAT_KEYS[0];
+            onChange({ ...value, [unused]: 0 });
+          }}
+          className="text-sm text-gold-bright hover:underline"
+        >
+          + Dodaj stat
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ItemsAdminPage() {
   const queryClient = useQueryClient();
   const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
+  const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateItemInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +287,22 @@ export function ItemsAdminPage() {
                 onChange={(e) => setForm({ ...form, minLevel: Number(e.target.value) })}
               />
             </Field>
+            {CLASS_RESTRICTABLE_TYPES.has(form.type) && (
+              <Field label="Klasa (ogranicza kto może założyć)">
+                <select
+                  className={inputClass}
+                  value={form.classId ?? ""}
+                  onChange={(e) => setForm({ ...form, classId: e.target.value || null })}
+                >
+                  <option value="">Uniwersalny</option>
+                  {classesQuery.data?.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field label="Stackuje się w EQ?">
               <div className="flex items-center gap-3 pt-1.5">
                 <input
@@ -353,6 +444,18 @@ export function ItemsAdminPage() {
               </div>
             </div>
           )}
+
+          <StatValueEditor
+            label="Staty bazowe (przy +0)"
+            value={form.baseStats}
+            onChange={(next) => setForm({ ...form, baseStats: next })}
+          />
+
+          <StatValueEditor
+            label="Staty przy +9 (interpolowane liniowo od +0 do +9 wg poziomu ulepszenia; stat pominięty tutaj nie rośnie z ulepszeniem)"
+            value={form.maxUpgradeStats}
+            onChange={(next) => setForm({ ...form, maxUpgradeStats: next })}
+          />
 
           <div>
             <p className="mb-2 text-xs font-medium text-parchment-dim">

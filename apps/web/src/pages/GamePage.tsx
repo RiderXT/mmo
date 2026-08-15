@@ -14,6 +14,7 @@ import { SkillsPanel } from "../components/character/SkillsPanel";
 import { VitalsPanel } from "../components/character/VitalsPanel";
 import { ApiError } from "../lib/apiClient";
 import { getCharacter } from "../lib/charactersApi";
+import { interpolateUpgrade } from "../lib/statMath";
 import {
   listInventory,
   moveItem,
@@ -294,7 +295,10 @@ export function GamePage() {
           </p>
           {selected.item.description && <p className="text-sm text-parchment-dim">{selected.item.description}</p>}
           <div className="text-sm text-parchment-dim">
-            {Object.entries({ ...selected.item.baseStats, ...selected.rolledStats })
+            {Object.entries({
+              ...interpolateUpgrade(selected.item.baseStats, selected.item.maxUpgradeStats, selected.upgradeLevel),
+              ...selected.rolledStats,
+            })
               .filter(([, v]) => v)
               .map(([k, v]) => (
                 <span key={k} className="mr-3 inline-block">

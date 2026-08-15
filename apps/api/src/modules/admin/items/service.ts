@@ -15,12 +15,19 @@ export class ItemError extends Error {
   }
 }
 
-function serialize<T extends { baseStats: string; possibleStatRanges: string }>(item: T) {
+function serialize<T extends { baseStats: string; maxUpgradeStats: string; possibleStatRanges: string }>(item: T) {
   return {
     ...item,
     baseStats: JSON.parse(item.baseStats) as unknown,
+    maxUpgradeStats: JSON.parse(item.maxUpgradeStats) as unknown,
     possibleStatRanges: JSON.parse(item.possibleStatRanges) as unknown,
   };
+}
+
+async function assertClassExists(classId: string | null | undefined) {
+  if (!classId) return;
+  const count = await prisma.characterClass.count({ where: { id: classId } });
+  if (count === 0) throw new ItemError("Wskazana klasa nie istnieje", 400);
 }
 
 function potionData(input: CreateItemInput) {
@@ -59,6 +66,7 @@ async function assertUpgradeItemsExist(input: CreateItemInput, selfId?: string) 
 
 export async function createItem(input: CreateItemInput, actorUserId: string, requestId?: string) {
   await assertUpgradeItemsExist(input);
+  await assertClassExists(input.classId);
 
   const item = await prisma.item.create({
     data: {
@@ -69,7 +77,9 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
       maxStack: input.maxStack,
       description: input.description,
       baseStats: JSON.stringify(input.baseStats),
+      maxUpgradeStats: JSON.stringify(input.maxUpgradeStats),
       possibleStatRanges: JSON.stringify(input.possibleStatRanges),
+      classId: input.classId ?? null,
       ...potionData(input),
       upgradeRequirements: {
         create: input.upgradeRequirements.map((r) => ({
@@ -103,6 +113,7 @@ export async function updateItem(
   if (!existing) throw new ItemError("Nie znaleziono itemu", 404);
 
   await assertUpgradeItemsExist(input, id);
+  await assertClassExists(input.classId);
 
   const item = await prisma.$transaction(async (tx) => {
     await tx.itemUpgradeRequirement.deleteMany({ where: { itemId: id } });
@@ -116,7 +127,9 @@ export async function updateItem(
         maxStack: input.maxStack,
         description: input.description,
         baseStats: JSON.stringify(input.baseStats),
+        maxUpgradeStats: JSON.stringify(input.maxUpgradeStats),
         possibleStatRanges: JSON.stringify(input.possibleStatRanges),
+        classId: input.classId ?? null,
         ...potionData(input),
         upgradeRequirements: {
           create: input.upgradeRequirements.map((r) => ({

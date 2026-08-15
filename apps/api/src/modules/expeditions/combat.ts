@@ -1,5 +1,28 @@
 import type { StatBlock, StatKey, CoreStatKey, ExpeditionResult, CombatEvent } from "@mmo/shared";
 
+/**
+ * Interpolates an item's stats between +0 (base) and +9 (maxUpgradeStats) by its current
+ * upgrade level. A stat present in `base` but missing from `max` doesn't grow with upgrades
+ * (e.g. a random-rolled bonus stat that isn't part of the item's own refine progression) —
+ * random `rolledStats` are never passed through this function, only the item's base stats.
+ *
+ * Deliberately NOT rounded here — StatKey mixes large integer stats (attack/defense/hp) with
+ * small fractional ones (movementSpeed, critChance, evasion, ...); rounding unconditionally
+ * would floor e.g. 0.1 movementSpeed to 0. computeDerivedStats already rounds each derived
+ * stat appropriately once all contributions (equipment + passives + core) are summed.
+ */
+export function interpolateUpgrade(base: StatBlock, max: StatBlock, level: number): StatBlock {
+  const t = Math.min(9, Math.max(0, level)) / 9;
+  const keys = new Set([...Object.keys(base), ...Object.keys(max)]) as Set<StatKey>;
+  const result: StatBlock = {};
+  for (const key of keys) {
+    const b = base[key] ?? 0;
+    const m = max[key] ?? b;
+    result[key] = b + (m - b) * t;
+  }
+  return result;
+}
+
 export interface CharacterCoreStats {
   strength: number;
   vitality: number;

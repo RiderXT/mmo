@@ -20,6 +20,7 @@ export interface InventoryItemDto {
     maxStack: number;
     description: string;
     baseStats: Partial<Record<StatKey, number>>;
+    maxUpgradeStats: Partial<Record<StatKey, number>>;
   };
 }
 

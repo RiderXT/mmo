@@ -1,5 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import type { InventoryItemDto } from "../../lib/inventoryApi";
+import { interpolateUpgrade } from "../../lib/statMath";
 
 const TYPE_COLORS: Record<string, string> = {
   weapon: "border-hp/60 bg-hp/10",
@@ -35,7 +36,10 @@ export function ItemBox({
     data: { inventoryItem },
   });
 
-  const stats = { ...inventoryItem.item.baseStats, ...inventoryItem.rolledStats };
+  const stats = {
+    ...interpolateUpgrade(inventoryItem.item.baseStats, inventoryItem.item.maxUpgradeStats, inventoryItem.upgradeLevel),
+    ...inventoryItem.rolledStats,
+  };
   const title = `${inventoryItem.item.name}${inventoryItem.upgradeLevel ? ` +${inventoryItem.upgradeLevel}` : ""}\n${statsSummary(stats)}`;
 
   return (

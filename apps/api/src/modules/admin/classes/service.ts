@@ -129,9 +129,15 @@ export async function deleteCharacterClass(id: string, actorUserId: string, requ
   const existing = await prisma.characterClass.findUnique({ where: { id } });
   if (!existing) throw new ClassError("Nie znaleziono klasy", 404);
 
-  const inUse = await prisma.character.count({ where: { classId: id } });
-  if (inUse > 0) {
+  const [charactersInUse, itemsInUse] = await Promise.all([
+    prisma.character.count({ where: { classId: id } }),
+    prisma.item.count({ where: { classId: id } }),
+  ]);
+  if (charactersInUse > 0) {
     throw new ClassError("Nie można usunąć klasy, którą ma przypisaną jakaś postać", 409);
+  }
+  if (itemsInUse > 0) {
+    throw new ClassError("Nie można usunąć klasy, do której przypisane są itemy", 409);
   }
 
   await prisma.characterClass.delete({ where: { id } });

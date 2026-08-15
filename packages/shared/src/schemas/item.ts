@@ -36,7 +36,12 @@ export const CreateItemSchema = z
     maxStack: z.number().int().min(1).max(9999).default(1),
     description: z.string().trim().max(2000).optional().default(""),
     baseStats: z.record(StatKeySchema, z.number()).default({}),
+    // Stats at +9 — interpolated with baseStats (+0) by InventoryItem.upgradeLevel. A key
+    // present in baseStats but absent here means that stat doesn't grow with upgrades.
+    maxUpgradeStats: z.record(StatKeySchema, z.number()).default({}),
     possibleStatRanges: z.array(StatRangeSchema).default([]),
+    // null/omitted = usable by any class. Only meaningful for weapon/armor/helmet.
+    classId: z.string().nullable().optional(),
     upgradeRequirements: z.array(UpgradeRequirementInputSchema).default([]),
     potion: PotionConfigSchema.optional(),
   })

@@ -44,7 +44,9 @@ export interface ItemDto {
   maxStack: number;
   description: string;
   baseStats: Partial<Record<StatKey, number>>;
+  maxUpgradeStats: Partial<Record<StatKey, number>>;
   possibleStatRanges: { stat: StatKey; min: number; max: number; weight: number }[];
+  classId: string | null;
   upgradeRequirements: { id: string; targetLevel: number; requiredItemId: string; requiredQty: number; requiredItem: { id: string; name: string } }[];
   potionTrigger: PotionConfig["trigger"] | null;
   potionThresholdPct: number | null;

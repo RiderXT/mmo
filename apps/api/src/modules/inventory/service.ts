@@ -44,7 +44,12 @@ export async function listInventory(characterId: string, userId: string) {
   });
   return items.map((i) => ({
     ...serializeInventoryItem(i),
-    item: { ...i.item, baseStats: JSON.parse(i.item.baseStats), possibleStatRanges: JSON.parse(i.item.possibleStatRanges) },
+    item: {
+      ...i.item,
+      baseStats: JSON.parse(i.item.baseStats),
+      maxUpgradeStats: JSON.parse(i.item.maxUpgradeStats),
+      possibleStatRanges: JSON.parse(i.item.possibleStatRanges),
+    },
   }));
 }
 
@@ -90,7 +95,7 @@ export async function equipItem(
   userId: string,
   requestId?: string,
 ) {
-  await assertCharacterOwnership(input.characterId, userId);
+  const owner = await assertCharacterOwnership(input.characterId, userId);
 
   const inventoryItem = await prisma.inventoryItem.findUnique({
     where: { id: input.inventoryItemId },
@@ -103,6 +108,10 @@ export async function equipItem(
   const allowedSlots = EQUIPPABLE_SLOTS_BY_TYPE[inventoryItem.item.type as ItemType];
   if (!allowedSlots || !allowedSlots.includes(input.equipSlot)) {
     throw new InventoryError("Tego przedmiotu nie można założyć w tym slocie", 400);
+  }
+
+  if (inventoryItem.item.classId && inventoryItem.item.classId !== owner.classId) {
+    throw new InventoryError("Ten przedmiot jest dostępny tylko dla innej klasy postaci", 400);
   }
 
   await prisma.$transaction(async (tx) => {
@@ -295,6 +304,16 @@ function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/** A narrow range (e.g. critChance 0.01-0.03) is a fractional/percentage stat and must not be
+ * rounded to an integer first — that would floor it to 0. A wide range (e.g. attack 20-40) is
+ * a whole-number stat and should roll a clean integer, not a stray float like 23.647. */
+function randomInRange(min: number, max: number): number {
+  if (Math.abs(max - min) < 2) {
+    return Math.round((min + Math.random() * (max - min)) * 10000) / 10000;
+  }
+  return randomInt(Math.round(min), Math.round(max));
+}
+
 /** Weighted sample without replacement of up to `count` stat ranges, each rolled to a concrete value. */
 function rollItemStats(possibleStatRanges: StatRange[], count = 3): Record<string, number> {
   const pool = [...possibleStatRanges];
@@ -314,7 +333,7 @@ function rollItemStats(possibleStatRanges: StatRange[], count = 3): Record<strin
 
   const stats: Record<string, number> = {};
   for (const range of picked) {
-    stats[range.stat] = randomInt(Math.round(range.min), Math.round(range.max));
+    stats[range.stat] = randomInRange(range.min, range.max);
   }
   return stats;
 }

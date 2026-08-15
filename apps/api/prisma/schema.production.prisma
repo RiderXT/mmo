@@ -85,6 +85,7 @@ model CharacterClass {
 
   skills     ClassSkill[]
   characters Character[]
+  items      Item[]
 }
 
 model ClassSkill {
@@ -176,8 +177,11 @@ model Item {
   stackable           Boolean  @default(false)
   maxStack            Int      @default(1)
   description         String   @default("")
-  baseStats           String   @default("{}") // JSON: StatBlock
+  baseStats           String   @default("{}") // JSON: StatBlock — stats at +0
+  maxUpgradeStats      String   @default("{}") // JSON: StatBlock — stats at +9, interpolated with baseStats by upgradeLevel
   possibleStatRanges  String   @default("[]") // JSON: StatRange[]
+  // Class restriction — null = usable by any class. Only meaningful for weapon/armor/helmet.
+  classId             String?
   // Potion behavior — only meaningful when type === "consumable".
   potionTrigger       String? // "hp_below" | "mana_below" | "interval"
   potionThresholdPct  Float?
@@ -188,12 +192,14 @@ model Item {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  class               CharacterClass? @relation(fields: [classId], references: [id])
   monsterDrops        MonsterDrop[]
   zoneDrops           ZoneDrop[]
   inventoryItems      InventoryItem[]
   upgradeRequirements ItemUpgradeRequirement[] @relation("ItemUpgradeFor")
   usedInUpgrades      ItemUpgradeRequirement[] @relation("ItemUpgradeMaterial")
 
+  @@index([classId])
   @@index([type])
 }
 

@@ -4,6 +4,7 @@ import { getExpeditionDurationMinutes } from "../settings/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import {
   computeDerivedStats,
+  interpolateUpgrade,
   simulateExpedition,
   type CharacterCoreStats,
   type PassiveSkillBonus,
@@ -61,7 +62,11 @@ async function gatherCombatBuild(characterId: string) {
   };
 
   const equipmentStats: StatBlock[] = equipped.map((inv) => ({
-    ...(JSON.parse(inv.item.baseStats) as StatBlock),
+    ...interpolateUpgrade(
+      JSON.parse(inv.item.baseStats) as StatBlock,
+      JSON.parse(inv.item.maxUpgradeStats) as StatBlock,
+      inv.upgradeLevel,
+    ),
     ...(JSON.parse(inv.rolledStats) as StatBlock),
   }));
 
