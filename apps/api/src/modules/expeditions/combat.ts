@@ -170,6 +170,8 @@ export function simulateExpedition(
   activeSkills: ActiveSkillDef[],
   potions: PotionSlot[],
   durationMinutes: number,
+  expMultiplier = 1,
+  goldMultiplier = 1,
 ): SimulationOutcome {
   let hp = stats.maxHp;
   let mana = stats.maxMana;
@@ -365,8 +367,10 @@ export function simulateExpedition(
 
     if (monsterHp <= 0) {
       monstersDefeated += 1;
-      expGained += currentMonster.expReward;
-      goldGained += currentMonster.goldReward;
+      const expReward = Math.round(currentMonster.expReward * expMultiplier);
+      const goldReward = Math.round(currentMonster.goldReward * goldMultiplier);
+      expGained += expReward;
+      goldGained += goldReward;
       for (const drop of currentMonster.drops) {
         if (Math.random() < drop.dropChance) {
           const qty = randomInt(drop.minQty, drop.maxQty);
@@ -385,8 +389,8 @@ export function simulateExpedition(
         type: "encounter_result",
         monsterId: currentMonster.monsterId,
         monsterName: currentMonster.name,
-        expGained: currentMonster.expReward,
-        goldGained: currentMonster.goldReward,
+        expGained: expReward,
+        goldGained: goldReward,
       });
       currentMonster = null;
     }

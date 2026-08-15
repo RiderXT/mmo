@@ -11,6 +11,7 @@ import type {
   PotionConfig,
   AdminGrantInput,
   AdminCharacterDto,
+  CreateGameEventInput,
 } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
@@ -196,3 +197,19 @@ export interface BalanceStatsDto {
 }
 
 export const getBalanceStats = () => apiFetch<BalanceStatsDto>("/api/admin/balance-stats");
+
+// Events (time-boxed exp/gold multipliers)
+export interface GameEventDto {
+  id: string;
+  name: string;
+  expMultiplier: number;
+  goldMultiplier: number;
+  startsAt: string;
+  endsAt: string;
+}
+export const listEvents = () => apiFetch<GameEventDto[]>("/api/admin/events");
+export const createEvent = (input: CreateGameEventInput) =>
+  apiFetch<GameEventDto>("/api/admin/events", { method: "POST", body: JSON.stringify(input) });
+export const updateEvent = (id: string, input: CreateGameEventInput) =>
+  apiFetch<GameEventDto>(`/api/admin/events/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteEvent = (id: string) => apiFetch<void>(`/api/admin/events/${id}`, { method: "DELETE" });

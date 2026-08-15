@@ -900,6 +900,65 @@ bez "Otwórz" (nie skrzynia), kliknięcie "Sprzedaj" sprzedało cały stos za 15
 usunęło slot; prawy klik na Różdżce Wilków → "Usuń" (z potwierdzeniem) trwale usunął przedmiot
 bez żadnej nagrody.
 
+## System eventów exp/złoto x2-x4 na czas określony (Etap 16)
+
+### Kontekst
+
+Po zablokowaniu drugiego z rzędu podejrzanego skoku poziomu (Etap 13/15) użytkownik poprosił o
+mechanizm bonusowych eventów czasowych (np. weekend x2-x4 exp/złota) — z założeniem, że event
+może być zaplanowany na przyszłość (data/godzina startu + czas trwania, nie tylko "start
+natychmiast"), oraz że limit bezpieczeństwa `SUSPICIOUS_LEVEL_JUMP` (Etap 13) musi się
+przeskalować razem z aktywnym mnożnikiem exp, żeby uczciwy bonus eventowy nie był fałszywie
+blokowany.
+
+### Model danych
+
+Nowy model `GameEvent` (addytywne, bez resetu): `name`, `expMultiplier`, `goldMultiplier`,
+`startsAt`, `endsAt`. "Aktywny" = `startsAt <= now <= endsAt`. Jeśli kilka eventów nakłada się
+czasowo, obowiązuje **maksimum z każdego mnożnika osobno** (nie mnożenie przez siebie) —
+`apps/api/src/lib/gameEvents.ts`, `getActiveEventMultipliers()`.
+
+`Expedition` dostaje `appliedExpMultiplier`/`appliedGoldMultiplier` (`Float @default(1)`,
+addytywne) — mnożnik **zapisywany raz, przy starcie ekspedycji** (nie odczytywany na nowo przy
+odbiorze), żeby wynik i próg bezpieczeństwa pozostały spójne nawet jeśli event się skończy
+zanim gracz odbierze nagrodę.
+
+### Silnik walki i próg bezpieczeństwa
+
+`simulateExpedition` (`combat.ts`) dostaje `expMultiplier`/`goldMultiplier`, mnoży
+`expReward`/`goldReward` **przy każdym zabiciu** (nie na końcu sumarycznie) — dzięki temu
+`encounter_result` w evencie i podsumowanie są od razu spójne, a częściowy odbiór
+(`leaveExpedition`, który tnie listę zdarzeń) automatycznie dziedziczy poprawne, już pomnożone
+wartości bez dodatkowej logiki.
+
+`checkRewardPlausibility` (Etap 13) mnoży `MAX_LEVELS_PER_EXPEDITION` (10) przez
+`appliedExpMultiplier` zapisany na danej ekspedycji — przy evencie x3 próg staje się 30
+poziomów, przy braku eventu zostaje 10 jak dotychczas.
+
+### Panel admina
+
+`modules/admin/events` (CRUD, wzorem `admin/classes`) + zakładka "Eventy" w
+`AdminSettingsPage.tsx`: formularz nazwa/mnożnik exp/mnożnik złota/start/koniec
+(`datetime-local`), tabela z oznaczeniem "AKTYWNY" dla eventu spełniającego `startsAt<=now<=
+endsAt`.
+
+**Świadomie poza zakresem**: brak widocznego dla gracza banera "trwa event" (nie proszono o
+to) — event działa niewidocznie w tle, gracz zobaczy efekt tylko przez wyższy zysk exp/złota w
+dzienniku walki.
+
+Zweryfikowane: curl — kraina z jednym potworem (`expReward: 15`), aktywny event x3 → w
+evencie `encounter_result.expGained: 45` (15×3), zgodnie z oczekiwaniem; spreparowana
+ekspedycja z `appliedExpMultiplier: 3` i skokiem 25 poziomów **przeszła** (próg 30), identyczna
+ekspedycja z `appliedExpMultiplier: 1` (bez eventu) **została zablokowana** (próg 10, kod
+`SUSPICIOUS_LEVEL_JUMP`) — potwierdza, że skalowanie działa w obie strony. Przeglądarka: nowy
+event zapisany przez formularz poprawnie oznaczony "AKTYWNY" w tabeli.
+
+**Skrzynia per kraina z wybraną szansą** — druga część tej samej prośby — nie wymagała nowego
+kodu: `ZonesAdminPage.tsx`'s "Dodatkowe dropy krainy" (Etap 6) już przyjmuje dowolny item,
+włącznie z typem "chest" (Etap 10). Wystarczy w Itemy stworzyć przedmiot typu "Skrzynia" ze
+skonfigurowaną zawartością, po czym dodać go w Krainy → Edytuj → "Dodatkowe dropy krainy" z
+wybraną szansą (0-1).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

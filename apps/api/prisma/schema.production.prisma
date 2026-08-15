@@ -329,11 +329,32 @@ model Expedition {
   // Set by the admin "revert expedition" tool when a claimed/left-early expedition's rewards
   // were undone (e.g. a balance exploit). Null = never reverted. See docs/architecture.md.
   revertedAt DateTime?
+  // Exp/gold multiplier from any GameEvent active at simulation time — baked in here (rather
+  // than re-read live at claim time) so the reward math and the SUSPICIOUS_LEVEL_JUMP safety
+  // threshold stay consistent even if the event has since ended. 1 = no event active.
+  appliedExpMultiplier  Float @default(1)
+  appliedGoldMultiplier Float @default(1)
 
   character   Character @relation("CharacterExpeditions", fields: [characterId], references: [id], onDelete: Cascade)
   zone        Zone      @relation(fields: [zoneId], references: [id])
 
   @@index([characterId, status])
+}
+
+// Time-boxed exp/gold multiplier, configured by an admin (see docs/architecture.md "Etap 16").
+// "Active" = startsAt <= now <= endsAt; overlapping active events combine by taking the max of
+// each multiplier independently (not multiplying together) to avoid accidental stacking.
+model GameEvent {
+  id             String   @id @default(cuid())
+  name           String
+  expMultiplier  Float    @default(1)
+  goldMultiplier Float    @default(1)
+  startsAt       DateTime
+  endsAt         DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([startsAt, endsAt])
 }
 
 model GameLog {

@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
 import { resolveTravelArrival } from "../../lib/travelResolution.js";
+import { getActiveEventMultipliers } from "../../lib/gameEvents.js";
 import { getExpeditionDurationMinutes } from "../settings/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import {
@@ -184,8 +185,9 @@ async function buildAndSimulate(
     );
   }
 
-  const outcome = simulateExpedition(simZone, stats, activeSkills, potions, durationMinutes);
-  return { character, zone, stats, outcome };
+  const { expMultiplier, goldMultiplier } = await getActiveEventMultipliers();
+  const outcome = simulateExpedition(simZone, stats, activeSkills, potions, durationMinutes, expMultiplier, goldMultiplier);
+  return { character, zone, stats, outcome, expMultiplier, goldMultiplier };
 }
 
 export async function startExpedition(
@@ -206,7 +208,7 @@ export async function startExpedition(
   }
 
   const durationMinutes = await getExpeditionDurationMinutes();
-  const { character, zone, outcome } = await buildAndSimulate(
+  const { character, zone, outcome, expMultiplier, goldMultiplier } = await buildAndSimulate(
     input.characterId,
     input.zoneId,
     durationMinutes,
@@ -237,6 +239,8 @@ export async function startExpedition(
         result: JSON.stringify(outcome.result),
         eventLog: JSON.stringify(outcome.events),
         selectedMonsterIds: JSON.stringify(input.selectedMonsterIds),
+        appliedExpMultiplier: expMultiplier,
+        appliedGoldMultiplier: goldMultiplier,
       },
     });
 
@@ -352,13 +356,18 @@ function deriveResultFromEvents(events: CombatEvent[]): ExpeditionResult {
 // silently, and let an admin review/resolve it via the "Ekspedycje" admin tool.
 const MAX_LEVELS_PER_EXPEDITION = 10;
 
+/** appliedExpMultiplier scales the threshold too — a legitimate x3 exp event naturally grants
+ * ~3x the levels for the same kills, and must not get flagged for that alone. Real balance
+ * exploits (hundreds of kills in one expedition) still blow past even the scaled limit. */
 function checkRewardPlausibility(
   character: { exp: number; level: number },
   result: ExpeditionResult,
+  appliedExpMultiplier: number,
 ): { ok: true } | { ok: false; code: string } {
   const newLevel = computeLevel(character.exp + result.expGained);
   const levelsGained = Math.max(0, newLevel - character.level);
-  if (levelsGained > MAX_LEVELS_PER_EXPEDITION) {
+  const maxAllowed = MAX_LEVELS_PER_EXPEDITION * Math.max(1, appliedExpMultiplier);
+  if (levelsGained > maxAllowed) {
     return { ok: false, code: "SUSPICIOUS_LEVEL_JUMP" };
   }
   return { ok: true };
@@ -457,7 +466,7 @@ export async function claimExpedition(expeditionId: string, userId: string, requ
   }
 
   const result = JSON.parse(expedition.result!) as ExpeditionResult;
-  const plausibility = checkRewardPlausibility(expedition.character, result);
+  const plausibility = checkRewardPlausibility(expedition.character, result, expedition.appliedExpMultiplier);
   if (!plausibility.ok) {
     await flagSuspiciousExpedition(expeditionId, expedition.characterId, result, userId, plausibility.code, requestId);
     throw new ExpeditionError(
@@ -507,7 +516,7 @@ export async function leaveExpedition(expeditionId: string, userId: string, requ
   const allEvents = expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [];
   const result = deriveResultFromEvents(allEvents.filter((e) => e.t <= elapsedSeconds));
 
-  const plausibility = checkRewardPlausibility(expedition.character, result);
+  const plausibility = checkRewardPlausibility(expedition.character, result, expedition.appliedExpMultiplier);
   if (!plausibility.ok) {
     await flagSuspiciousExpedition(expeditionId, expedition.characterId, result, userId, plausibility.code, requestId);
     throw new ExpeditionError(

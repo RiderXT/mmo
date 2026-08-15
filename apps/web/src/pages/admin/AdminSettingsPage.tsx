@@ -7,6 +7,7 @@ import { MonstersAdminPage } from "./MonstersAdminPage";
 import { ItemsAdminPage } from "./ItemsAdminPage";
 import { GrantAdminPage } from "./GrantAdminPage";
 import { BalanceStatsPage } from "./BalanceStatsPage";
+import { EventsAdminPage } from "./EventsAdminPage";
 
 const TABS = [
   { key: "general", label: "Ogólne", Component: SettingsAdminPage },
@@ -14,6 +15,7 @@ const TABS = [
   { key: "zones", label: "Krainy", Component: ZonesAdminPage },
   { key: "monsters", label: "Potwory", Component: MonstersAdminPage },
   { key: "items", label: "Itemy", Component: ItemsAdminPage },
+  { key: "events", label: "Eventy", Component: EventsAdminPage },
   { key: "testing", label: "Testowanie", Component: GrantAdminPage },
   { key: "balance", label: "Statystyki balansu", Component: BalanceStatsPage },
 ] as const;

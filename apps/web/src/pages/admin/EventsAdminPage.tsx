@@ -1,0 +1,231 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CreateGameEventSchema, type CreateGameEventInput } from "@mmo/shared";
+import { Field, inputClass } from "../../components/admin/Field";
+import { ApiError } from "../../lib/apiClient";
+import { listEvents, createEvent, updateEvent, deleteEvent, type GameEventDto } from "../../lib/adminApi";
+
+/** datetime-local inputs need "yyyy-MM-ddTHH:mm" in local time, not an ISO string with seconds/Z. */
+function toLocalInputValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function emptyForm(): CreateGameEventInput {
+  const now = new Date();
+  const in72h = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+  return {
+    name: "",
+    expMultiplier: 2,
+    goldMultiplier: 2,
+    startsAt: toLocalInputValue(now.toISOString()),
+    endsAt: toLocalInputValue(in72h.toISOString()),
+  };
+}
+
+function fromDto(event: GameEventDto): CreateGameEventInput {
+  return {
+    name: event.name,
+    expMultiplier: event.expMultiplier,
+    goldMultiplier: event.goldMultiplier,
+    startsAt: toLocalInputValue(event.startsAt),
+    endsAt: toLocalInputValue(event.endsAt),
+  };
+}
+
+function isActive(event: GameEventDto, now: number): boolean {
+  return new Date(event.startsAt).getTime() <= now && now <= new Date(event.endsAt).getTime();
+}
+
+export function EventsAdminPage() {
+  const queryClient = useQueryClient();
+  const eventsQuery = useQuery({ queryKey: ["admin-events"], queryFn: listEvents });
+  const [editingId, setEditingId] = useState<string | null | "new">(null);
+  const [form, setForm] = useState<CreateGameEventInput>(emptyForm());
+  const [error, setError] = useState<string | null>(null);
+
+  const saveMutation = useMutation({
+    mutationFn: (input: CreateGameEventInput) =>
+      editingId && editingId !== "new" ? updateEvent(editingId, input) : createEvent(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-events"] });
+      setEditingId(null);
+      setError(null);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Błąd zapisu"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteEvent,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-events"] }),
+    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
+  });
+
+  function openCreate() {
+    setForm(emptyForm());
+    setError(null);
+    setEditingId("new");
+  }
+
+  function openEdit(event: GameEventDto) {
+    setForm(fromDto(event));
+    setError(null);
+    setEditingId(event.id);
+  }
+
+  function handleSubmit() {
+    const parsed = CreateGameEventSchema.safeParse(form);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Nieprawidłowe dane");
+      return;
+    }
+    saveMutation.mutate(parsed.data);
+  }
+
+  const now = Date.now();
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-parchment">Eventy</h1>
+        <button
+          onClick={openCreate}
+          className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
+        >
+          + Nowy event
+        </button>
+      </div>
+      <p className="mt-1 text-sm text-parchment-dim">
+        Na czas eventu wszystkie ekspedycje dostają mnożnik exp/złota. Jeśli aktywnych eventów
+        jest kilka naraz, obowiązuje najwyższy mnożnik z każdej kategorii osobno (nie mnożą się
+        przez siebie). Limit bezpieczeństwa blokujący podejrzanie duży skok poziomu skaluje się
+        razem z mnożnikiem exp, więc uczciwy bonus eventowy nie zostanie fałszywie zablokowany.
+      </p>
+
+      <div className="mt-4 overflow-x-auto panel">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="bg-panel text-parchment-dim">
+            <tr>
+              <th className="px-3 py-2">Nazwa</th>
+              <th className="px-3 py-2">Exp ×</th>
+              <th className="px-3 py-2">Złoto ×</th>
+              <th className="px-3 py-2">Start</th>
+              <th className="px-3 py-2">Koniec</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line bg-ink">
+            {eventsQuery.data?.map((event) => (
+              <tr key={event.id}>
+                <td className="px-3 py-2 text-parchment">
+                  {event.name}
+                  {isActive(event, now) && (
+                    <span className="ml-2  bg-rarity-uncommon/20 px-1.5 py-0.5 text-[10px] font-medium text-rarity-uncommon">
+                      AKTYWNY
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-parchment-dim">×{event.expMultiplier}</td>
+                <td className="px-3 py-2 text-parchment-dim">×{event.goldMultiplier}</td>
+                <td className="px-3 py-2 text-parchment-dim">{new Date(event.startsAt).toLocaleString("pl-PL")}</td>
+                <td className="px-3 py-2 text-parchment-dim">{new Date(event.endsAt).toLocaleString("pl-PL")}</td>
+                <td className="space-x-2 px-3 py-2 text-right">
+                  <button onClick={() => openEdit(event)} className="text-gold-bright hover:underline">
+                    Edytuj
+                  </button>
+                  <button
+                    onClick={() => confirm(`Usunąć event "${event.name}"?`) && deleteMutation.mutate(event.id)}
+                    className="text-red-400 hover:underline"
+                  >
+                    Usuń
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {eventsQuery.data?.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
+                  Brak eventów. Dodaj pierwszy.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {editingId !== null && (
+        <div className="mt-6 space-y-4 panel p-4">
+          <h2 className="font-medium text-parchment">{editingId === "new" ? "Nowy event" : "Edycja eventu"}</h2>
+
+          <Field label="Nazwa">
+            <input
+              className={inputClass}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Mnożnik exp">
+              <input
+                type="number"
+                step="0.5"
+                min={1}
+                max={20}
+                className={inputClass}
+                value={form.expMultiplier}
+                onChange={(e) => setForm({ ...form, expMultiplier: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Mnożnik złota">
+              <input
+                type="number"
+                step="0.5"
+                min={1}
+                max={20}
+                className={inputClass}
+                value={form.goldMultiplier}
+                onChange={(e) => setForm({ ...form, goldMultiplier: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Start">
+              <input
+                type="datetime-local"
+                className={inputClass}
+                value={form.startsAt}
+                onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+              />
+            </Field>
+            <Field label="Koniec">
+              <input
+                type="datetime-local"
+                className={inputClass}
+                value={form.endsAt}
+                onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
+              />
+            </Field>
+          </div>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleSubmit}
+              disabled={saveMutation.isPending}
+              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
+            >
+              Zapisz
+            </button>
+            <button
+              onClick={() => setEditingId(null)}
+              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
+            >
+              Anuluj
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
