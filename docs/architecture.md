@@ -348,6 +348,39 @@ do krainy…" nad licznikiem, lista krain pokazuje "~30s podróży (tam i z powr
 wysłaniem, opuszczenie w trakcie podróży pokazuje odrębny komunikat potwierdzenia i daje
 zerowe podsumowanie nagród.
 
+## Generator treści balansowej dla krain 1-99 (post-Etap 6)
+
+`apps/api/prisma/seed-zones.ts` — osobny, bezpiecznie powtarzalny skrypt (pomija krainy, które
+już istnieją po nazwie) generujący 5 nowych krain ponad już zasianym "Wilcze Uroczysko" (1-10):
+Zapomniane Mokradła (11-25), Krwawy Wąwóz (26-40), Popielne Pustkowia (41-55), Czarna Twierdza
+(56-75), Otchłań Cieni (76-99) — każda z potworem i pełnym 7-slotowym setem (broń/zbroja/hełm/
+buty/naszyjnik/kolczyki/pierścień), rosnącym czasem podróży (30s→300s) i butami niosącymi
+`movementSpeed` rosnący z tierem (5%→35%). Uruchomić: `npx tsx prisma/seed-zones.ts` z
+`apps/api`.
+
+**Metoda** (per framework ustalony z użytkownikiem, m.in. na podstawie realnych danych ze
+Metin2 wiki dla butów/kolczyków — płaski wzrost + jeden nowy stat na tier): "referencyjny build"
+(50% punktów staty w primary / 30% witalność / 10%+10% pozostałe — uniwersalne przybliżenie,
+bo ekwipunek nie jest ograniczony klasą) daje "gołe" staty na dany poziom przez te same wzory co
+`computeDerivedStats`. Budżet ekwipunku per tier = (staty w pełnym secie na `maxLevel` tieru) −
+(gołe staty), rozłożony po 7 slotach wagami (broń najwięcej ataku, zbroja/hełm najwięcej obrony/
+hp, biżuteria po trochu + drugorzędne staty: kolczyki→krytyk, pierścień→unik, buty→ruch).
+
+**Pułapka znaleziona przy weryfikacji**: pierwsza wersja liczyła trudność potwora z prostego
+stosunku `roundsToKill:roundsSurvivable` (cel 1:1.7) per pojedyncze starcie — w testowej
+ekspedycji (postać poziom 26 w pełnym secie Krwawego Wąwozu) dało to 8 wygranych na 19 starć w
+30 minut z seriami przegranych. Przyczyna: HP **nie resetuje się między starciami** i regeneruje
+tylko poniżej 0 (2%/min) — nawet "korzystny" stosunek dla jednego starcia kumuluje się boleśnie
+po kilkunastu starciach z rzędu, bo każda wygrana i tak kosztuje `roundsToKill-1` rund obrażeń
+bez odnowienia. Naprawione przeliczeniem ataku potwora względem `maxHp/12` (tyle pełnych starć
+powinna wytrzymać postać z rzędu) zamiast surowego stosunku rund — po zmianie ten sam test dał
+30/30 wygranych. Test z gołą postacią (bez ekwipunku) na tym samym poziomie wciąż przegrywa
+większość starć (rachunek: ~82% hp na starcie), więc zdobycie setu z danej krainy pozostaje
+realną motywacją, a nie formalnością.
+
+To pierwszy przebieg — dane celowo nazwane "bazą do dostosowania" (cytat użytkownika), nie
+finalnym balansem; kolejne poprawki po realnym playtestingu.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
