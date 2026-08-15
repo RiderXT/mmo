@@ -443,9 +443,18 @@ Mokradeł", "Hełm Wojownika Mokradeł" — dopełniacz celowo omija polską zgo
 przymiotnik-rzeczownik rodzajowo, bo działa identycznie po rzeczowniku męskim i żeńskim) +
 uniwersalne buty/naszyjnik/kolczyki/pierścień; **jeden uniwersalny kamień wzmocnienia na
 krainę** + pętla `ItemUpgradeRequirement` dla poziomów 1-9 na wszystkich 16 itemach (rosnąca
-ilość, `qty = poziom × 2`) zamiast ręcznych wpisów. Skrypt pozostaje bezpieczny do
-wielokrotnego uruchomienia (usuń-po-nazwie-i-odtwórz), bo użytkownik będzie dalej stroił
-liczby.
+ilość, `qty = poziom × 2`) zamiast ręcznych wpisów.
+
+**UWAGA (od Etapu 15) — ta notatka o "bezpieczeństwie" była aktualna tylko w fazie tworzenia
+treści, zanim istnieli prawdziwi gracze.** `clearTier` (wywoływane dla każdej krainy przy
+każdym uruchomieniu) usuwa krainę/potworów/itemy po nazwie i tworzy je od nowa — po drodze
+kasuje **wszystkie ekspedycje w tej krainie**, przenosi każdą postać aktualnie w tej krainie
+z powrotem "donikąd" (`currentZoneId: null`) i usuwa `InventoryItem` graczy trzymających
+którykolwiek z usuwanych itemów. Na produkcji z realnymi kontami **nie wolno** już uruchamiać
+`seed-zones.ts` ponownie — to skasuje graczom przedmioty i historię ekspedycji w danej
+krainie. Punktowe poprawki liczb (np. szans dropu) na już zasianej bazie robi się przez
+dedykowany, addytywny skrypt (np. `prisma/scripts/lower-drop-rates.ts` — tylko `updateMany`
+na konkretnych polach, zero usuwania) albo ręcznie przez panele admina Itemy/Potwory/Krainy.
 
 **Świadomie poza zakresem** (nowe mechaniki silnika, nie tylko treść): odporności na typy
 przeciwników, szansa na podwójny drop/yang, szanse na debuff przy trafieniu, bonusowe punkty

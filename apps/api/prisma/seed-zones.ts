@@ -395,7 +395,11 @@ async function main() {
             stats: JSON.stringify({ attack: stats.attack, defense: stats.defense }),
             expReward: stats.expReward,
             goldReward: stats.goldReward,
-            drops: { create: [{ itemId: stone.id, dropChance: 0.3, minQty: 1, maxQty: 2 }] },
+            // Kept low deliberately — a character that survives many kills in one expedition
+            // (see docs/architecture.md "Etap 13"/"Etap 15") must not walk away with hundreds
+            // of stones from a single run. See prisma/scripts/lower-drop-rates.ts for the
+            // additive, no-reseed way to apply the same numbers to an already-seeded database.
+            drops: { create: [{ itemId: stone.id, dropChance: 0.08, minQty: 1, maxQty: 2 }] },
           },
         });
       }),
@@ -412,7 +416,7 @@ async function main() {
         maxLevel: tier.maxLevel,
         travelTimeSeconds: tier.travelTimeSeconds,
         monsters: { create: monsters.map((m) => ({ monsterId: m.id, spawnWeight: 10, maxCount: 5 })) },
-        drops: { create: items.map((item) => ({ itemId: item.id, dropChance: 0.04 })) },
+        drops: { create: items.map((item) => ({ itemId: item.id, dropChance: 0.015 })) },
       },
     });
   }
