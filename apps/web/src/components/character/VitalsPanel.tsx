@@ -14,16 +14,21 @@ function VitalBar({
 }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div>
-      <div className="flex items-center justify-between text-xs text-slate-400">
-        <span>{label}</span>
-        <span className="tabular-nums text-slate-300">
-          {value} / {max}
-        </span>
+    <div className="flex items-center gap-2">
+      <span className="w-6 shrink-0 text-[11px] tracking-wide text-parchment-faint">{label}</span>
+      <div className="relative h-3.5 flex-1 overflow-hidden border border-line-soft bg-ink">
+        <div className={`h-full ${barClassName}`} style={{ width: `${pct}%` }} />
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(90deg, rgba(0,0,0,0.35) 0 1px, transparent 1px 10%)",
+          }}
+        />
       </div>
-      <div className="mt-1 h-3 w-full overflow-hidden rounded-full bg-slate-800">
-        <div className={`h-full rounded-full ${barClassName}`} style={{ width: `${pct}%` }} />
-      </div>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-parchment-dim">
+        {value} / {max}
+      </span>
     </div>
   );
 }
@@ -38,11 +43,11 @@ export function VitalsPanel({ characterId }: { characterId: string }) {
   if (!stats) return null;
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <h2 className="font-medium text-slate-100">Kondycja</h2>
-      <div className="mt-3 space-y-3">
-        <VitalBar label="HP" value={stats.maxHp} max={stats.maxHp} barClassName="bg-red-500" />
-        <VitalBar label="MP" value={stats.maxMana} max={stats.maxMana} barClassName="bg-sky-500" />
+    <div className="panel p-4">
+      <h2 className="font-medium text-parchment">Kondycja</h2>
+      <div className="mt-3 space-y-2">
+        <VitalBar label="HP" value={stats.maxHp} max={stats.maxHp} barClassName="bg-hp" />
+        <VitalBar label="MP" value={stats.maxMana} max={stats.maxMana} barClassName="bg-mp" />
       </div>
     </div>
   );

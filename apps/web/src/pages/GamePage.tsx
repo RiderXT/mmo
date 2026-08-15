@@ -157,7 +157,7 @@ export function GamePage() {
   if (!characterId) {
     return (
       <AppShell>
-        <p className="text-slate-400">Wybierz postać z listy.</p>
+        <p className="text-parchment-dim">Wybierz postać z listy.</p>
       </AppShell>
     );
   }
@@ -165,9 +165,9 @@ export function GamePage() {
   return (
     <AppShell>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-lg font-semibold text-slate-100">{character?.name ?? "…"}</h1>
+        <h1 className="text-lg font-semibold text-parchment">{character?.name ?? "…"}</h1>
         {character && (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-parchment-dim">
             Poziom {character.level} · {character.exp} exp · {character.gold} złota
           </p>
         )}
@@ -194,7 +194,7 @@ export function GamePage() {
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="mt-6 flex flex-wrap gap-8">
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">Założony ekwipunek</p>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">Założony ekwipunek</p>
             <div className="flex flex-wrap gap-3">
               {EQUIP_SLOTS.map((slot) => {
                 const item = byEquipSlot.get(slot);
@@ -212,7 +212,7 @@ export function GamePage() {
               })}
             </div>
 
-            <p className="mb-2 mt-4 text-xs font-medium text-slate-400">
+            <p className="mb-2 mt-4 text-xs font-medium text-parchment-dim">
               Aktywne itemy (potiony — zużywane automatycznie na ekspedycji)
             </p>
             <div className="flex flex-wrap gap-3">
@@ -235,16 +235,16 @@ export function GamePage() {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-400">Ekwipunek (przeciągnij, by przenieść)</p>
+              <p className="text-xs font-medium text-parchment-dim">Ekwipunek (przeciągnij, by przenieść)</p>
               <div className="flex gap-1">
                 {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
+                    className={`flex h-6 w-6 items-center justify-center  text-xs font-medium transition ${
                       activeTab === tab
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                        ? "bg-gold text-ink"
+                        : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
                     } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
                     title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
                   >
@@ -277,23 +277,23 @@ export function GamePage() {
       {actionError && <p className="mt-3 text-sm text-red-400">{actionError}</p>}
 
       {selected && (
-        <div className="mt-6 max-w-sm space-y-2 rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <div className="mt-6 max-w-sm space-y-2 panel p-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-medium text-slate-100">
+            <h2 className="font-medium text-parchment">
               {selected.item.name}
-              {selected.upgradeLevel > 0 && <span className="text-amber-300"> +{selected.upgradeLevel}</span>}
+              {selected.upgradeLevel > 0 && <span className="text-gold-bright"> +{selected.upgradeLevel}</span>}
             </h2>
-            <button onClick={() => setSelectedId(null)} className="text-xs text-slate-500 hover:text-slate-300">
+            <button onClick={() => setSelectedId(null)} className="text-xs text-parchment-faint hover:text-parchment-dim">
               zamknij
             </button>
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-parchment-faint">
             {selected.item.type} · poziom min. {selected.item.minLevel}
             {selected.equippedSlot ? ` · założony (${selected.equippedSlot})` : ""}
             {selected.activeSlotIndex !== null ? ` · aktywny slot ${selected.activeSlotIndex + 1}` : ""}
           </p>
-          {selected.item.description && <p className="text-sm text-slate-400">{selected.item.description}</p>}
-          <div className="text-sm text-slate-300">
+          {selected.item.description && <p className="text-sm text-parchment-dim">{selected.item.description}</p>}
+          <div className="text-sm text-parchment-dim">
             {Object.entries({ ...selected.item.baseStats, ...selected.rolledStats })
               .filter(([, v]) => v)
               .map(([k, v]) => (
@@ -306,7 +306,7 @@ export function GamePage() {
             <button
               onClick={() => upgradeMutation.mutate(selected.id)}
               disabled={upgradeMutation.isPending}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
             >
               Ulepsz
             </button>

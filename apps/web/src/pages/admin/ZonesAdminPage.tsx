@@ -86,18 +86,18 @@ export function ZonesAdminPage() {
   return (
     <AppShell>
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-100">Krainy</h1>
+        <h1 className="text-lg font-semibold text-parchment">Krainy</h1>
         <button
           onClick={openCreate}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+          className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
         >
           + Nowa kraina
         </button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800">
+      <div className="mt-4 overflow-x-auto panel">
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-slate-900 text-slate-400">
+          <thead className="bg-panel text-parchment-dim">
             <tr>
               <th className="px-3 py-2">Nazwa</th>
               <th className="px-3 py-2">Poziomy</th>
@@ -106,17 +106,17 @@ export function ZonesAdminPage() {
               <th className="px-3 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800 bg-slate-950">
+          <tbody className="divide-y divide-line bg-ink">
             {zonesQuery.data?.map((zone) => (
               <tr key={zone.id}>
-                <td className="px-3 py-2 text-slate-200">{zone.name}</td>
-                <td className="px-3 py-2 text-slate-400">
+                <td className="px-3 py-2 text-parchment">{zone.name}</td>
+                <td className="px-3 py-2 text-parchment-dim">
                   {zone.minLevel}–{zone.maxLevel}
                 </td>
-                <td className="px-3 py-2 text-slate-400">{zone.monsters.length}</td>
-                <td className="px-3 py-2 text-slate-400">{zone.drops.length}</td>
+                <td className="px-3 py-2 text-parchment-dim">{zone.monsters.length}</td>
+                <td className="px-3 py-2 text-parchment-dim">{zone.drops.length}</td>
                 <td className="space-x-2 px-3 py-2 text-right">
-                  <button onClick={() => openEdit(zone)} className="text-indigo-400 hover:underline">
+                  <button onClick={() => openEdit(zone)} className="text-gold-bright hover:underline">
                     Edytuj
                   </button>
                   <button
@@ -130,7 +130,7 @@ export function ZonesAdminPage() {
             ))}
             {zonesQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={5} className="px-3 py-6 text-center text-parchment-faint">
                   Brak krain. Dodaj pierwszą.
                 </td>
               </tr>
@@ -140,8 +140,8 @@ export function ZonesAdminPage() {
       </div>
 
       {editingId !== null && (
-        <div className="mt-6 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <h2 className="font-medium text-slate-100">
+        <div className="mt-6 space-y-4 panel p-4">
+          <h2 className="font-medium text-parchment">
             {editingId === "new" ? "Nowa kraina" : "Edycja krainy"}
           </h2>
 
@@ -181,7 +181,7 @@ export function ZonesAdminPage() {
           </Field>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
               Potwory w tej krainie (jakie i ile)
             </p>
             <div className="space-y-2">
@@ -240,7 +240,7 @@ export function ZonesAdminPage() {
                     monsters: [...form.monsters, { monsterId: "", spawnWeight: 10, maxCount: 5 }],
                   })
                 }
-                className="text-sm text-indigo-400 hover:underline"
+                className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj potwora
               </button>
@@ -248,7 +248,7 @@ export function ZonesAdminPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
               Dodatkowe dropy krainy (niezależne od konkretnego potwora)
             </p>
             <div className="space-y-2">
@@ -296,7 +296,7 @@ export function ZonesAdminPage() {
                 onClick={() =>
                   setForm({ ...form, drops: [...form.drops, { itemId: "", dropChance: 0.01 }] })
                 }
-                className="text-sm text-indigo-400 hover:underline"
+                className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj drop
               </button>
@@ -309,13 +309,13 @@ export function ZonesAdminPage() {
             <button
               onClick={handleSubmit}
               disabled={saveMutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
             >
               Zapisz
             </button>
             <button
               onClick={() => setEditingId(null)}
-              className="rounded-lg border border-slate-700 px-4 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
             >
               Anuluj
             </button>

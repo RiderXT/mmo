@@ -4,8 +4,8 @@ import { logoutRequest } from "../lib/authApi";
 import { useAuthStore } from "../store/authStore";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `rounded-lg px-3 py-1.5 text-sm transition ${
-    isActive ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-800"
+  ` px-3 py-1.5 text-sm transition ${
+    isActive ? "bg-gold text-ink" : "text-parchment-dim hover:bg-panel-raised"
   }`;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -22,8 +22,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
+    <div className="min-h-screen bg-ink">
+      <header className="sticky top-0 z-10 border-b border-line bg-ink/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <nav className="flex flex-wrap gap-1">
             <NavLink to="/characters" className={navLinkClass}>
@@ -54,11 +54,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               </NavLink>
             )}
           </nav>
-          <div className="flex items-center gap-3 text-sm text-slate-400">
+          <div className="flex items-center gap-3 text-sm text-parchment-dim">
             <span className="hidden sm:inline">{user?.email}</span>
             <button
               onClick={handleLogout}
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:bg-slate-800"
+              className=" border border-line-soft px-3 py-1.5 text-parchment-dim transition hover:bg-panel-raised"
             >
               Wyloguj
             </button>

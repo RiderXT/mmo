@@ -115,18 +115,18 @@ export function ItemsAdminPage() {
   return (
     <AppShell>
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-100">Itemy</h1>
+        <h1 className="text-lg font-semibold text-parchment">Itemy</h1>
         <button
           onClick={openCreate}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+          className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
         >
           + Nowy item
         </button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800">
+      <div className="mt-4 overflow-x-auto panel">
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-slate-900 text-slate-400">
+          <thead className="bg-panel text-parchment-dim">
             <tr>
               <th className="px-3 py-2">Nazwa</th>
               <th className="px-3 py-2">Typ</th>
@@ -136,18 +136,18 @@ export function ItemsAdminPage() {
               <th className="px-3 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800 bg-slate-950">
+          <tbody className="divide-y divide-line bg-ink">
             {itemsQuery.data?.map((item) => (
               <tr key={item.id}>
-                <td className="px-3 py-2 text-slate-200">{item.name}</td>
-                <td className="px-3 py-2 text-slate-400">{item.type}</td>
-                <td className="px-3 py-2 text-slate-400">{item.minLevel}</td>
-                <td className="px-3 py-2 text-slate-400">
+                <td className="px-3 py-2 text-parchment">{item.name}</td>
+                <td className="px-3 py-2 text-parchment-dim">{item.type}</td>
+                <td className="px-3 py-2 text-parchment-dim">{item.minLevel}</td>
+                <td className="px-3 py-2 text-parchment-dim">
                   {item.stackable ? `tak (${item.maxStack})` : "nie"}
                 </td>
-                <td className="px-3 py-2 text-slate-400">{item.upgradeRequirements.length}</td>
+                <td className="px-3 py-2 text-parchment-dim">{item.upgradeRequirements.length}</td>
                 <td className="space-x-2 px-3 py-2 text-right">
-                  <button onClick={() => openEdit(item)} className="text-indigo-400 hover:underline">
+                  <button onClick={() => openEdit(item)} className="text-gold-bright hover:underline">
                     Edytuj
                   </button>
                   <button
@@ -161,7 +161,7 @@ export function ItemsAdminPage() {
             ))}
             {itemsQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
                   Brak itemów. Dodaj pierwszy.
                 </td>
               </tr>
@@ -171,8 +171,8 @@ export function ItemsAdminPage() {
       </div>
 
       {editingId !== null && (
-        <div className="mt-6 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <h2 className="font-medium text-slate-100">
+        <div className="mt-6 space-y-4 panel p-4">
+          <h2 className="font-medium text-parchment">
             {editingId === "new" ? "Nowy item" : "Edycja itemu"}
           </h2>
 
@@ -248,12 +248,12 @@ export function ItemsAdminPage() {
           </Field>
 
           {form.type === "consumable" && form.potion && (
-            <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3">
-              <p className="mb-2 text-xs font-medium text-slate-400">
+            <div className="border border-rarity-uncommon/40 bg-rarity-uncommon/10 p-3">
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
                 Działanie potionu (zużywany automatycznie z aktywnego slotu na ekspedycji)
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
-                <label className="flex items-center gap-2 text-xs text-slate-400">
+                <label className="flex items-center gap-2 text-xs text-parchment-dim">
                   wyzwalacz
                   <select
                     className={inputClass}
@@ -273,7 +273,7 @@ export function ItemsAdminPage() {
                   </select>
                 </label>
 
-                <label className="flex items-center gap-2 text-xs text-slate-400">
+                <label className="flex items-center gap-2 text-xs text-parchment-dim">
                   efekt
                   <select
                     className={inputClass}
@@ -294,7 +294,7 @@ export function ItemsAdminPage() {
                 </label>
 
                 {(form.potion.trigger === "hp_below" || form.potion.trigger === "mana_below") && (
-                  <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <label className="flex items-center gap-2 text-xs text-parchment-dim">
                     próg (0-1)
                     <input
                       type="number"
@@ -311,7 +311,7 @@ export function ItemsAdminPage() {
                 )}
 
                 {form.potion.trigger === "interval" && (
-                  <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <label className="flex items-center gap-2 text-xs text-parchment-dim">
                     interwał (s)
                     <input
                       type="number"
@@ -324,7 +324,7 @@ export function ItemsAdminPage() {
                   </label>
                 )}
 
-                <label className="flex items-center gap-2 text-xs text-slate-400">
+                <label className="flex items-center gap-2 text-xs text-parchment-dim">
                   siła efektu (%)
                   <input
                     type="number"
@@ -338,7 +338,7 @@ export function ItemsAdminPage() {
                 </label>
 
                 {form.potion.effect.startsWith("buff_") && (
-                  <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <label className="flex items-center gap-2 text-xs text-parchment-dim">
                     czas trwania (s)
                     <input
                       type="number"
@@ -355,7 +355,7 @@ export function ItemsAdminPage() {
           )}
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
               Możliwe losowe staty (przy dropie losowana jest wartość z zakresu)
             </p>
             <div className="space-y-2">
@@ -432,7 +432,7 @@ export function ItemsAdminPage() {
                     ],
                   })
                 }
-                className="text-sm text-indigo-400 hover:underline"
+                className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj staty
               </button>
@@ -440,7 +440,7 @@ export function ItemsAdminPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
               Wymagane materiały do ulepszenia
             </p>
             <div className="space-y-2">
@@ -507,7 +507,7 @@ export function ItemsAdminPage() {
                     ],
                   })
                 }
-                className="text-sm text-indigo-400 hover:underline"
+                className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj wymaganie
               </button>
@@ -520,13 +520,13 @@ export function ItemsAdminPage() {
             <button
               onClick={handleSubmit}
               disabled={saveMutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
             >
               Zapisz
             </button>
             <button
               onClick={() => setEditingId(null)}
-              className="rounded-lg border border-slate-700 px-4 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
             >
               Anuluj
             </button>

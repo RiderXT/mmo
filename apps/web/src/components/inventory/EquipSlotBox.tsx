@@ -22,13 +22,13 @@ export function EquipSlotBox({ slot, children }: { slot: EquipSlot; children: Re
     <div className="flex flex-col items-center gap-1">
       <div
         ref={setNodeRef}
-        className={`flex h-14 w-14 items-center justify-center rounded-lg border-2 border-dashed ${
-          isOver ? "border-indigo-400 bg-indigo-500/10" : "border-slate-700"
+        className={`flex h-14 w-14 items-center justify-center  border-2 border-dashed ${
+          isOver ? "border-gold-bright bg-gold/10" : "border-line-soft"
         }`}
       >
         {children}
       </div>
-      <span className="text-[10px] text-slate-500">{LABELS[slot]}</span>
+      <span className="text-[10px] text-parchment-faint">{LABELS[slot]}</span>
     </div>
   );
 }

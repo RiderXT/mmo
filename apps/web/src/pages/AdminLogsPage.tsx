@@ -4,7 +4,7 @@ import { AppShell } from "../components/AppShell";
 import { fetchLogs, fetchLogModules, type LogsFilter } from "../lib/logsApi";
 
 const LEVEL_COLORS: Record<string, string> = {
-  debug: "text-slate-400",
+  debug: "text-parchment-dim",
   info: "text-sky-400",
   warn: "text-amber-400",
   error: "text-red-400",
@@ -28,17 +28,17 @@ export function AdminLogsPage() {
 
   return (
     <AppShell>
-      <h1 className="text-lg font-semibold text-slate-100">Dziennik zdarzeń (GameLog)</h1>
-      <p className="mt-1 text-sm text-slate-400">
+      <h1 className="text-lg font-semibold text-parchment">Dziennik zdarzeń (GameLog)</h1>
+      <p className="mt-1 text-sm text-parchment-dim">
         Każda akcja w grze jest tu logowana — filtruj po module, poziomie, dacie lub treści, by
         szybko zlokalizować błąd.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <div className="mt-4 flex flex-wrap gap-3 panel p-4">
         <select
           value={filter.module ?? ""}
           onChange={(e) => updateFilter({ module: e.target.value || undefined })}
-          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200"
+          className=" border border-line-soft bg-panel-raised px-3 py-1.5 text-sm text-parchment"
         >
           <option value="">Wszystkie moduły</option>
           {modulesQuery.data?.map((m) => (
@@ -51,7 +51,7 @@ export function AdminLogsPage() {
         <select
           value={filter.level ?? ""}
           onChange={(e) => updateFilter({ level: e.target.value || undefined })}
-          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200"
+          className=" border border-line-soft bg-panel-raised px-3 py-1.5 text-sm text-parchment"
         >
           <option value="">Wszystkie poziomy</option>
           <option value="debug">debug</option>
@@ -65,7 +65,7 @@ export function AdminLogsPage() {
           placeholder="Szukaj w akcji/module…"
           value={filter.search ?? ""}
           onChange={(e) => updateFilter({ search: e.target.value || undefined })}
-          className="min-w-[180px] flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200"
+          className="min-w-[180px] flex-1  border border-line-soft bg-panel-raised px-3 py-1.5 text-sm text-parchment"
         />
 
         <input
@@ -74,7 +74,7 @@ export function AdminLogsPage() {
           onChange={(e) =>
             updateFilter({ from: e.target.value ? new Date(e.target.value).toISOString() : undefined })
           }
-          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200"
+          className=" border border-line-soft bg-panel-raised px-3 py-1.5 text-sm text-parchment"
         />
         <input
           type="datetime-local"
@@ -82,13 +82,13 @@ export function AdminLogsPage() {
           onChange={(e) =>
             updateFilter({ to: e.target.value ? new Date(e.target.value).toISOString() : undefined })
           }
-          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200"
+          className=" border border-line-soft bg-panel-raised px-3 py-1.5 text-sm text-parchment"
         />
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800">
+      <div className="mt-4 overflow-x-auto panel">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-slate-900 text-slate-400">
+          <thead className="bg-panel text-parchment-dim">
             <tr>
               <th className="px-3 py-2">Czas</th>
               <th className="px-3 py-2">Moduł</th>
@@ -98,26 +98,26 @@ export function AdminLogsPage() {
               <th className="px-3 py-2">Payload</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800 bg-slate-950">
+          <tbody className="divide-y divide-line bg-ink">
             {logsQuery.data?.entries.map((entry) => (
               <tr key={entry.id} className="align-top">
-                <td className="whitespace-nowrap px-3 py-2 text-slate-400">
+                <td className="whitespace-nowrap px-3 py-2 text-parchment-dim">
                   {new Date(entry.createdAt).toLocaleString("pl-PL")}
                 </td>
-                <td className="px-3 py-2 text-slate-200">{entry.module}</td>
+                <td className="px-3 py-2 text-parchment">{entry.module}</td>
                 <td className={`px-3 py-2 font-medium ${LEVEL_COLORS[entry.level] ?? ""}`}>
                   {entry.level}
                 </td>
-                <td className="px-3 py-2 text-slate-200">{entry.action}</td>
-                <td className="px-3 py-2 text-slate-500">{entry.actorUserId ?? "—"}</td>
-                <td className="max-w-xs truncate px-3 py-2 font-mono text-xs text-slate-500">
+                <td className="px-3 py-2 text-parchment">{entry.action}</td>
+                <td className="px-3 py-2 text-parchment-faint">{entry.actorUserId ?? "—"}</td>
+                <td className="max-w-xs truncate px-3 py-2 font-mono text-xs text-parchment-faint">
                   {JSON.stringify(entry.payload)}
                 </td>
               </tr>
             ))}
             {logsQuery.data?.entries.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
                   Brak wpisów spełniających filtry.
                 </td>
               </tr>
@@ -126,7 +126,7 @@ export function AdminLogsPage() {
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm text-slate-400">
+      <div className="mt-3 flex items-center justify-between text-sm text-parchment-dim">
         <span>
           Strona {filter.page} / {totalPages} ({logsQuery.data?.total ?? 0} wpisów)
         </span>
@@ -134,14 +134,14 @@ export function AdminLogsPage() {
           <button
             disabled={filter.page <= 1}
             onClick={() => updateFilter({ page: filter.page - 1 })}
-            className="rounded-lg border border-slate-700 px-3 py-1 disabled:opacity-40"
+            className=" border border-line-soft px-3 py-1 disabled:opacity-40"
           >
             Poprzednia
           </button>
           <button
             disabled={filter.page >= totalPages}
             onClick={() => updateFilter({ page: filter.page + 1 })}
-            className="rounded-lg border border-slate-700 px-3 py-1 disabled:opacity-40"
+            className=" border border-line-soft px-3 py-1 disabled:opacity-40"
           >
             Następna
           </button>

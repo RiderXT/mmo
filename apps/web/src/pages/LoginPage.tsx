@@ -39,12 +39,12 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl"
+        className="w-full max-w-sm space-y-4 panel p-6 shadow-xl"
       >
-        <h1 className="text-xl font-semibold text-slate-100">Logowanie</h1>
+        <h1 className="text-xl font-semibold text-parchment">Logowanie</h1>
 
         <div className="space-y-1">
-          <label className="text-sm text-slate-400" htmlFor="email">
+          <label className="text-sm text-parchment-dim" htmlFor="email">
             E-mail
           </label>
           <input
@@ -53,13 +53,13 @@ export function LoginPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+            className="w-full  border border-line-soft bg-panel-raised px-3 py-2 text-parchment outline-none focus:border-gold"
             required
           />
         </div>
 
         <div className="space-y-1">
-          <label className="text-sm text-slate-400" htmlFor="password">
+          <label className="text-sm text-parchment-dim" htmlFor="password">
             Hasło
           </label>
           <input
@@ -68,7 +68,7 @@ export function LoginPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
+            className="w-full  border border-line-soft bg-panel-raised px-3 py-2 text-parchment outline-none focus:border-gold"
             required
           />
         </div>
@@ -78,14 +78,14 @@ export function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-lg bg-indigo-600 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+          className="w-full  bg-gold py-2 font-medium text-ink transition hover:bg-gold-bright disabled:opacity-50"
         >
           {submitting ? "Logowanie…" : "Zaloguj się"}
         </button>
 
-        <p className="text-center text-sm text-slate-400">
+        <p className="text-center text-sm text-parchment-dim">
           Nie masz konta?{" "}
-          <Link to="/register" className="text-indigo-400 hover:underline">
+          <Link to="/register" className="text-gold-bright hover:underline">
             Zarejestruj się
           </Link>
         </p>

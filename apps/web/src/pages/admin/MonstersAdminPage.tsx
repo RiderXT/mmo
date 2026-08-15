@@ -88,18 +88,18 @@ export function MonstersAdminPage() {
   return (
     <AppShell>
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-100">Potwory</h1>
+        <h1 className="text-lg font-semibold text-parchment">Potwory</h1>
         <button
           onClick={openCreate}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+          className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
         >
           + Nowy potwór
         </button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800">
+      <div className="mt-4 overflow-x-auto panel">
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-slate-900 text-slate-400">
+          <thead className="bg-panel text-parchment-dim">
             <tr>
               <th className="px-3 py-2">Nazwa</th>
               <th className="px-3 py-2">Poziom</th>
@@ -109,16 +109,16 @@ export function MonstersAdminPage() {
               <th className="px-3 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800 bg-slate-950">
+          <tbody className="divide-y divide-line bg-ink">
             {monstersQuery.data?.map((m) => (
               <tr key={m.id}>
-                <td className="px-3 py-2 text-slate-200">{m.name}</td>
-                <td className="px-3 py-2 text-slate-400">{m.level}</td>
-                <td className="px-3 py-2 text-slate-400">{m.hp}</td>
-                <td className="px-3 py-2 text-slate-400">{m.expReward}</td>
-                <td className="px-3 py-2 text-slate-400">{m.drops.length}</td>
+                <td className="px-3 py-2 text-parchment">{m.name}</td>
+                <td className="px-3 py-2 text-parchment-dim">{m.level}</td>
+                <td className="px-3 py-2 text-parchment-dim">{m.hp}</td>
+                <td className="px-3 py-2 text-parchment-dim">{m.expReward}</td>
+                <td className="px-3 py-2 text-parchment-dim">{m.drops.length}</td>
                 <td className="space-x-2 px-3 py-2 text-right">
-                  <button onClick={() => openEdit(m)} className="text-indigo-400 hover:underline">
+                  <button onClick={() => openEdit(m)} className="text-gold-bright hover:underline">
                     Edytuj
                   </button>
                   <button
@@ -132,7 +132,7 @@ export function MonstersAdminPage() {
             ))}
             {monstersQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
                   Brak potworów. Dodaj pierwszego.
                 </td>
               </tr>
@@ -142,8 +142,8 @@ export function MonstersAdminPage() {
       </div>
 
       {editingId !== null && (
-        <div className="mt-6 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <h2 className="font-medium text-slate-100">
+        <div className="mt-6 space-y-4 panel p-4">
+          <h2 className="font-medium text-parchment">
             {editingId === "new" ? "Nowy potwór" : "Edycja potwora"}
           </h2>
 
@@ -190,10 +190,10 @@ export function MonstersAdminPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">Statystyki</p>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">Statystyki</p>
             <div className="flex flex-wrap gap-2">
               {STAT_KEYS.map((key) => (
-                <label key={key} className="flex items-center gap-1 text-xs text-slate-400">
+                <label key={key} className="flex items-center gap-1 text-xs text-parchment-dim">
                   {key}
                   <input
                     type="number"
@@ -213,7 +213,7 @@ export function MonstersAdminPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">Umiejętności</p>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">Umiejętności</p>
             <div className="space-y-2">
               {form.skills.map((skill, idx) => (
                 <div key={idx} className="flex flex-wrap items-center gap-2">
@@ -260,7 +260,7 @@ export function MonstersAdminPage() {
                 onClick={() =>
                   setForm({ ...form, skills: [...form.skills, { name: "", description: "", power: 0 }] })
                 }
-                className="text-sm text-indigo-400 hover:underline"
+                className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj umiejętność
               </button>
@@ -268,7 +268,7 @@ export function MonstersAdminPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
               Drop (co i z jaką szansą wypada z tego potwora)
             </p>
             <div className="space-y-2">
@@ -341,7 +341,7 @@ export function MonstersAdminPage() {
                     drops: [...form.drops, { itemId: "", dropChance: 0.1, minQty: 1, maxQty: 1 }],
                   })
                 }
-                className="text-sm text-indigo-400 hover:underline"
+                className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj drop
               </button>
@@ -354,13 +354,13 @@ export function MonstersAdminPage() {
             <button
               onClick={handleSubmit}
               disabled={saveMutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
             >
               Zapisz
             </button>
             <button
               onClick={() => setEditingId(null)}
-              className="rounded-lg border border-slate-700 px-4 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
             >
               Anuluj
             </button>

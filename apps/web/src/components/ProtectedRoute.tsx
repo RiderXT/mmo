@@ -13,7 +13,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps):
 
   if (isBootstrapping) {
     return (
-      <div className="flex h-screen items-center justify-center text-slate-400">
+      <div className="flex h-screen items-center justify-center text-parchment-dim">
         Ładowanie…
       </div>
     );

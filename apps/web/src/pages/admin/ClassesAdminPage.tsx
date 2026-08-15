@@ -114,18 +114,18 @@ export function ClassesAdminPage() {
   return (
     <AppShell>
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-100">Klasy postaci</h1>
+        <h1 className="text-lg font-semibold text-parchment">Klasy postaci</h1>
         <button
           onClick={openCreate}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+          className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
         >
           + Nowa klasa
         </button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800">
+      <div className="mt-4 overflow-x-auto panel">
         <table className="w-full min-w-[560px] text-left text-sm">
-          <thead className="bg-slate-900 text-slate-400">
+          <thead className="bg-panel text-parchment-dim">
             <tr>
               <th className="px-3 py-2">Nazwa</th>
               <th className="px-3 py-2">Główny staty</th>
@@ -133,14 +133,14 @@ export function ClassesAdminPage() {
               <th className="px-3 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800 bg-slate-950">
+          <tbody className="divide-y divide-line bg-ink">
             {classesQuery.data?.map((cls) => (
               <tr key={cls.id}>
-                <td className="px-3 py-2 text-slate-200">{cls.name}</td>
-                <td className="px-3 py-2 text-slate-400">{cls.primaryStat}</td>
-                <td className="px-3 py-2 text-slate-400">{cls.skills.length}</td>
+                <td className="px-3 py-2 text-parchment">{cls.name}</td>
+                <td className="px-3 py-2 text-parchment-dim">{cls.primaryStat}</td>
+                <td className="px-3 py-2 text-parchment-dim">{cls.skills.length}</td>
                 <td className="space-x-2 px-3 py-2 text-right">
-                  <button onClick={() => openEdit(cls)} className="text-indigo-400 hover:underline">
+                  <button onClick={() => openEdit(cls)} className="text-gold-bright hover:underline">
                     Edytuj
                   </button>
                   <button
@@ -154,7 +154,7 @@ export function ClassesAdminPage() {
             ))}
             {classesQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={4} className="px-3 py-6 text-center text-parchment-faint">
                   Brak klas. Dodaj pierwszą.
                 </td>
               </tr>
@@ -164,8 +164,8 @@ export function ClassesAdminPage() {
       </div>
 
       {editingId !== null && (
-        <div className="mt-6 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <h2 className="font-medium text-slate-100">
+        <div className="mt-6 space-y-4 panel p-4">
+          <h2 className="font-medium text-parchment">
             {editingId === "new" ? "Nowa klasa" : "Edycja klasy"}
           </h2>
 
@@ -203,17 +203,17 @@ export function ClassesAdminPage() {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-400">Umiejętności ({form.skills.length})</p>
+              <p className="text-xs font-medium text-parchment-dim">Umiejętności ({form.skills.length})</p>
               <button
                 onClick={() => setForm({ ...form, skills: [...form.skills, emptySkill()] })}
-                className="text-sm text-indigo-400 hover:underline"
+                className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj umiejętność
               </button>
             </div>
             <div className="space-y-3">
               {form.skills.map((skill, idx) => (
-                <div key={idx} className="rounded-lg border border-slate-800 p-3">
+                <div key={idx} className=" border border-line p-3">
                   <div className="grid gap-2 sm:grid-cols-3">
                     <input
                       placeholder="nazwa"
@@ -253,7 +253,7 @@ export function ClassesAdminPage() {
                   />
 
                   <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                    <label className="flex items-center gap-2 text-xs text-parchment-dim">
                       mnożnik
                       <input
                         type="number"
@@ -263,7 +263,7 @@ export function ClassesAdminPage() {
                         onChange={(e) => updateSkill(idx, { scalingFactor: Number(e.target.value) })}
                       />
                     </label>
-                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                    <label className="flex items-center gap-2 text-xs text-parchment-dim">
                       maks. poziom
                       <input
                         type="number"
@@ -274,7 +274,7 @@ export function ClassesAdminPage() {
                     </label>
 
                     {skill.kind === "passive" ? (
-                      <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <label className="flex items-center gap-2 text-xs text-parchment-dim">
                         docelowy staty
                         <select
                           className={inputClass}
@@ -289,7 +289,7 @@ export function ClassesAdminPage() {
                         </select>
                       </label>
                     ) : (
-                      <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <label className="flex items-center gap-2 text-xs text-parchment-dim">
                         efekt
                         <select
                           className={inputClass}
@@ -307,7 +307,7 @@ export function ClassesAdminPage() {
                   </div>
 
                   {skill.kind === "active" && (
-                    <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                    <label className="mt-2 flex items-center gap-2 text-xs text-parchment-dim">
                       cooldown (s)
                       <input
                         type="number"
@@ -335,13 +335,13 @@ export function ClassesAdminPage() {
             <button
               onClick={handleSubmit}
               disabled={saveMutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
             >
               Zapisz
             </button>
             <button
               onClick={() => setEditingId(null)}
-              className="rounded-lg border border-slate-700 px-4 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
             >
               Anuluj
             </button>

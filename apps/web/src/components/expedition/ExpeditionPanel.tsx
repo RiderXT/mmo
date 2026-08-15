@@ -92,19 +92,19 @@ export function ExpeditionPanel({
 
   if (claimResult) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <h2 className="font-medium text-slate-100">Ekspedycja zakończona</h2>
-        <p className="mt-1 text-sm text-slate-300">
+      <div className="panel p-4">
+        <h2 className="font-medium text-parchment">Ekspedycja zakończona</h2>
+        <p className="mt-1 text-sm text-parchment-dim">
           Pokonano {claimResult.result.monstersDefeated} potworów · +{claimResult.result.expGained} exp ·
           +{claimResult.result.goldGained} złota
         </p>
         {claimResult.leveledUp && (
-          <p className="mt-1 text-sm font-medium text-amber-300">
+          <p className="mt-1 text-sm font-medium text-gold-bright">
             Awans na poziom {claimResult.newLevel}!
           </p>
         )}
         {claimResult.result.loot.length > 0 ? (
-          <ul className="mt-2 space-y-1 text-sm text-slate-400">
+          <ul className="mt-2 space-y-1 text-sm text-parchment-dim">
             {claimResult.result.loot.map((l) => (
               <li key={l.itemId}>
                 {itemNameFor(l.itemId)} ×{l.quantity}
@@ -112,11 +112,11 @@ export function ExpeditionPanel({
             ))}
           </ul>
         ) : (
-          <p className="mt-2 text-sm text-slate-500">Brak przedmiotów tym razem.</p>
+          <p className="mt-2 text-sm text-parchment-faint">Brak przedmiotów tym razem.</p>
         )}
         <button
           onClick={() => setClaimResult(null)}
-          className="mt-3 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+          className="mt-3  bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
         >
           OK
         </button>
@@ -126,20 +126,20 @@ export function ExpeditionPanel({
 
   if (expedition) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <h2 className="font-medium text-slate-100">Ekspedycja w toku</h2>
-        <p className="mt-1 text-sm text-slate-400">Kraina: {zoneNameFor(expedition.zoneId)}</p>
+      <div className="panel p-4">
+        <h2 className="font-medium text-parchment">Ekspedycja w toku</h2>
+        <p className="mt-1 text-sm text-parchment-dim">Kraina: {zoneNameFor(expedition.zoneId)}</p>
         {isReadyToClaim ? (
           <button
             onClick={() => claimMutation.mutate(expedition.id)}
             disabled={claimMutation.isPending}
-            className="mt-3 rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            className="mt-3 border border-gold px-4 py-1.5 text-sm font-medium text-gold-bright hover:bg-gold/10 disabled:opacity-50"
           >
             Odbierz nagrody
           </button>
         ) : (
           <>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-100">
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-parchment">
               {formatDuration((endsAtMs ?? now) - now)}
             </p>
             <button
@@ -153,7 +153,7 @@ export function ExpeditionPanel({
                 }
               }}
               disabled={leaveMutation.isPending}
-              className="mt-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+              className="mt-2  border border-line-soft px-3 py-1.5 text-xs text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
             >
               Opuść ekspedycję (odbierz zdobyte)
             </button>
@@ -168,10 +168,10 @@ export function ExpeditionPanel({
   const zones = zonesQuery.data ?? [];
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <h2 className="font-medium text-slate-100">Wyślij na ekspedycję</h2>
+    <div className="panel p-4">
+      <h2 className="font-medium text-parchment">Wyślij na ekspedycję</h2>
       {durationQuery.data && (
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-parchment-faint">
           Ekspedycja trwa {durationQuery.data.minutes} min (ustawienie administratora).
         </p>
       )}
@@ -184,20 +184,20 @@ export function ExpeditionPanel({
               key={zone.id}
               disabled={!eligible}
               onClick={() => setSelectedZoneId(zone.id)}
-              className={`block w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
+              className={`block w-full  border px-3 py-2 text-left text-sm transition ${
                 selectedZoneId === zone.id
-                  ? "border-indigo-500 bg-indigo-500/10"
-                  : "border-slate-800 hover:border-slate-700"
+                  ? "border-gold bg-gold/10"
+                  : "border-line hover:border-line-soft"
               } ${!eligible ? "cursor-not-allowed opacity-40" : ""}`}
             >
-              <span className="font-medium text-slate-200">{zone.name}</span>
-              <span className="ml-2 text-xs text-slate-500">
+              <span className="font-medium text-parchment">{zone.name}</span>
+              <span className="ml-2 text-xs text-parchment-faint">
                 poziom {zone.minLevel}-{zone.maxLevel}
               </span>
             </button>
           );
         })}
-        {zones.length === 0 && <p className="text-sm text-slate-500">Brak dostępnych krain.</p>}
+        {zones.length === 0 && <p className="text-sm text-parchment-faint">Brak dostępnych krain.</p>}
       </div>
 
       {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
@@ -205,7 +205,7 @@ export function ExpeditionPanel({
       <button
         onClick={() => selectedZoneId && startMutation.mutate(selectedZoneId)}
         disabled={!selectedZoneId || startMutation.isPending}
-        className="mt-3 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+        className="mt-3  bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
       >
         Wyślij postać
       </button>

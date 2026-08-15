@@ -10,8 +10,8 @@ export function GridSlot({ slotIndex, children }: { slotIndex: number; children:
   return (
     <div
       ref={setNodeRef}
-      className={`flex h-14 w-14 items-center justify-center rounded-lg border border-dashed ${
-        isOver ? "border-indigo-400 bg-indigo-500/10" : "border-slate-800"
+      className={`flex h-14 w-14 items-center justify-center  border border-dashed ${
+        isOver ? "border-gold-bright bg-gold/10" : "border-line"
       }`}
     >
       {children}

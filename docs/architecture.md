@@ -286,6 +286,36 @@ natywny dialog potwierdzenia z poprawnym tekstem ostrzeżenia, po potwierdzeniu 
 w "Ekspedycja zakończona" z poprawnym (zerowym, bo opuszczono przed pierwszym starciem o t=60s)
 podsumowaniem nagród.
 
+## Identyfikacja wizualna — dark fantasy (post-Etap 5)
+
+Zastąpiono generyczny dashboard (slate-900 + indigo-600) motywem dopasowanym do gry: żelazo,
+pergamin, złoto. Wdrożone na podstawie koncepcji zaakceptowanej wcześniej jako osobny artifact.
+
+**Mechanizm**: `tailwind.config.js` dostał nowe tokeny kolorów (`ink`/`panel`/`panel-raised`/
+`line`/`line-soft`/`gold`/`parchment`/`hp`/`mp`/`rarity-*`) i `fontFamily.display` (systemowy stos
+szeryfowy). `index.css` definiuje `@layer components .panel` — klasę z narożnikowymi "okuciami"
+(pseudo-elementy `::before`/`::after` w złocie), którą dostał każdy dotychczasowy
+`rounded-xl border border-slate-800 bg-slate-900` panel w całej aplikacji. Promienie zaokrągleń
+(`rounded-*`) usunięto globalnie — ostre, "kute" krawędzie zamiast zaokrąglonych kart SaaS.
+Kolory rzadkości (`rarity-common/uncommon/rare/epic`) użyte w `ItemBox.tsx` do kolorowania ramek
+slotów wg typu przedmiotu (biżuteria = złoto, broń = czerwień, zbroja/hełm/buty = stal, konsumpcyjne
+= zieleń, materiały = szarość, questowe = fiolet) — przy okazji naprawiono tam nieaktualną mapę
+typów (`gloves`/`accessory` nie istnieją już w `ItemTypeSchema` od Etapu 5, brakowało
+`necklace`/`earrings`/`ring`). Semantyczne kolory statusu (poziomy logów w adminie, typy zdarzeń
+w dzienniku walki: krytyk/unik/przegrana) celowo **nie** zostały wciągnięte w paletę motywu —
+zostały jako odrębne, funkcjonalne kolory (zasada: kolor semantyczny ≠ kolor akcentu marki).
+
+**Pułapka po drodze**: `theme("colors.panel.DEFAULT")` w customowym CSS zwracało `undefined` i
+całą deklarację CSS wyciszało po cichu, bo `panel`/`line`/`ink` to płaskie stringi w configu
+(nie obiekty z kluczem `DEFAULT` jak `gold`) — poprawny odczyt to `theme("colors.panel")`. Objawiało
+się to jako przezroczyste tło i szara (Tailwind default) ramka paneli mimo braku błędu w konsoli
+przeglądarki (błąd był tylko w logu Vite/PostCSS).
+
+Zweryfikowane: `pnpm typecheck` czysty; przeglądarka z odczytem `getComputedStyle` — tło strony
+`rgb(14,12,10)` (`#0e0c0a`), pasek HP `rgb(139,38,53)`, pasek MP `rgb(46,111,128)`, ramka itemu
+materiałowego `rgba(138,132,119,…)` (rarity-common), złote narożniki `.panel::before` —
+wszystkie zgodne co do piksela z tokenami w `tailwind.config.js`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

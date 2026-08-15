@@ -10,8 +10,8 @@ function EventLine({ event, itemNameFor }: { event: CombatEvent; itemNameFor: (i
   switch (event.type) {
     case "encounter_start":
       return (
-        <p className="text-slate-300">
-          ⚔️ Starcie: <span className="text-slate-100">{event.monsterName}</span> ({event.monsterHp} HP)
+        <p className="text-parchment-dim">
+          ⚔️ Starcie: <span className="text-parchment">{event.monsterName}</span> ({event.monsterHp} HP)
         </p>
       );
     case "skill_activated":
@@ -79,19 +79,19 @@ export function CombatLog({
 
   return (
     <div className="mt-3">
-      <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+      <div className="flex flex-wrap gap-3 text-xs text-parchment-dim">
         <span>
-          Pokonano: <span className="font-medium text-slate-200">{kills}</span>
+          Pokonano: <span className="font-medium text-parchment">{kills}</span>
         </span>
         <span>
-          Exp: <span className="font-medium text-slate-200">{exp}</span>
+          Exp: <span className="font-medium text-parchment">{exp}</span>
         </span>
         <span>
-          Złoto: <span className="font-medium text-slate-200">{gold}</span>
+          Złoto: <span className="font-medium text-parchment">{gold}</span>
         </span>
       </div>
-      <div className="mt-2 h-48 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/60 p-2 font-mono text-xs leading-relaxed">
-        {events.length === 0 && <p className="text-slate-600">Ekspedycja się rozpoczyna…</p>}
+      <div className="mt-2 h-48 overflow-y-auto  border border-line bg-ink/60 p-2 font-mono text-xs leading-relaxed">
+        {events.length === 0 && <p className="text-parchment-faint">Ekspedycja się rozpoczyna…</p>}
         {events.map((event, idx) => (
           <EventLine key={idx} event={event} itemNameFor={itemNameFor} />
         ))}

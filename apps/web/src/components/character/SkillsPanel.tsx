@@ -33,11 +33,11 @@ export function SkillsPanel({ character }: { character: Character }) {
   const levelByClassSkillId = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s.level]) ?? []);
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <div className="panel p-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-medium text-slate-100">Umiejętności ({classQuery.data.name})</h2>
-        <span className="text-xs text-slate-400">
-          Niewydane punkty: <span className="text-amber-300">{character.unspentSkillPoints}</span>
+        <h2 className="font-medium text-parchment">Umiejętności ({classQuery.data.name})</h2>
+        <span className="text-xs text-parchment-dim">
+          Niewydane punkty: <span className="text-gold-bright">{character.unspentSkillPoints}</span>
         </span>
       </div>
       <div className="mt-2 space-y-1">
@@ -47,19 +47,19 @@ export function SkillsPanel({ character }: { character: Character }) {
           return (
             <div key={skill.id} className="flex items-center justify-between text-sm">
               <div>
-                <span className="text-slate-300">{skill.name}</span>
-                <span className="ml-2 text-xs text-slate-500">
+                <span className="text-parchment-dim">{skill.name}</span>
+                <span className="ml-2 text-xs text-parchment-faint">
                   {skill.kind === "active" ? `aktywna, cd ${skill.cooldownSeconds}s` : "pasywna"}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="tabular-nums text-slate-200">
+                <span className="tabular-nums text-parchment">
                   {level}/{skill.maxLevel}
                 </span>
                 <button
                   onClick={() => mutation.mutate(skill.id)}
                   disabled={character.unspentSkillPoints < 1 || maxed || mutation.isPending}
-                  className="flex h-5 w-5 items-center justify-center rounded bg-indigo-600 text-xs text-white hover:bg-indigo-500 disabled:opacity-30"
+                  className="flex h-5 w-5 items-center justify-center  bg-gold text-xs text-ink hover:bg-gold-bright disabled:opacity-30"
                 >
                   +
                 </button>

@@ -32,9 +32,9 @@ export function SettingsAdminPage() {
 
   return (
     <AppShell>
-      <h1 className="text-lg font-semibold text-slate-100">Ustawienia</h1>
+      <h1 className="text-lg font-semibold text-parchment">Ustawienia</h1>
 
-      <div className="mt-4 max-w-sm space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <div className="mt-4 max-w-sm space-y-3 panel p-4">
         <Field label="Domyślny czas ekspedycji (minuty)">
           <input
             type="number"
@@ -45,15 +45,15 @@ export function SettingsAdminPage() {
             onChange={(e) => setMinutes(Number(e.target.value))}
           />
         </Field>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-parchment-faint">
           Jak długo postać automatycznie walczy w krainie, zanim będzie można odebrać nagrody.
         </p>
         {error && <p className="text-sm text-red-400">{error}</p>}
-        {saved && <p className="text-sm text-emerald-400">Zapisano.</p>}
+        {saved && <p className="text-sm text-rarity-uncommon">Zapisano.</p>}
         <button
           onClick={() => saveMutation.mutate(minutes)}
           disabled={saveMutation.isPending}
-          className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
         >
           Zapisz
         </button>
