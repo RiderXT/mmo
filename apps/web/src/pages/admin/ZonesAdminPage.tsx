@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateZoneSchema, type CreateZoneInput } from "@mmo/shared";
-import { Field, inputClass } from "../../components/admin/Field";
+import { Field, MiniField, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import {
   listZones,
@@ -196,45 +196,49 @@ export function ZonesAdminPage() {
             </p>
             <div className="space-y-2">
               {form.monsters.map((zm, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
-                  <select
-                    className={`${inputClass} w-48`}
-                    value={zm.monsterId}
-                    onChange={(e) => {
-                      const next = [...form.monsters];
-                      next[idx] = { ...zm, monsterId: e.target.value };
-                      setForm({ ...form, monsters: next });
-                    }}
-                  >
-                    <option value="">wybierz potwora</option>
-                    {monsters.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} (lvl {m.level})
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="waga spawnu"
-                    className={`${inputClass} w-32`}
-                    value={zm.spawnWeight}
-                    onChange={(e) => {
-                      const next = [...form.monsters];
-                      next[idx] = { ...zm, spawnWeight: Number(e.target.value) };
-                      setForm({ ...form, monsters: next });
-                    }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="maks. liczba"
-                    className={`${inputClass} w-32`}
-                    value={zm.maxCount}
-                    onChange={(e) => {
-                      const next = [...form.monsters];
-                      next[idx] = { ...zm, maxCount: Number(e.target.value) };
-                      setForm({ ...form, monsters: next });
-                    }}
-                  />
+                <div key={idx} className="flex flex-wrap items-end gap-2">
+                  <MiniField label="Potwór">
+                    <select
+                      className={`${inputClass} w-48`}
+                      value={zm.monsterId}
+                      onChange={(e) => {
+                        const next = [...form.monsters];
+                        next[idx] = { ...zm, monsterId: e.target.value };
+                        setForm({ ...form, monsters: next });
+                      }}
+                    >
+                      <option value="">wybierz potwora</option>
+                      {monsters.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} (lvl {m.level})
+                        </option>
+                      ))}
+                    </select>
+                  </MiniField>
+                  <MiniField label="Waga spawnu (względna, nie %; wyższa = częściej losowany)">
+                    <input
+                      type="number"
+                      className={`${inputClass} w-32`}
+                      value={zm.spawnWeight}
+                      onChange={(e) => {
+                        const next = [...form.monsters];
+                        next[idx] = { ...zm, spawnWeight: Number(e.target.value) };
+                        setForm({ ...form, monsters: next });
+                      }}
+                    />
+                  </MiniField>
+                  <MiniField label="Maks. liczba (obecnie nieużywane przez silnik walki)">
+                    <input
+                      type="number"
+                      className={`${inputClass} w-32`}
+                      value={zm.maxCount}
+                      onChange={(e) => {
+                        const next = [...form.monsters];
+                        next[idx] = { ...zm, maxCount: Number(e.target.value) };
+                        setForm({ ...form, monsters: next });
+                      }}
+                    />
+                  </MiniField>
                   <button
                     onClick={() => setForm({ ...form, monsters: form.monsters.filter((_, i) => i !== idx) })}
                     className="text-red-400 hover:underline"
@@ -263,37 +267,40 @@ export function ZonesAdminPage() {
             </p>
             <div className="space-y-2">
               {form.drops.map((drop, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
-                  <select
-                    className={`${inputClass} w-48`}
-                    value={drop.itemId}
-                    onChange={(e) => {
-                      const next = [...form.drops];
-                      next[idx] = { ...drop, itemId: e.target.value };
-                      setForm({ ...form, drops: next });
-                    }}
-                  >
-                    <option value="">wybierz item</option>
-                    {items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step="0.001"
-                    min={0}
-                    max={1}
-                    placeholder="szansa 0-1"
-                    className={`${inputClass} w-28`}
-                    value={drop.dropChance}
-                    onChange={(e) => {
-                      const next = [...form.drops];
-                      next[idx] = { ...drop, dropChance: Number(e.target.value) };
-                      setForm({ ...form, drops: next });
-                    }}
-                  />
+                <div key={idx} className="flex flex-wrap items-end gap-2">
+                  <MiniField label="Przedmiot">
+                    <select
+                      className={`${inputClass} w-48`}
+                      value={drop.itemId}
+                      onChange={(e) => {
+                        const next = [...form.drops];
+                        next[idx] = { ...drop, itemId: e.target.value };
+                        setForm({ ...form, drops: next });
+                      }}
+                    >
+                      <option value="">wybierz item</option>
+                      {items.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                        </option>
+                      ))}
+                    </select>
+                  </MiniField>
+                  <MiniField label="Szansa (0–1, np. 0.02 = 2%; sprawdzana osobno po każdej wygranej walce w tej krainie)">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min={0}
+                      max={1}
+                      className={`${inputClass} w-28`}
+                      value={drop.dropChance}
+                      onChange={(e) => {
+                        const next = [...form.drops];
+                        next[idx] = { ...drop, dropChance: Number(e.target.value) };
+                        setForm({ ...form, drops: next });
+                      }}
+                    />
+                  </MiniField>
                   <button
                     onClick={() => setForm({ ...form, drops: form.drops.filter((_, i) => i !== idx) })}
                     className="text-red-400 hover:underline"

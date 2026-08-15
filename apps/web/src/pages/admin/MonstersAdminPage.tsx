@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateMonsterSchema, StatKeySchema, type CreateMonsterInput } from "@mmo/shared";
-import { Field, inputClass } from "../../components/admin/Field";
+import { Field, MiniField, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
+import { STAT_LABELS, statHint } from "../../lib/statFormat";
 import {
   listMonsters,
   createMonster,
@@ -189,14 +190,17 @@ export function MonstersAdminPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-parchment-dim">Statystyki</p>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
+              Statystyki (wpływają na walkę — tylko "Atak" i "Obrona" są faktycznie używane przez
+              silnik, reszta jest zarezerwowana na przyszłość)
+            </p>
             <div className="flex flex-wrap gap-2">
               {STAT_KEYS.map((key) => (
-                <label key={key} className="flex items-center gap-1 text-xs text-parchment-dim">
-                  {key}
+                <MiniField key={key} label={`${STAT_LABELS[key]} (${statHint(key)})`}>
                   <input
                     type="number"
-                    className={`${inputClass} w-20`}
+                    step="any"
+                    className={`${inputClass} w-24`}
                     value={form.stats[key] ?? ""}
                     onChange={(e) => {
                       const value = e.target.value === "" ? undefined : Number(e.target.value);
@@ -206,7 +210,7 @@ export function MonstersAdminPage() {
                       setForm({ ...form, stats: nextStats });
                     }}
                   />
-                </label>
+                </MiniField>
               ))}
             </div>
           </div>
@@ -272,59 +276,64 @@ export function MonstersAdminPage() {
             </p>
             <div className="space-y-2">
               {form.drops.map((drop, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
-                  <select
-                    className={`${inputClass} w-48`}
-                    value={drop.itemId}
-                    onChange={(e) => {
-                      const next = [...form.drops];
-                      next[idx] = { ...drop, itemId: e.target.value };
-                      setForm({ ...form, drops: next });
-                    }}
-                  >
-                    <option value="">wybierz item</option>
-                    {items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    max={1}
-                    placeholder="szansa 0-1"
-                    className={`${inputClass} w-28`}
-                    value={drop.dropChance}
-                    onChange={(e) => {
-                      const next = [...form.drops];
-                      next[idx] = { ...drop, dropChance: Number(e.target.value) };
-                      setForm({ ...form, drops: next });
-                    }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="min ilość"
-                    className={`${inputClass} w-24`}
-                    value={drop.minQty}
-                    onChange={(e) => {
-                      const next = [...form.drops];
-                      next[idx] = { ...drop, minQty: Number(e.target.value) };
-                      setForm({ ...form, drops: next });
-                    }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="max ilość"
-                    className={`${inputClass} w-24`}
-                    value={drop.maxQty}
-                    onChange={(e) => {
-                      const next = [...form.drops];
-                      next[idx] = { ...drop, maxQty: Number(e.target.value) };
-                      setForm({ ...form, drops: next });
-                    }}
-                  />
+                <div key={idx} className="flex flex-wrap items-end gap-2">
+                  <MiniField label="Przedmiot">
+                    <select
+                      className={`${inputClass} w-48`}
+                      value={drop.itemId}
+                      onChange={(e) => {
+                        const next = [...form.drops];
+                        next[idx] = { ...drop, itemId: e.target.value };
+                        setForm({ ...form, drops: next });
+                      }}
+                    >
+                      <option value="">wybierz item</option>
+                      {items.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                        </option>
+                      ))}
+                    </select>
+                  </MiniField>
+                  <MiniField label="Szansa (0–1, np. 0.02 = 2%)">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      max={1}
+                      className={`${inputClass} w-28`}
+                      value={drop.dropChance}
+                      onChange={(e) => {
+                        const next = [...form.drops];
+                        next[idx] = { ...drop, dropChance: Number(e.target.value) };
+                        setForm({ ...form, drops: next });
+                      }}
+                    />
+                  </MiniField>
+                  <MiniField label="Min ilość">
+                    <input
+                      type="number"
+                      className={`${inputClass} w-24`}
+                      value={drop.minQty}
+                      onChange={(e) => {
+                        const next = [...form.drops];
+                        next[idx] = { ...drop, minQty: Number(e.target.value) };
+                        setForm({ ...form, drops: next });
+                      }}
+                    />
+                  </MiniField>
+                  <MiniField label="Max ilość">
+                    <input
+                      type="number"
+                      className={`${inputClass} w-24`}
+                      value={drop.maxQty}
+                      onChange={(e) => {
+                        const next = [...form.drops];
+                        next[idx] = { ...drop, maxQty: Number(e.target.value) };
+                        setForm({ ...form, drops: next });
+                      }}
+                    />
+                  </MiniField>
                   <button
                     onClick={() => setForm({ ...form, drops: form.drops.filter((_, i) => i !== idx) })}
                     className="text-red-400 hover:underline"

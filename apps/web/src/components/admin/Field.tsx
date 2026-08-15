@@ -12,4 +12,16 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
+/** Compact inline label for a single input inside a flex-wrap row of several fields (e.g. a
+ * drop/stat editor line) — Field's block layout would break that row, this stays inline and the
+ * label stays visible even once the input has a value (unlike a placeholder). */
+export function MiniField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-0.5">
+      <span className="text-[10px] leading-tight text-parchment-faint">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export { inputClass };

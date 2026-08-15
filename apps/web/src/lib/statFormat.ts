@@ -45,6 +45,14 @@ export function formatStatValue(stat: StatKey, value: number): string {
   return `${flat >= 0 ? "+" : ""}${flat}`;
 }
 
+/** Short inline hint for admin stat-value inputs — explains the raw number format (a "percent"
+ * stat is stored/edited as a 0-1 fraction, not a whole percentage) right where it's entered,
+ * since the same StatKey editor is reused for very different-looking numbers (attack: 12,
+ * critChance: 0.02). */
+export function statHint(stat: StatKey): string {
+  return STAT_FORMAT[stat] === "percent" ? "ułamek 0–1, np. 0.02 = 2%" : "liczba całkowita";
+}
+
 export const TYPE_LABELS: Record<string, string> = {
   weapon: "Broń",
   armor: "Zbroja",

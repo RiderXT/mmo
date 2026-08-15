@@ -8,10 +8,10 @@ import {
   PotionEffectSchema,
   type CreateItemInput,
 } from "@mmo/shared";
-import { Field, inputClass } from "../../components/admin/Field";
+import { Field, MiniField, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import { listItems, createItem, updateItem, deleteItem, listClasses, type ItemDto } from "../../lib/adminApi";
-import { TYPE_LABELS } from "../../lib/statFormat";
+import { TYPE_LABELS, STAT_LABELS, statHint } from "../../lib/statFormat";
 
 const ITEM_TYPES = ItemTypeSchema.options;
 const STAT_KEYS = StatKeySchema.options;
@@ -97,31 +97,35 @@ function StatValueEditor({
       <p className="mb-2 text-xs font-medium text-parchment-dim">{label}</p>
       <div className="space-y-2">
         {entries.map(([stat, val], idx) => (
-          <div key={idx} className="flex flex-wrap items-center gap-2">
-            <select
-              className={`${inputClass} w-32`}
-              value={stat}
-              onChange={(e) => {
-                const nextStat = e.target.value as (typeof STAT_KEYS)[number];
-                const next = { ...value };
-                delete next[stat];
-                next[nextStat] = val;
-                onChange(next);
-              }}
-            >
-              {STAT_KEYS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              placeholder="wartość"
-              className={`${inputClass} w-24`}
-              value={val}
-              onChange={(e) => onChange({ ...value, [stat]: Number(e.target.value) })}
-            />
+          <div key={idx} className="flex flex-wrap items-end gap-2">
+            <MiniField label="Staty">
+              <select
+                className={`${inputClass} w-44`}
+                value={stat}
+                onChange={(e) => {
+                  const nextStat = e.target.value as (typeof STAT_KEYS)[number];
+                  const next = { ...value };
+                  delete next[stat];
+                  next[nextStat] = val;
+                  onChange(next);
+                }}
+              >
+                {STAT_KEYS.map((s) => (
+                  <option key={s} value={s}>
+                    {STAT_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </MiniField>
+            <MiniField label={`Wartość (${statHint(stat)})`}>
+              <input
+                type="number"
+                step="any"
+                className={`${inputClass} w-32`}
+                value={val}
+                onChange={(e) => onChange({ ...value, [stat]: Number(e.target.value) })}
+              />
+            </MiniField>
             <button
               onClick={() => {
                 const next = { ...value };
@@ -533,59 +537,67 @@ export function ItemsAdminPage() {
 
           <div>
             <p className="mb-2 text-xs font-medium text-parchment-dim">
-              Możliwe losowe staty (przy dropie losowana jest wartość z zakresu)
+              Możliwe losowe staty (przy dropie losowana jest wartość z zakresu min-max jednego
+              z poniższych, z prawdopodobieństwem proporcjonalnym do wagi)
             </p>
             <div className="space-y-2">
               {form.possibleStatRanges.map((range, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
-                  <select
-                    className={`${inputClass} w-32`}
-                    value={range.stat}
-                    onChange={(e) => {
-                      const next = [...form.possibleStatRanges];
-                      next[idx] = { ...range, stat: e.target.value as (typeof STAT_KEYS)[number] };
-                      setForm({ ...form, possibleStatRanges: next });
-                    }}
-                  >
-                    {STAT_KEYS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="min"
-                    className={`${inputClass} w-20`}
-                    value={range.min}
-                    onChange={(e) => {
-                      const next = [...form.possibleStatRanges];
-                      next[idx] = { ...range, min: Number(e.target.value) };
-                      setForm({ ...form, possibleStatRanges: next });
-                    }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="max"
-                    className={`${inputClass} w-20`}
-                    value={range.max}
-                    onChange={(e) => {
-                      const next = [...form.possibleStatRanges];
-                      next[idx] = { ...range, max: Number(e.target.value) };
-                      setForm({ ...form, possibleStatRanges: next });
-                    }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="waga"
-                    className={`${inputClass} w-20`}
-                    value={range.weight}
-                    onChange={(e) => {
-                      const next = [...form.possibleStatRanges];
-                      next[idx] = { ...range, weight: Number(e.target.value) };
-                      setForm({ ...form, possibleStatRanges: next });
-                    }}
-                  />
+                <div key={idx} className="flex flex-wrap items-end gap-2">
+                  <MiniField label="Staty">
+                    <select
+                      className={`${inputClass} w-44`}
+                      value={range.stat}
+                      onChange={(e) => {
+                        const next = [...form.possibleStatRanges];
+                        next[idx] = { ...range, stat: e.target.value as (typeof STAT_KEYS)[number] };
+                        setForm({ ...form, possibleStatRanges: next });
+                      }}
+                    >
+                      {STAT_KEYS.map((s) => (
+                        <option key={s} value={s}>
+                          {STAT_LABELS[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </MiniField>
+                  <MiniField label={`Min (${statHint(range.stat)})`}>
+                    <input
+                      type="number"
+                      step="any"
+                      className={`${inputClass} w-24`}
+                      value={range.min}
+                      onChange={(e) => {
+                        const next = [...form.possibleStatRanges];
+                        next[idx] = { ...range, min: Number(e.target.value) };
+                        setForm({ ...form, possibleStatRanges: next });
+                      }}
+                    />
+                  </MiniField>
+                  <MiniField label={`Max (${statHint(range.stat)})`}>
+                    <input
+                      type="number"
+                      step="any"
+                      className={`${inputClass} w-24`}
+                      value={range.max}
+                      onChange={(e) => {
+                        const next = [...form.possibleStatRanges];
+                        next[idx] = { ...range, max: Number(e.target.value) };
+                        setForm({ ...form, possibleStatRanges: next });
+                      }}
+                    />
+                  </MiniField>
+                  <MiniField label="Waga (względna szansa wylosowania, nie %)">
+                    <input
+                      type="number"
+                      className={`${inputClass} w-20`}
+                      value={range.weight}
+                      onChange={(e) => {
+                        const next = [...form.possibleStatRanges];
+                        next[idx] = { ...range, weight: Number(e.target.value) };
+                        setForm({ ...form, possibleStatRanges: next });
+                      }}
+                    />
+                  </MiniField>
                   <button
                     onClick={() =>
                       setForm({
@@ -698,61 +710,66 @@ export function ItemsAdminPage() {
               </p>
               <div className="space-y-2">
                 {form.chestLoot.map((entry, idx) => (
-                  <div key={idx} className="flex flex-wrap items-center gap-2">
-                    <select
-                      className={`${inputClass} w-48`}
-                      value={entry.rewardItemId}
-                      onChange={(e) => {
-                        const next = [...form.chestLoot];
-                        next[idx] = { ...entry, rewardItemId: e.target.value };
-                        setForm({ ...form, chestLoot: next });
-                      }}
-                    >
-                      <option value="">wybierz item</option>
-                      {otherItems.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      max={1}
-                      placeholder="szansa (0-1)"
-                      className={`${inputClass} w-28`}
-                      value={entry.dropChance}
-                      onChange={(e) => {
-                        const next = [...form.chestLoot];
-                        next[idx] = { ...entry, dropChance: Number(e.target.value) };
-                        setForm({ ...form, chestLoot: next });
-                      }}
-                    />
-                    <input
-                      type="number"
-                      min={1}
-                      placeholder="min ilość"
-                      className={`${inputClass} w-24`}
-                      value={entry.minQty}
-                      onChange={(e) => {
-                        const next = [...form.chestLoot];
-                        next[idx] = { ...entry, minQty: Number(e.target.value) };
-                        setForm({ ...form, chestLoot: next });
-                      }}
-                    />
-                    <input
-                      type="number"
-                      min={1}
-                      placeholder="max ilość"
-                      className={`${inputClass} w-24`}
-                      value={entry.maxQty}
-                      onChange={(e) => {
-                        const next = [...form.chestLoot];
-                        next[idx] = { ...entry, maxQty: Number(e.target.value) };
-                        setForm({ ...form, chestLoot: next });
-                      }}
-                    />
+                  <div key={idx} className="flex flex-wrap items-end gap-2">
+                    <MiniField label="Przedmiot">
+                      <select
+                        className={`${inputClass} w-48`}
+                        value={entry.rewardItemId}
+                        onChange={(e) => {
+                          const next = [...form.chestLoot];
+                          next[idx] = { ...entry, rewardItemId: e.target.value };
+                          setForm({ ...form, chestLoot: next });
+                        }}
+                      >
+                        <option value="">wybierz item</option>
+                        {otherItems.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.name}
+                          </option>
+                        ))}
+                      </select>
+                    </MiniField>
+                    <MiniField label="Szansa (0–1, np. 0.02 = 2%; 1 = gwarantowane)">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        max={1}
+                        className={`${inputClass} w-28`}
+                        value={entry.dropChance}
+                        onChange={(e) => {
+                          const next = [...form.chestLoot];
+                          next[idx] = { ...entry, dropChance: Number(e.target.value) };
+                          setForm({ ...form, chestLoot: next });
+                        }}
+                      />
+                    </MiniField>
+                    <MiniField label="Min ilość">
+                      <input
+                        type="number"
+                        min={1}
+                        className={`${inputClass} w-24`}
+                        value={entry.minQty}
+                        onChange={(e) => {
+                          const next = [...form.chestLoot];
+                          next[idx] = { ...entry, minQty: Number(e.target.value) };
+                          setForm({ ...form, chestLoot: next });
+                        }}
+                      />
+                    </MiniField>
+                    <MiniField label="Max ilość">
+                      <input
+                        type="number"
+                        min={1}
+                        className={`${inputClass} w-24`}
+                        value={entry.maxQty}
+                        onChange={(e) => {
+                          const next = [...form.chestLoot];
+                          next[idx] = { ...entry, maxQty: Number(e.target.value) };
+                          setForm({ ...form, chestLoot: next });
+                        }}
+                      />
+                    </MiniField>
                     <button
                       onClick={() => setForm({ ...form, chestLoot: form.chestLoot.filter((_, i) => i !== idx) })}
                       className="text-red-400 hover:underline"
