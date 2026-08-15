@@ -5,6 +5,7 @@ export const StartExpeditionSchema = z.object({
   characterId: z.string(),
   zoneId: z.string(),
   durationMinutes: z.number().int().min(1).max(720).optional(),
+  selectedMonsterIds: z.array(z.string()).default([]), // empty = whole zone pool
 });
 export type StartExpeditionInput = z.infer<typeof StartExpeditionSchema>;
 

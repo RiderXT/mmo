@@ -79,6 +79,17 @@ export function GrantAdminPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {charactersQuery.isLoading && (
+            <p className="mt-3 text-sm text-parchment-faint">Wczytywanie...</p>
+          )}
+          {charactersQuery.isError && (
+            <p className="mt-3 text-sm text-red-400">
+              Nie udało się wczytać postaci:{" "}
+              {charactersQuery.error instanceof ApiError
+                ? charactersQuery.error.message
+                : "błąd sieci"}
+            </p>
+          )}
           <div className="mt-3 max-h-[28rem] divide-y divide-line overflow-y-auto">
             {filtered.map((c) => (
               <button

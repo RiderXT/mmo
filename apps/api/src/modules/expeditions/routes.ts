@@ -12,6 +12,7 @@ import {
 const StartExpeditionBodySchema = z.object({
   characterId: z.string(),
   zoneId: z.string(),
+  selectedMonsterIds: z.array(z.string()).default([]), // empty = whole zone pool
 });
 
 export async function expeditionsRoutes(app: FastifyInstance): Promise<void> {

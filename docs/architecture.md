@@ -528,6 +528,92 @@ Krainy, Potwory, Itemy) działają bez regresji; zakładka Testowanie faktycznie
 złoto wskazanej postaci widoczne od razu w odpowiedzi API; zakładka Statystyki balansu pokazuje
 te same dane co curl.
 
+## Podróż jako osobny krok, podróż kraina-kraina, wybór potworów (Etap 9)
+
+Zgłoszony problem balansu: gracz poziomu 1 wysłany do krainy 1-10 (potwory poziomów 1,3,6,8,10)
+mógł dostać losowo najsilniejszego potwora krainy i przegrać — silnik walki losował
+przeciwnika z całej puli krainy bez względu na poziom gracza. Dodatkowo dotychczasowy model
+ekspedycji wymuszał jeden ciągły cykl podróż-tam→walka→podróż-powrotna liczony z góry w jednym
+kliknięciu. Ustalono z użytkownikiem: pełna podróż kraina-kraina od razu (nie tylko
+wioska↔kraina), wybór potworów przez popup z kafelkami (nazwa/HP/exp/poziom, klik
+zaznacza/odznacza, można zaznaczyć pojedyncze albo wszystkie naraz), "bycie w krainie" jako
+nowy, osobny stan postaci — dopiero świadome "rozpocznij walkę" tworzy `Expedition`.
+
+**Model danych** (addytywne, bez resetu `dev.db`): `Character` dostał `travelDestinationZoneId
+String?` (null = cel to wioska) i `travelArrivesAt DateTime?` (null = postać nie jest w drodze —
+jej obecność jest jedynym źródłem prawdy o tym, że trwa podróż, niezależnie od
+`currentZoneId`). `currentZoneId` (już istniejące) zostaje źródłem prawdy o tym, gdzie postać
+FIZYCZNIE stoi — nie zmienia się w trakcie podróży, tylko w momencie rozstrzygnięcia przybycia.
+Ponieważ `Character` ma teraz dwie relacje do `Zone`, obie wymagały jawnych nazw
+(`@relation("CharacterCurrentZone" | "CharacterTravelDestination", ...)`) — czysto typowa
+zmiana, nie generuje SQL-a dla istniejącej kolumny `currentZoneId`. `Expedition` dostał
+`selectedMonsterIds String @default("[]")` (pusta tablica = cała pula krainy, kompatybilne
+wstecznie).
+
+**Rozstrzyganie przybycia** (`apps/api/src/lib/travelResolution.ts`, `resolveTravelArrival`):
+wzorzec compare-and-swap na dokładnie odczytanej wartości `travelArrivesAt` (analogiczny do
+`claimExpedition`/`leaveExpedition`) — **nie** `updateMany({where:{lte: now}})`, bo Prisma nie
+potrafi ustawić `currentZoneId = travelDestinationZoneId` (kolumna = wartość innej kolumny tego
+samego wiersza) bez surowego SQL, więc docelową wartość trzeba najpierw odczytać, a dopiero
+potem użyć jej w `WHERE` obok `data`, żeby zapis pozostał bezpieczny przy wyścigu. Funkcja
+świadomie mieszka w `lib/`, nie w `modules/travel/`, żeby uniknąć cyklu importów: wołają ją
+`modules/characters/service.ts`, `modules/expeditions/service.ts` i `modules/travel/service.ts`
+nawzajem.
+
+**Nowy moduł `modules/travel`**: `POST /api/travel/start {characterId, destinationZoneId}`.
+Czas podróży: obie strony to krainy → suma obu `travelTimeSeconds` (uproszczony zamiennik
+macierzy NxN krain — "dalsze krainy = dłużej", bez treści administrowanej per para krain);
+jedna strona to wioska → tylko `travelTimeSeconds` tej krainy (zachowuje dokładnie zachowanie
+sprzed Etapu 9). Redukcja przez `movementSpeedPct` postaci jak dotąd. Żadnej walidacji poziomu
+postaci względem krainy docelowej przy starcie podróży — ta walidacja zostaje tam gdzie była,
+czyli przy starcie walki, żeby gracz mógł świadomie dojść do trudniejszej krainy i wybrać tam
+tylko najsłabszego potwora. Brak osobnego endpointu statusu podróży — `GET
+/api/characters/:id` (już odpytywany przez frontend) w zupełności wystarcza jako źródło stanu
+po rozszerzeniu `CharacterSchema`.
+
+**`startExpedition`** (`modules/expeditions/service.ts`) wymaga teraz `currentZoneId ===
+zoneId && travelArrivesAt === null` (409 inaczej — "postać musi najpierw dotrzeć do tej
+krainy") zamiast dotychczasowego "zawsze można wysłać z dowolnego miejsca". Filtruje
+`simZone.monsters` do `selectedMonsterIds` przed symulacją (pusta tablica = cała pula, jak
+dawniej); pusta pula po filtrze (np. nieprawidłowe ID) → 400 zamiast cichej symulacji z zerową
+pulą. Skoro podróż jest już osobnym krokiem PRZED wejściem do ekspedycji, `arrivedAt =
+startedAt` i `fightEndsAt = endsAt` zawsze odtąd (kolumny zostają w schemacie, nie usunięte —
+ekspedycje już w toku w momencie wdrożenia działają bez zmian aż do naturalnego zakończenia,
+zero specjalnej logiki migracyjnej potrzebne, bo logika faz na froncie nie została ruszona —
+patrz niżej). `applyExpeditionReward` przestał czyścić `currentZoneId` — postać zostaje w
+krainie po zakończeniu/opuszczeniu walki, dopóki gracz nie zainicjuje nowej podróży. Przy okazji
+naprawiony pre-existing brak atomowej ochrony przed podwójnym startem ekspedycji (dwa
+równoległe żądania mogły oba utworzyć `Expedition` i nadpisać `activeExpeditionId`) —
+`updateMany` z pełnym zestawem warunków wewnątrz tej samej transakcji co `expedition.create`,
+rzut wyjątku = automatyczny rollback.
+
+**Frontend** (`ExpeditionPanel.tsx`) — przebudowany na maszynę stanów zależną od pól postaci
+(`currentZoneId`/`travelDestinationZoneId`/`travelArrivesAt`/`activeExpeditionId`,
+`GamePage.tsx` przekazuje cały obiekt `character`): w wiosce (lista krain, "Wyrusz do krainy"),
+w podróży (licznik "W drodze do X, dotrzesz za Ys"), w krainie bez walki (nazwa krainy + trzy
+akcje: Walcz/Idź do innej krainy/Wróć do wioski), walka w toku, gotowe do odbioru. Logika faz
+`traveling_there/fighting/traveling_back/ready` (liczona z `arrivedAtMs`/`fightEndsAtMs`/
+`endsAtMs`) **celowo pozostawiona bez zmian** — dla nowych ekspedycji `arrivedAt===startedAt`
+sprawia, że faza podróży ma zerową szerokość i naturalnie znika bez żadnej specjalnej logiki.
+Nowy `MonsterPickerModal.tsx`: kafelki potworów krainy (nazwa/poziom/HP/exp z rozszerzonego
+`zoneInclude.monsters.monster.select` w `admin/zones/service.ts`), klik = toggle, "zaznacz/
+odznacz wszystkie".
+
+Zweryfikowane: curl — podróż wioska→kraina (stan pośredni: `currentZoneId` wciąż `null`,
+`travelArrivesAt` w przyszłości; po "upłynięciu czasu" — rozstrzygnięcie poprawne), 409 przy
+drugiej podróży w trakcie pierwszej, podróż kraina→kraina bezpośrednio (czas = suma obu
+`travelTimeSeconds`, zweryfikowany na Wilcze Uroczysko→Zapomniane Mokradła: 30+55=85s), 409 przy
+starcie walki gdy `currentZoneId !== zoneId`, `selectedMonsterIds` z jednym ID → `eventLog`
+zawiera wyłącznie tego potwora we wszystkich `encounter_start`, `currentZoneId` **zostaje**
+krainą po `claim` (nie wraca do `null`), 409 przy próbie usunięcia krainy z postacią w drodze do
+niej. Przeglądarka: pełny cykl wioska → wybór krainy → licznik podróży → w krainie (3 akcje) →
+popup wyboru potworów (zaznaczono tylko najsłabszego) → walka ("WALCZY W KRAINIE…", faza
+podróży poprawnie zerowej szerokości) → odbiór nagród (loot faktycznie trafił do ekwipunku) →
+**postać zostaje w krainie** (nie wraca do wioski) → "Idź do innej krainy" (próba wejścia do
+krainy poza zakresem poziomu poprawnie zablokowana dopiero przy starcie walki, nie przy samym
+dojściu) → powrót do właściwej krainy → ponowna walka → "Wróć do wioski" → z powrotem stan
+wioski z listą krain.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

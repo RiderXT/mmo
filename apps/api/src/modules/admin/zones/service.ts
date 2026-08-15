@@ -3,7 +3,11 @@ import { logAction } from "../../../lib/gameLog.js";
 import type { CreateZoneInput, UpdateZoneInput } from "@mmo/shared";
 
 const zoneInclude = {
-  monsters: { include: { monster: { select: { id: true, name: true, level: true } } } },
+  monsters: {
+    include: {
+      monster: { select: { id: true, name: true, level: true, hp: true, expReward: true, goldReward: true } },
+    },
+  },
   drops: { include: { item: { select: { id: true, name: true, type: true } } } },
 } as const;
 
@@ -121,9 +125,14 @@ export async function deleteZone(id: string, actorUserId: string, requestId?: st
   const existing = await prisma.zone.findUnique({ where: { id } });
   if (!existing) throw new ZoneError("Nie znaleziono krainy", 404);
 
-  const inUse = await prisma.character.count({ where: { currentZoneId: id } });
+  const inUse = await prisma.character.count({
+    where: { OR: [{ currentZoneId: id }, { travelDestinationZoneId: id }] },
+  });
   if (inUse > 0) {
-    throw new ZoneError("Nie można usunąć krainy, w której aktualnie przebywają postacie", 409);
+    throw new ZoneError(
+      "Nie można usunąć krainy: postać w niej przebywa albo do niej podróżuje",
+      409,
+    );
   }
 
   await prisma.zone.delete({ where: { id } });

@@ -185,8 +185,7 @@ export function GamePage() {
       {character && (
         <div className="mt-4">
           <ExpeditionPanel
-            characterId={characterId}
-            characterLevel={character.level}
+            character={character}
             onClaimed={() => queryClient.invalidateQueries({ queryKey: ["character", characterId] })}
           />
         </div>

@@ -17,6 +17,7 @@ import { publicZonesRoutes } from "./modules/zones/routes.js";
 import { publicItemsRoutes } from "./modules/items/routes.js";
 import { settingsRoutes, adminSettingsRoutes } from "./modules/settings/routes.js";
 import { expeditionsRoutes } from "./modules/expeditions/routes.js";
+import { travelRoutes } from "./modules/travel/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -55,6 +56,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(settingsRoutes, { prefix: "/api/settings" });
   await app.register(adminSettingsRoutes, { prefix: "/api/admin/settings" });
   await app.register(expeditionsRoutes, { prefix: "/api/expeditions" });
+  await app.register(travelRoutes, { prefix: "/api/travel" });
 
   return app;
 }

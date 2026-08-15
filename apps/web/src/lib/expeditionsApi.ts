@@ -33,10 +33,10 @@ export interface ExpeditionClaimResult {
 export const getActiveExpedition = (characterId: string) =>
   apiFetch<ExpeditionDto | null>(`/api/expeditions/${characterId}/active`);
 
-export const startExpedition = (characterId: string, zoneId: string) =>
+export const startExpedition = (characterId: string, zoneId: string, selectedMonsterIds: string[] = []) =>
   apiFetch<ExpeditionDto>("/api/expeditions/start", {
     method: "POST",
-    body: JSON.stringify({ characterId, zoneId }),
+    body: JSON.stringify({ characterId, zoneId, selectedMonsterIds }),
   });
 
 export const claimExpedition = (expeditionId: string) =>

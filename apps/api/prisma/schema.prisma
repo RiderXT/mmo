@@ -60,12 +60,19 @@ model Character {
   unspentSkillPoints Int      @default(0)
   currentZoneId      String?
   activeExpeditionId String?  @unique
+  // Travel state — see docs/architecture.md "Etap 9". travelArrivesAt null = not traveling;
+  // its presence is the source of truth for "in transit", independent of currentZoneId (which
+  // only changes once arrival is resolved). travelDestinationZoneId null while traveling means
+  // "heading to the village".
+  travelDestinationZoneId String?
+  travelArrivesAt         DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  class       CharacterClass? @relation(fields: [classId], references: [id])
-  currentZone Zone?           @relation(fields: [currentZoneId], references: [id])
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class                 CharacterClass? @relation(fields: [classId], references: [id])
+  currentZone           Zone?           @relation("CharacterCurrentZone", fields: [currentZoneId], references: [id])
+  travelDestinationZone Zone?           @relation("CharacterTravelDestination", fields: [travelDestinationZoneId], references: [id])
   inventory   InventoryItem[]
   skills      CharacterSkill[]
   expeditions Expedition[]    @relation("CharacterExpeditions")
@@ -129,10 +136,11 @@ model Zone {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  monsters    ZoneMonster[]
-  drops       ZoneDrop[]
-  characters  Character[]
-  expeditions Expedition[]
+  monsters             ZoneMonster[]
+  drops                ZoneDrop[]
+  characters           Character[] @relation("CharacterCurrentZone")
+  travelingCharacters  Character[] @relation("CharacterTravelDestination")
+  expeditions          Expedition[]
 
   @@index([minLevel, maxLevel])
 }
@@ -274,6 +282,9 @@ model Expedition {
   endsAt      DateTime // travel-back complete, rewards claimable
   result      String? // JSON: ExpeditionResult, computed server-side at start
   eventLog    String? // JSON: CombatEvent[], computed server-side at start, revealed progressively client-side
+  // Monster ids (subset of the zone's pool) the player chose to fight — see docs/architecture.md
+  // "Etap 9". Empty array = whole zone pool, preserving pre-Etap-9 behavior.
+  selectedMonsterIds String @default("[]")
 
   character   Character @relation("CharacterExpeditions", fields: [characterId], references: [id], onDelete: Cascade)
   zone        Zone      @relation(fields: [zoneId], references: [id])

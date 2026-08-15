@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
+import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import type { CreateCharacterInput, CoreStatKey } from "@mmo/shared";
 
 export class CharacterError extends Error {
@@ -14,10 +15,14 @@ export class CharacterError extends Error {
 const MAX_CHARACTERS_PER_USER = 5;
 
 export async function listCharacters(userId: string) {
+  const characters = await prisma.character.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
+  await Promise.all(characters.map((c) => resolveTravelArrival(c.id)));
+  if (characters.length === 0) return characters;
   return prisma.character.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
 }
 
 export async function getCharacter(id: string, userId: string) {
+  await resolveTravelArrival(id);
   const character = await prisma.character.findUnique({ where: { id } });
   if (!character || character.userId !== userId) return null;
   return character;

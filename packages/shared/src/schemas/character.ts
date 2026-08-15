@@ -28,6 +28,8 @@ export const CharacterSchema = z.object({
   unspentSkillPoints: z.number().int(),
   currentZoneId: z.string().nullable(),
   activeExpeditionId: z.string().nullable(),
+  travelDestinationZoneId: z.string().nullable(),
+  travelArrivesAt: z.string().nullable(),
   createdAt: z.string(),
 });
 export type Character = z.infer<typeof CharacterSchema>;

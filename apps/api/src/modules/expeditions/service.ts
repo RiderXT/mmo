@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
+import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import { getExpeditionDurationMinutes } from "../settings/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import {
@@ -114,8 +115,22 @@ export async function getCharacterCombatStats(characterId: string, userId: strin
   return computeDerivedStats(core, equipmentStats, passiveSkills);
 }
 
-/** Gathers the character's full combat build and runs the deterministic expedition simulation. */
-async function buildAndSimulate(characterId: string, zoneId: string, durationMinutes: number) {
+/** Movement-speed-only readout of a character's build, reused by modules/travel/service.ts to
+ * price a journey — avoids duplicating the equipment/passive-skill gathering logic there. */
+export async function getCharacterMovementSpeedPct(characterId: string): Promise<number> {
+  const { core, equipmentStats, passiveSkills } = await gatherCombatBuild(characterId);
+  return computeDerivedStats(core, equipmentStats, passiveSkills).movementSpeedPct;
+}
+
+/** Gathers the character's full combat build and runs the deterministic expedition simulation.
+ * selectedMonsterIds narrows the zone's monster pool to the player's chosen subset — empty
+ * array (the default) preserves the pre-Etap-9 behavior of drawing from the whole zone. */
+async function buildAndSimulate(
+  characterId: string,
+  zoneId: string,
+  durationMinutes: number,
+  selectedMonsterIds: string[] = [],
+) {
   const [{ character, core, equipmentStats, passiveSkills, activeSkills, potions }, zone] = await Promise.all([
     gatherCombatBuild(characterId),
     prisma.zone.findUnique({
@@ -129,30 +144,37 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
   const stats = computeDerivedStats(core, equipmentStats, passiveSkills);
 
   const simZone: SimZone = {
-    monsters: zone.monsters.map((zm) => {
-      const monsterStats = JSON.parse(zm.monster.stats) as StatBlock;
-      return {
-        monsterId: zm.monster.id,
-        name: zm.monster.name,
-        hp: zm.monster.hp,
-        attack: monsterStats.attack ?? 0,
-        defense: monsterStats.defense ?? 0,
-        expReward: zm.monster.expReward,
-        goldReward: zm.monster.goldReward,
-        spawnWeight: zm.spawnWeight,
-        drops: zm.monster.drops.map((d) => ({
-          itemId: d.itemId,
-          dropChance: d.dropChance,
-          minQty: d.minQty,
-          maxQty: d.maxQty,
-        })),
-      };
-    }),
+    monsters: zone.monsters
+      .map((zm) => {
+        const monsterStats = JSON.parse(zm.monster.stats) as StatBlock;
+        return {
+          monsterId: zm.monster.id,
+          name: zm.monster.name,
+          hp: zm.monster.hp,
+          attack: monsterStats.attack ?? 0,
+          defense: monsterStats.defense ?? 0,
+          expReward: zm.monster.expReward,
+          goldReward: zm.monster.goldReward,
+          spawnWeight: zm.spawnWeight,
+          drops: zm.monster.drops.map((d) => ({
+            itemId: d.itemId,
+            dropChance: d.dropChance,
+            minQty: d.minQty,
+            maxQty: d.maxQty,
+          })),
+        };
+      })
+      .filter((m) => selectedMonsterIds.length === 0 || selectedMonsterIds.includes(m.monsterId)),
     drops: zone.drops.map((d) => ({ itemId: d.itemId, dropChance: d.dropChance })),
   };
 
   if (simZone.monsters.length === 0) {
-    throw new ExpeditionError("Ta kraina nie ma jeszcze przypisanych potworów", 400);
+    throw new ExpeditionError(
+      selectedMonsterIds.length === 0
+        ? "Ta kraina nie ma jeszcze przypisanych potworów"
+        : "Wybierz co najmniej jednego potwora z tej krainy",
+      400,
+    );
   }
   if (character.level < zone.minLevel || character.level > zone.maxLevel) {
     throw new ExpeditionError(
@@ -166,29 +188,36 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
 }
 
 export async function startExpedition(
-  input: { characterId: string; zoneId: string },
+  input: { characterId: string; zoneId: string; selectedMonsterIds: string[] },
   userId: string,
   requestId?: string,
 ) {
+  await resolveTravelArrival(input.characterId);
   const owner = await assertCharacterOwnership(input.characterId, userId);
   if (owner.activeExpeditionId) {
     throw new ExpeditionError("Postać jest już na ekspedycji", 409);
   }
+  if (owner.travelArrivesAt) {
+    throw new ExpeditionError("Postać jest w drodze — poczekaj na przybycie", 409);
+  }
+  if (owner.currentZoneId !== input.zoneId) {
+    throw new ExpeditionError("Postać musi najpierw dotrzeć do tej krainy", 409);
+  }
 
   const durationMinutes = await getExpeditionDurationMinutes();
-  const { character, zone, stats, outcome } = await buildAndSimulate(
+  const { character, zone, outcome } = await buildAndSimulate(
     input.characterId,
     input.zoneId,
     durationMinutes,
+    input.selectedMonsterIds,
   );
 
-  // Travel time (village <-> zone) is computed once here, same as combat — reduced by the
-  // character's current movementSpeedPct, identical for both legs of the round trip.
-  const travelSeconds = Math.max(1, Math.round(zone.travelTimeSeconds * (1 - stats.movementSpeedPct)));
+  // Etap 9: travel is a fully separate step (modules/travel) that already happened before the
+  // player could even see this zone's "walcz" action — the expedition itself no longer spans
+  // any travel, so arrivedAt/fightEndsAt collapse onto startedAt/endsAt (columns kept, not
+  // removed, so expeditions already in flight at deploy time keep working unmodified).
   const startedAt = new Date();
-  const arrivedAt = new Date(startedAt.getTime() + travelSeconds * 1000);
-  const fightEndsAt = new Date(arrivedAt.getTime() + durationMinutes * 60_000);
-  const endsAt = new Date(fightEndsAt.getTime() + travelSeconds * 1000);
+  const endsAt = new Date(startedAt.getTime() + durationMinutes * 60_000);
 
   const expedition = await prisma.$transaction(async (tx) => {
     const created = await tx.expedition.create({
@@ -197,17 +226,24 @@ export async function startExpedition(
         zoneId: zone.id,
         status: "in_progress",
         startedAt,
-        arrivedAt,
-        fightEndsAt,
+        arrivedAt: startedAt,
+        fightEndsAt: endsAt,
         endsAt,
         result: JSON.stringify(outcome.result),
         eventLog: JSON.stringify(outcome.events),
+        selectedMonsterIds: JSON.stringify(input.selectedMonsterIds),
       },
     });
-    await tx.character.update({
-      where: { id: character.id },
-      data: { currentZoneId: zone.id, activeExpeditionId: created.id },
+
+    // Atomic guard against a double-start race (e.g. a double-click on "rozpocznij walkę"):
+    // only succeeds if the character is still exactly where/how we checked above.
+    const guarded = await tx.character.updateMany({
+      where: { id: character.id, activeExpeditionId: null, currentZoneId: zone.id, travelArrivesAt: null },
+      data: { activeExpeditionId: created.id },
     });
+    if (guarded.count !== 1) {
+      throw new ExpeditionError("Postać jest już na ekspedycji albo nie stoi już w tej krainie", 409);
+    }
 
     for (const [inventoryItemId, qtyConsumed] of outcome.potionsConsumed) {
       const stack = await tx.inventoryItem.findUnique({ where: { id: inventoryItemId } });
@@ -235,6 +271,7 @@ export async function startExpedition(
       expeditionId: expedition.id,
       zoneId: zone.id,
       durationMinutes,
+      selectedMonsterIds: input.selectedMonsterIds,
       potionsConsumed: Object.fromEntries(outcome.potionsConsumed),
     },
   });
@@ -327,7 +364,8 @@ async function applyExpeditionReward(
         gold: character.gold + result.goldGained,
         unspentStatPoints: character.unspentStatPoints + levelsGained * 4,
         unspentSkillPoints: character.unspentSkillPoints + levelsGained * 1,
-        currentZoneId: null,
+        // currentZoneId intentionally left untouched (Etap 9) — the character stays in the
+        // zone after combat ends/is left early, until they explicitly travel elsewhere.
         activeExpeditionId: null,
       },
     });
