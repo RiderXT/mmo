@@ -75,6 +75,7 @@ export interface PotionSlot {
 export interface SimMonster {
   monsterId: string;
   name: string;
+  level: number;
   hp: number;
   attack: number;
   defense: number;
@@ -144,17 +145,24 @@ function pickWeighted<T>(items: T[], weight: (item: T) => number): T | null {
   return items[items.length - 1];
 }
 
-const PASSIVE_REGEN_PER_MINUTE = 0.02; // 2% of maxHp, recovered on minutes with no fight (hp was 0)
 const MANA_REGEN_PER_SECOND_PCT = 0.001; // 0.1% of maxMana per second
 const DEFAULT_BUFF_DURATION_SECONDS = 60;
 const THRESHOLD_POTION_COOLDOWN_SECONDS = 5;
+// One round = one exchange of blows (player hits, monster hits back if it survived) — ticks
+// every ROUND_SECONDS of simulated time, so the client can reveal it as a visibly live event.
+const ROUND_SECONDS = 3;
+// Independent hard safety cap on event count, on top of the duration-minutes cap below — a
+// character strong enough to never die must not be able to generate an unbounded eventLog just
+// because an admin later raises the duration-minutes setting. ~2.5h of simulated fighting.
+const MAX_ROUNDS = 3000;
 
 /**
  * Deterministic combat simulation for one full expedition. HP/mana persist across the whole
- * expedition (not reset per encounter) so threshold-based potions are meaningful. One
- * encounter is resolved per minute of expedition duration, using a "rounds to kill vs rounds
- * survivable" comparison rather than a full per-round loop — cheap and deterministic while
- * still reflecting the character's build (stats, equipment, skills, potions).
+ * expedition (not reset per encounter). Combat runs round-by-round (see ROUND_SECONDS) — crit
+ * and evasion are re-rolled every round rather than once per (formerly aggregated) encounter —
+ * until the character dies (`character_died`, terminal) or a safety time/round limit is hit
+ * (`fight_time_limit_reached`, terminal) — whichever comes first. `durationMinutes` is a safety
+ * cap, not a guaranteed length: most fights end in death well before it.
  */
 export function simulateExpedition(
   zone: SimZone,
@@ -177,7 +185,7 @@ export function simulateExpedition(
     potions.filter((p) => p.trigger === "interval").map((p) => [p.inventoryItemId, p.intervalSeconds ?? 600]),
   );
   // Short reuse cooldown for threshold-triggered potions so a sustained dip below the
-  // threshold doesn't chug the whole stack one-per-second — sip, wait, re-check.
+  // threshold doesn't chug the whole stack round after round — sip, wait, re-check.
   const potionNextThresholdCheck = new Map<string, number>();
   const skillNextAvailable = new Map(activeSkills.map((s) => [s.id, 0]));
 
@@ -188,47 +196,72 @@ export function simulateExpedition(
   let defenseBuffUntil = 0;
   let defenseBuffPct = 0;
 
-  function tryConsumePotion(p: PotionSlot, second: number): boolean {
+  function tryConsumePotion(p: PotionSlot, t: number): boolean {
     const remaining = potionRemaining.get(p.inventoryItemId) ?? 0;
     if (remaining <= 0) return false;
     potionRemaining.set(p.inventoryItemId, remaining - 1);
     potionsConsumed.set(p.inventoryItemId, (potionsConsumed.get(p.inventoryItemId) ?? 0) + 1);
 
-    const buffUntil = second + (p.durationSeconds ?? DEFAULT_BUFF_DURATION_SECONDS);
+    const buffUntil = t + (p.durationSeconds ?? DEFAULT_BUFF_DURATION_SECONDS);
+    let amount = 0;
     switch (p.effect) {
-      case "restore_hp":
+      case "restore_hp": {
+        const before = hp;
         hp = Math.min(stats.maxHp, hp + stats.maxHp * p.magnitudePct);
+        amount = Math.round(hp - before);
         break;
-      case "restore_mana":
+      }
+      case "restore_mana": {
+        const before = mana;
         mana = Math.min(stats.maxMana, mana + stats.maxMana * p.magnitudePct);
+        amount = Math.round(mana - before);
         break;
+      }
       case "buff_attack_speed":
         attackSpeedBuffUntil = buffUntil;
         attackSpeedBuffPct = p.magnitudePct;
+        amount = Math.round(p.magnitudePct * 100);
         break;
       case "buff_attack":
         attackBuffUntil = buffUntil;
         attackBuffPct = p.magnitudePct;
+        amount = Math.round(p.magnitudePct * 100);
         break;
       case "buff_defense":
         defenseBuffUntil = buffUntil;
         defenseBuffPct = p.magnitudePct;
+        amount = Math.round(p.magnitudePct * 100);
         break;
     }
-    events.push({ t: second, type: "potion_used", itemName: p.itemName, effect: p.effect });
+    events.push({
+      t,
+      type: "potion_used",
+      itemName: p.itemName,
+      effect: p.effect,
+      amount,
+      playerHpAfter: Math.max(0, Math.round(hp)),
+      playerManaAfter: Math.max(0, Math.round(mana)),
+    });
     return true;
   }
 
   const addLoot = (itemId: string, qty: number) => lootMap.set(itemId, (lootMap.get(itemId) ?? 0) + qty);
-  const totalSeconds = Math.max(60, durationMinutes * 60);
+  const maxSeconds = Math.max(60, durationMinutes * 60);
 
-  for (let second = 1; second <= totalSeconds; second++) {
+  let t = 0;
+  let roundsEmitted = 0;
+  let currentMonster: SimMonster | null = null;
+  let monsterHp = 0;
+
+  while (t + ROUND_SECONDS <= maxSeconds && roundsEmitted < MAX_ROUNDS) {
+    t += ROUND_SECONDS;
+
     for (const p of potions) {
       if ((potionRemaining.get(p.inventoryItemId) ?? 0) <= 0) continue;
-      const thresholdReady = second >= (potionNextThresholdCheck.get(p.inventoryItemId) ?? 0);
+      const thresholdReady = t >= (potionNextThresholdCheck.get(p.inventoryItemId) ?? 0);
       if (thresholdReady && p.trigger === "hp_below" && p.thresholdPct != null && hp / stats.maxHp < p.thresholdPct) {
-        if (tryConsumePotion(p, second)) {
-          potionNextThresholdCheck.set(p.inventoryItemId, second + THRESHOLD_POTION_COOLDOWN_SECONDS);
+        if (tryConsumePotion(p, t)) {
+          potionNextThresholdCheck.set(p.inventoryItemId, t + THRESHOLD_POTION_COOLDOWN_SECONDS);
         }
       } else if (
         thresholdReady &&
@@ -237,120 +270,129 @@ export function simulateExpedition(
         stats.maxMana > 0 &&
         mana / stats.maxMana < p.thresholdPct
       ) {
-        if (tryConsumePotion(p, second)) {
-          potionNextThresholdCheck.set(p.inventoryItemId, second + THRESHOLD_POTION_COOLDOWN_SECONDS);
+        if (tryConsumePotion(p, t)) {
+          potionNextThresholdCheck.set(p.inventoryItemId, t + THRESHOLD_POTION_COOLDOWN_SECONDS);
         }
       } else if (p.trigger === "interval") {
         const next = potionNextInterval.get(p.inventoryItemId) ?? Infinity;
-        if (second >= next && tryConsumePotion(p, second)) {
-          potionNextInterval.set(p.inventoryItemId, second + (p.intervalSeconds ?? 600));
+        if (t >= next && tryConsumePotion(p, t)) {
+          potionNextInterval.set(p.inventoryItemId, t + (p.intervalSeconds ?? 600));
         }
       }
     }
 
-    mana = Math.min(stats.maxMana, mana + stats.maxMana * MANA_REGEN_PER_SECOND_PCT);
+    mana = Math.min(stats.maxMana, mana + stats.maxMana * MANA_REGEN_PER_SECOND_PCT * ROUND_SECONDS);
 
-    if (second % 60 !== 0) continue;
-
-    if (hp <= 0) {
-      hp = Math.min(stats.maxHp, hp + stats.maxHp * PASSIVE_REGEN_PER_MINUTE);
-      continue;
+    if (!currentMonster) {
+      currentMonster = pickWeighted(zone.monsters, (m) => m.spawnWeight);
+      if (!currentMonster) break; // defensive — buildAndSimulate already guarantees a non-empty pool
+      monsterHp = currentMonster.hp;
+      events.push({
+        t,
+        type: "encounter_start",
+        monsterId: currentMonster.monsterId,
+        monsterName: currentMonster.name,
+        monsterLevel: currentMonster.level,
+        monsterMaxHp: currentMonster.hp,
+      });
     }
-
-    const monster = pickWeighted(zone.monsters, (m) => m.spawnWeight);
-    if (!monster) continue;
-
-    events.push({ t: second, type: "encounter_start", monsterName: monster.name, monsterHp: monster.hp });
 
     let burstDamage = 0;
     for (const skill of activeSkills) {
       const nextAt = skillNextAvailable.get(skill.id) ?? 0;
-      if (second < nextAt || mana < skill.manaCost) continue;
+      if (t < nextAt || mana < skill.manaCost) continue;
       mana -= skill.manaCost;
-      skillNextAvailable.set(skill.id, second + skill.cooldownSeconds);
+      skillNextAvailable.set(skill.id, t + skill.cooldownSeconds);
       if (skill.effectType === "damage") burstDamage += skill.power;
       else hp = Math.min(stats.maxHp, hp + skill.power);
       events.push({
-        t: second,
+        t,
         type: "skill_activated",
         skillName: skill.name,
         effectType: skill.effectType,
         power: Math.round(skill.power),
+        playerHpAfter: Math.max(0, Math.round(hp)),
+        playerManaAfter: Math.max(0, Math.round(mana)),
       });
     }
 
-    const effectiveAttack = stats.attack * (1 + (second <= attackBuffUntil ? attackBuffPct : 0));
-    const speedMultiplier =
-      (stats.attackSpeed * (1 + (second <= attackSpeedBuffUntil ? attackSpeedBuffPct : 0))) / 10;
-    const effectiveDefense = stats.defense * (1 + (second <= defenseBuffUntil ? defenseBuffPct : 0));
+    const effectiveAttack = stats.attack * (1 + (t <= attackBuffUntil ? attackBuffPct : 0));
+    const speedMultiplier = (stats.attackSpeed * (1 + (t <= attackSpeedBuffUntil ? attackSpeedBuffPct : 0))) / 10;
+    const effectiveDefense = stats.defense * (1 + (t <= defenseBuffUntil ? defenseBuffPct : 0));
 
     const crit = Math.random() < stats.critChance;
-    const characterDamage =
-      Math.max(1, effectiveAttack - monster.defense) * (crit ? stats.critDamage : 1) * speedMultiplier +
+    const playerDamage =
+      Math.max(1, effectiveAttack - currentMonster.defense) * (crit ? stats.critDamage : 1) * speedMultiplier +
       burstDamage;
+    monsterHp -= playerDamage;
 
-    const monsterHits = Math.random() >= stats.evasion;
-    const effectiveMonsterDamage = monsterHits
-      ? Math.max(0, monster.attack - effectiveDefense) * (1 - stats.damageReduction)
-      : 0;
-
-    const roundsToKill = Math.max(1, Math.ceil(monster.hp / characterDamage));
-    const roundsSurvivable = effectiveMonsterDamage > 0 ? Math.ceil(hp / effectiveMonsterDamage) : Infinity;
-    const won = roundsToKill <= roundsSurvivable;
-    const monsterRoundsLanded = won ? Math.max(0, roundsToKill - 1) : roundsSurvivable;
+    let monsterDamage = 0;
+    let monsterEvaded = false;
+    if (monsterHp > 0) {
+      // The killing blow doesn't get countered — the monster only hits back if it survived.
+      monsterEvaded = Math.random() < stats.evasion;
+      monsterDamage = monsterEvaded
+        ? 0
+        : Math.max(0, currentMonster.attack - effectiveDefense) * (1 - stats.damageReduction);
+      hp -= monsterDamage;
+    }
 
     events.push({
-      t: second,
-      type: "player_attack",
-      baseAttack: Math.round(effectiveAttack),
-      monsterDefense: monster.defense,
-      skillBonus: Math.round(burstDamage),
-      damagePerRound: Math.round(characterDamage),
-      rounds: won ? roundsToKill : roundsSurvivable,
-      crit,
+      t,
+      type: "round",
+      playerDamage: Math.round(playerDamage),
+      playerCrit: crit,
+      monsterHpAfter: Math.max(0, Math.round(monsterHp)),
+      monsterDamage: Math.round(monsterDamage),
+      monsterEvaded,
+      playerHpAfter: Math.max(0, Math.round(hp)),
     });
-    events.push({
-      t: second,
-      type: "monster_attack",
-      monsterAttack: monster.attack,
-      characterDefense: Math.round(effectiveDefense),
-      damagePerRound: Math.round(effectiveMonsterDamage),
-      rounds: monsterRoundsLanded,
-      evaded: !monsterHits,
-    });
+    roundsEmitted += 1;
 
-    if (won) {
-      hp = Math.max(1, hp - effectiveMonsterDamage * monsterRoundsLanded);
+    if (hp <= 0) {
+      events.push({ t, type: "character_died" });
+      return {
+        result: {
+          expGained,
+          goldGained,
+          monstersDefeated,
+          loot: Array.from(lootMap.entries()).map(([itemId, quantity]) => ({ itemId, quantity })),
+        },
+        potionsConsumed,
+        events,
+      };
+    }
+
+    if (monsterHp <= 0) {
       monstersDefeated += 1;
-      expGained += monster.expReward;
-      goldGained += monster.goldReward;
-      for (const drop of monster.drops) {
+      expGained += currentMonster.expReward;
+      goldGained += currentMonster.goldReward;
+      for (const drop of currentMonster.drops) {
         if (Math.random() < drop.dropChance) {
           const qty = randomInt(drop.minQty, drop.maxQty);
           addLoot(drop.itemId, qty);
-          events.push({ t: second, type: "loot", itemId: drop.itemId, quantity: qty });
+          events.push({ t, type: "loot", itemId: drop.itemId, quantity: qty });
         }
       }
       for (const zoneDrop of zone.drops) {
         if (Math.random() < zoneDrop.dropChance) {
           addLoot(zoneDrop.itemId, 1);
-          events.push({ t: second, type: "loot", itemId: zoneDrop.itemId, quantity: 1 });
+          events.push({ t, type: "loot", itemId: zoneDrop.itemId, quantity: 1 });
         }
       }
-    } else {
-      hp = Math.max(0, hp - effectiveMonsterDamage * roundsSurvivable);
+      events.push({
+        t,
+        type: "encounter_result",
+        monsterId: currentMonster.monsterId,
+        monsterName: currentMonster.name,
+        expGained: currentMonster.expReward,
+        goldGained: currentMonster.goldReward,
+      });
+      currentMonster = null;
     }
-
-    events.push({
-      t: second,
-      type: "encounter_result",
-      won,
-      monsterName: monster.name,
-      expGained: won ? monster.expReward : 0,
-      goldGained: won ? monster.goldReward : 0,
-    });
   }
 
+  events.push({ t, type: "fight_time_limit_reached" });
   return {
     result: {
       expGained,

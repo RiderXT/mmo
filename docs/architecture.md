@@ -614,6 +614,115 @@ krainy poza zakresem poziomu poprawnie zablokowana dopiero przy starcie walki, n
 dojściu) → powrót do właściwej krainy → ponowna walka → "Wróć do wioski" → z powrotem stan
 wioski z listą krain.
 
+## Walka rundowa do śmierci, panel potwora, tooltipy, filtry admina, skrzynie (Etap 10)
+
+Sześć powiązanych żądań: (1) walka trwa aż do śmierci postaci zamiast z góry ustalony czas,
+gracz może ją przerwać w dowolnym momencie (`leaveExpedition` już to umożliwiał — bez zmian);
+(2) info o walce rozbite na "rundy" z realnymi deltami HP po każdej rundzie/potionie; (3) panel
+z info o aktualnie zwalczanym potworze nad dziennikiem walki, z placeholderem grafiki; (4)
+przedmioty dostają placeholder-ikony; (5) pełny tooltip przedmiotu (klasa/poziom/staty) z
+liczbami całkowitymi/procentami i jednolitym polskim językiem, zamiast np. `defense: 0.146`;
+(6) filtry po typie/klasie w panelu Itemy i w Testowaniu (dziś płaski `<select>` z ~160
+opcjami); (7) nowy typ przedmiotu "Skrzynia" z częściowo losową zawartością, otwierana prawym
+klikiem. Użytkownik potwierdził (`AskUserQuestion`) zachowanie maksymalnego czasu walki jako
+zabezpieczenia technicznego (nie gwarantowanego czasu) — bez tego silnie przeważająca postać
+mogłaby generować nieograniczenie długi `eventLog`.
+
+**Silnik walki — rundy w ramach jednego starcia, do śmierci** (`combat.ts`,
+`simulateExpedition`, pełna przebudowa): "runda" = jedna wymiana ciosów (gracz atakuje, jeśli
+potwór przeżył — odbija), tyka co `ROUND_SECONDS=3s`. Krytyk i unik losowane NA NOWO co rundę
+(dawniej raz na całe zagregowane starcie) — świadoma zmiana wariancji balansu, bo inaczej pasek
+HP potwora skakałby od razu z pełna do zera bez sensu "ścierania się". Twardy bezpiecznik
+`MAX_ROUNDS=3000` (~2.5h symulowanej walki) niezależny od ustawienia administratora — chroni
+przed nieograniczonym `eventLog`, gdyby admin kiedyś podniósł limit minut. `hp<=0` → natychmiastowy
+koniec CAŁEJ symulacji (`character_died`, terminalny) — usunięta pasywna regeneracja między
+starciami (`PASSIVE_REGEN_PER_MINUTE`), w nowym modelu 0 HP to realna śmierć, nie stan
+odwracalny. Osiągnięcie limitu bez śmierci → `fight_time_limit_reached` (postać przeżyła).
+`startExpedition` (`expeditions/service.ts`) liczy `endsAt` dynamicznie z ostatniego zdarzenia
+symulacji (`outcome.events.at(-1)?.t`), nie z pełnego skonfigurowanego limitu — "Odbierz
+nagrody" pojawia się dokładnie w momencie zgonu/limitu, nie dopiero po wyczerpaniu maksimum.
+
+**Kształt `CombatEvent`** (`combatEvent.ts`, breaking change — bezpieczne, bo to JSON w
+`String?`, stare zakończone ekspedycje nie są już czytane poza `computeBalanceStats`): nowy typ
+`round{playerDamage, playerCrit, monsterHpAfter, monsterDamage, monsterEvaded, playerHpAfter}`
+zastępuje skumulowane `player_attack`+`monster_attack`; `encounter_result` stracił pole `won`
+(zawsze oznacza wygraną — przegrana to teraz `character_died`, nie osobne starcie); nowe
+terminalne `character_died`/`fight_time_limit_reached`; `potion_used` dostał `amount` (ile
+HP/many faktycznie przywrócono, albo wielkość buffu w % — wcześniej backend to liczył, ale
+nigdzie nie emitował). `computeBalanceStats` (Etap 8) zaktualizowany pod `round` (obrażenia
+brane wprost z `event.monsterDamage`), z heurystyką pomijania starych ekspedycji
+(`start.monsterId === undefined`) — mix starego/nowego kształtu w tych samych uśrednieniach
+dawałby ciche, mylące dane. `wins`/`losses` per potwór odzyskały sens dzięki nowym zdarzeniom
+terminalnym: `wins` = starcie z `encounter_result` (potwór pokonany), `losses` = starcie z
+`character_died` w tym samym fragmencie (postać zginęła walcząc z tym potworem) — bardziej
+użyteczne niż stary model, bo bezpośrednio wskazuje który potwór realnie zabija graczy.
+
+**Frontend combat UI**: nowy `MonsterEncounterPanel.tsx` nad `CombatLog.tsx` — nazwa+poziom
+aktualnego potwora (z ostatniego widocznego `encounter_start`), żywy pasek HP (z ostatniego
+`round.monsterHpAfter`), jeden uniwersalny placeholder-glif (SVG, nie per-potwór — realna
+grafika to przyszły etap). `CombatLog.tsx` przepisany pod `round` — każda linia pokazuje wprost
+"-X obrażeń" graczowi/potworowi z pól zdarzenia, bez przeliczania różnic po stronie frontu.
+
+**Tooltip przedmiotu i jednolite formatowanie** — nowy `apps/web/src/lib/statFormat.ts`:
+`STAT_LABELS` (polskie nazwy wszystkich `StatKey`) + `STAT_FORMAT` (`flat` dla
+attack/defense/hp/maxMana/attackSpeed — zaokrąglone do liczby całkowitej; `percent` dla
+critChance/critDamage/evasion/damageReduction/movementSpeed — ×100 zaokrąglone, ze znakiem "+"
+— `critDamage` na poziomie itemu to bonus nad bazowym mnożnikiem 1.5, nie sam mnożnik, stąd
+procentowa interpretacja jest tu poprawna). Nowy `ItemTooltip.tsx` (custom hover przez
+`group-hover`, zastępuje natywny atrybut `title`) pokazuje nazwę+poziom ulepszenia, klasę
+(`Dla klasy: X`/`Uniwersalny` — wymagało dociągnięcia `classId`+`class` do `listInventory` w
+`inventory/service.ts`, bo `InventoryItemDto` w ogóle tego nie miało), "Od poziomu: X", pełną
+listę statów sformatowaną. Świadomie BEZ systemu rzadkości (dołączony zrzut ekranu z Metin2 to
+wzór UKŁADU tooltipa, nie prośba o dodanie tierów "ZWYKŁY"/itd. — o to wprost nie proszono).
+Nowy `ItemTypeIcon.tsx` — prosty, wspólny SVG-glif per `ItemType`, celowo "placeholderowy".
+`GamePage.tsx` miał DRUGI, osobny surowy dump statów (panel szczegółów wybranego przedmiotu) —
+też przepisany na `STAT_LABELS`/`STAT_FORMAT`, inaczej problem zostałby tylko połowicznie
+naprawiony; przy okazji dodano `TYPE_LABELS` (polskie nazwy typów zamiast surowych `weapon`/...).
+
+**Filtry admina**: `ItemsAdminPage.tsx` i `GrantAdminPage.tsx` — szukajka tekstowa + filtr typu
++ filtr klasy nad listą/dropdownem (client-side, `useMemo`), zawężające ~174 itemy do
+realistycznej liczby wyników.
+
+**Skrzynia** — nowy `ItemType` `"chest"` (jak `material`/`quest`, nie w `EquipSlotSchema`),
+nowy model `ChestLoot` (wzorem `MonsterDrop`: `chestItemId`, `rewardItemId`, `dropChance`,
+`minQty`, `maxQty`, dwie nazwane relacje do `Item` bo występuje w dwóch rolach). Otwieranie
+(`modules/inventory/service.ts`, `openChest`) losuje każdy wiersz niezależnie
+(`Math.random() < dropChance` — `dropChance:1` = gwarantowane), woła reużyte
+`addLootToInventory` (ten sam kod co realny drop z potwora), zmniejsza stos skrzyni o 1
+(usuwa slot przy ostatniej). Admin UI: edytor `chestLoot` w `ItemsAdminPage.tsx` (wzorem
+`upgradeRequirements`), `deleteItem` guard rozszerzony o użycie jako nagroda w skrzyni.
+Frontend: `onContextMenu` na `ItemBox.tsx` (tylko `type==="chest"`) → `openChest` → komunikat
+z listą zdobytych przedmiotów. Świadomie POZA zakresem: seed script z przykładową "skrzynią
+startową" — zbudowano mechanizm, treść tworzy admin przez nowy UI.
+
+**Świadomie NIE zmieniane**: nazwa klucza ustawienia (`expedition.defaultDurationMinutes`),
+URL (`/api/settings/expedition-duration`) i nazwy funkcji w kodzie zostały bez zmian — zmieniono
+tylko widoczny dla gracza/admina tekst ("Maksymalny czas pojedynczej walki (zabezpieczenie)"),
+żeby ograniczyć zakres zmiany i ryzyko literówek w wielu miejscach na raz.
+
+**Obserwacja balansowa z weryfikacji** (nie naprawiana teraz — realny wynik nowego modelu, nie
+błąd): bez naturalnej regeneracji HP między starciami, nawet dobrze wyekwipowana postać w
+końcu ginie na skutek zwykłej akumulacji drobnych obrażeń w bardzo długiej sesji (nagi poziom-1
+charakter zginął po 1 starciu z najsłabszym potworem krainy; w pełnym secie Wilcze Uroczysko
+pokonał 49 Młodych Wilków zanim padł, bez potionów w aktywnych slotach). To zgodne z wcześniej
+wyrażonym celem projektu ("żeby gracz realnie zużywał potiony, a nie zabijał potwory bez
+problemu") — potiony stają się realnie potrzebne do dłuższych sesji, nie kosmetyczne. Dalsze
+strojenie liczb (`referenceNakedStats`/`gearBudget` w `seed-zones.ts`) to temat na kolejny
+etap po realnym playteście, zgodnie z ustaloną praktyką projektu.
+
+Zweryfikowane: curl — słaba (naga) postać vs dobrze dobrany potwór → `character_died` po 5
+rundach, `endsAt` dokładnie odpowiada momentowi zgonu; ta sama postać w pełnym secie krainy →
+49 wygranych starć zanim padła; `leaveExpedition` z nowym silnikiem → poprawna częściowa
+nagroda + awans poziomu; skrzynia z gwarantowanym (`dropChance:1`) i niemożliwym
+(`dropChance:0`) wpisem → `awarded` zawiera tylko gwarantowany, stos skrzyni zmniejsza się i
+znika przy ostatniej; próba otwarcia nie-skrzyni → 400; próba usunięcia itemu użytego jako
+nagroda w skrzyni → 409. Przeglądarka: pełen cykl walki rundowej na żywo (log odsłania się co
+~3s, pasek HP potwora realnie się ścieka, krytyki/loot/zwycięstwa widoczne), tooltip przedmiotu
+pokazuje pełne liczby całkowite/procenty po polsku z nazwą klasy, filtry w Itemy/Testowanie
+realnie zawężają ~174 itemy, prawy klik na skrzyni w ekwipunku poprawnie ją otworzył (zniknęła
+ze stosu, gwarantowana nagroda trafiła do plecaka) — przez rzeczywisty kod UI
+(`ItemBox`→`onContextMenu`→mutacja→invalidacja), nie tylko przez curl.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

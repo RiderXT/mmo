@@ -6,6 +6,7 @@ import {
   UpgradeItemSchema,
   SetActiveSlotSchema,
   ClearActiveSlotSchema,
+  OpenChestSchema,
 } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
 import {
@@ -16,6 +17,7 @@ import {
   upgradeItem,
   setActiveSlot,
   clearActiveSlot,
+  openChest,
   InventoryError,
 } from "./service.js";
 
@@ -95,6 +97,18 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
     const body = UpgradeItemSchema.parse(request.body);
     try {
       const result = await upgradeItem({ characterId, ...body }, request.user!.sub, request.id);
+      return reply.send(result);
+    } catch (err) {
+      if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:characterId/open-chest", { preHandler: requireAuth }, async (request, reply) => {
+    const { characterId } = request.params as { characterId: string };
+    const body = OpenChestSchema.parse(request.body);
+    try {
+      const result = await openChest({ characterId, ...body }, request.user!.sub, request.id);
       return reply.send(result);
     } catch (err) {
       if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });

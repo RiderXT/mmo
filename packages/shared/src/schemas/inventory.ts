@@ -25,6 +25,11 @@ export const UpgradeItemSchema = z.object({
 });
 export type UpgradeItemInput = z.infer<typeof UpgradeItemSchema>;
 
+export const OpenChestSchema = z.object({
+  inventoryItemId: z.string(),
+});
+export type OpenChestInput = z.infer<typeof OpenChestSchema>;
+
 export const SetActiveSlotSchema = z.object({
   inventoryItemId: z.string(),
   slotIndex: z.number().int().min(0).max(ACTIVE_SLOT_COUNT - 1),

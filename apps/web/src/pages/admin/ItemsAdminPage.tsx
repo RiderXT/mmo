@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CreateItemSchema,
@@ -11,6 +11,7 @@ import {
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import { listItems, createItem, updateItem, deleteItem, listClasses, type ItemDto } from "../../lib/adminApi";
+import { TYPE_LABELS } from "../../lib/statFormat";
 
 const ITEM_TYPES = ItemTypeSchema.options;
 const STAT_KEYS = StatKeySchema.options;
@@ -35,6 +36,7 @@ function emptyForm(): CreateItemInput {
     possibleStatRanges: [],
     classId: null,
     upgradeRequirements: [],
+    chestLoot: [],
   };
 }
 
@@ -54,6 +56,12 @@ function fromDto(item: ItemDto): CreateItemInput {
       targetLevel: r.targetLevel,
       requiredItemId: r.requiredItemId,
       requiredQty: r.requiredQty,
+    })),
+    chestLoot: item.chestLoot.map((c) => ({
+      rewardItemId: c.rewardItemId,
+      dropChance: c.dropChance,
+      minQty: c.minQty,
+      maxQty: c.maxQty,
     })),
     potion:
       item.type === "consumable" && item.potionTrigger && item.potionEffect
@@ -145,6 +153,19 @@ export function ItemsAdminPage() {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateItemInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<CreateItemInput["type"] | "all">("all");
+  const [classFilter, setClassFilter] = useState<string>("all");
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (itemsQuery.data ?? []).filter(
+      (i) =>
+        (typeFilter === "all" || i.type === typeFilter) &&
+        (classFilter === "all" || i.classId === classFilter) &&
+        (!q || i.name.toLowerCase().includes(q)),
+    );
+  }, [itemsQuery.data, search, typeFilter, classFilter]);
 
   const saveMutation = useMutation({
     mutationFn: (input: CreateItemInput) =>
@@ -198,7 +219,40 @@ export function ItemsAdminPage() {
         </button>
       </div>
 
-      <div className="mt-4 overflow-x-auto panel">
+      <div className="mt-4 flex flex-wrap gap-2">
+        <input
+          className={`${inputClass} w-48`}
+          placeholder="Szukaj po nazwie..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className={`${inputClass} w-40`}
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as CreateItemInput["type"] | "all")}
+        >
+          <option value="all">Wszystkie typy</option>
+          {ITEM_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {TYPE_LABELS[t] ?? t}
+            </option>
+          ))}
+        </select>
+        <select className={`${inputClass} w-40`} value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
+          <option value="all">Wszystkie klasy</option>
+          <option value="">Uniwersalne</option>
+          {classesQuery.data?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <span className="self-center text-xs text-parchment-faint">
+          {filteredItems.length} / {itemsQuery.data?.length ?? 0}
+        </span>
+      </div>
+
+      <div className="mt-2 overflow-x-auto panel">
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="bg-panel text-parchment-dim">
             <tr>
@@ -211,10 +265,10 @@ export function ItemsAdminPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-line bg-ink">
-            {itemsQuery.data?.map((item) => (
+            {filteredItems.map((item) => (
               <tr key={item.id}>
                 <td className="px-3 py-2 text-parchment">{item.name}</td>
-                <td className="px-3 py-2 text-parchment-dim">{item.type}</td>
+                <td className="px-3 py-2 text-parchment-dim">{TYPE_LABELS[item.type] ?? item.type}</td>
                 <td className="px-3 py-2 text-parchment-dim">{item.minLevel}</td>
                 <td className="px-3 py-2 text-parchment-dim">
                   {item.stackable ? `tak (${item.maxStack})` : "nie"}
@@ -233,10 +287,10 @@ export function ItemsAdminPage() {
                 </td>
               </tr>
             ))}
-            {itemsQuery.data?.length === 0 && (
+            {filteredItems.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
-                  Brak itemów. Dodaj pierwszy.
+                  {itemsQuery.data?.length ? "Brak wyników dla wybranych filtrów." : "Brak itemów. Dodaj pierwszy."}
                 </td>
               </tr>
             )}
@@ -273,7 +327,7 @@ export function ItemsAdminPage() {
               >
                 {ITEM_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {TYPE_LABELS[t] ?? t}
                   </option>
                 ))}
               </select>
@@ -615,6 +669,91 @@ export function ItemsAdminPage() {
               </button>
             </div>
           </div>
+
+          {form.type === "chest" && (
+            <div>
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
+                Zawartość skrzyni (każdy wiersz losowany niezależnie — szansa 1 = gwarantowane)
+              </p>
+              <div className="space-y-2">
+                {form.chestLoot.map((entry, idx) => (
+                  <div key={idx} className="flex flex-wrap items-center gap-2">
+                    <select
+                      className={`${inputClass} w-48`}
+                      value={entry.rewardItemId}
+                      onChange={(e) => {
+                        const next = [...form.chestLoot];
+                        next[idx] = { ...entry, rewardItemId: e.target.value };
+                        setForm({ ...form, chestLoot: next });
+                      }}
+                    >
+                      <option value="">wybierz item</option>
+                      {otherItems.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      max={1}
+                      placeholder="szansa (0-1)"
+                      className={`${inputClass} w-28`}
+                      value={entry.dropChance}
+                      onChange={(e) => {
+                        const next = [...form.chestLoot];
+                        next[idx] = { ...entry, dropChance: Number(e.target.value) };
+                        setForm({ ...form, chestLoot: next });
+                      }}
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="min ilość"
+                      className={`${inputClass} w-24`}
+                      value={entry.minQty}
+                      onChange={(e) => {
+                        const next = [...form.chestLoot];
+                        next[idx] = { ...entry, minQty: Number(e.target.value) };
+                        setForm({ ...form, chestLoot: next });
+                      }}
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="max ilość"
+                      className={`${inputClass} w-24`}
+                      value={entry.maxQty}
+                      onChange={(e) => {
+                        const next = [...form.chestLoot];
+                        next[idx] = { ...entry, maxQty: Number(e.target.value) };
+                        setForm({ ...form, chestLoot: next });
+                      }}
+                    />
+                    <button
+                      onClick={() => setForm({ ...form, chestLoot: form.chestLoot.filter((_, i) => i !== idx) })}
+                      className="text-red-400 hover:underline"
+                    >
+                      Usuń
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      chestLoot: [...form.chestLoot, { rewardItemId: "", dropChance: 1, minQty: 1, maxQty: 1 }],
+                    })
+                  }
+                  className="text-sm text-gold-bright hover:underline"
+                >
+                  + Dodaj przedmiot do skrzyni
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 

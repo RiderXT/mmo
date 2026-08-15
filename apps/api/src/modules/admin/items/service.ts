@@ -4,6 +4,7 @@ import type { CreateItemInput, UpdateItemInput } from "@mmo/shared";
 
 const itemInclude = {
   upgradeRequirements: { include: { requiredItem: { select: { id: true, name: true } } } },
+  chestLootEntries: { include: { rewardItem: { select: { id: true, name: true } } } },
 } as const;
 
 export class ItemError extends Error {
@@ -15,12 +16,16 @@ export class ItemError extends Error {
   }
 }
 
-function serialize<T extends { baseStats: string; maxUpgradeStats: string; possibleStatRanges: string }>(item: T) {
+function serialize<
+  T extends { baseStats: string; maxUpgradeStats: string; possibleStatRanges: string; chestLootEntries?: unknown },
+>(item: T) {
+  const { chestLootEntries, ...rest } = item;
   return {
-    ...item,
+    ...rest,
     baseStats: JSON.parse(item.baseStats) as unknown,
     maxUpgradeStats: JSON.parse(item.maxUpgradeStats) as unknown,
     possibleStatRanges: JSON.parse(item.possibleStatRanges) as unknown,
+    chestLoot: chestLootEntries ?? [],
   };
 }
 
@@ -64,8 +69,21 @@ async function assertUpgradeItemsExist(input: CreateItemInput, selfId?: string) 
   }
 }
 
+async function assertChestLootItemsExist(input: CreateItemInput, selfId?: string) {
+  const rewardItemIds = input.chestLoot.map((c) => c.rewardItemId);
+  if (selfId && rewardItemIds.includes(selfId)) {
+    throw new ItemError("Skrzynia nie może zawierać samej siebie", 400);
+  }
+  if (!rewardItemIds.length) return;
+  const count = await prisma.item.count({ where: { id: { in: rewardItemIds } } });
+  if (count !== new Set(rewardItemIds).size) {
+    throw new ItemError("Jeden lub więcej przedmiotów w zawartości skrzyni nie istnieje", 400);
+  }
+}
+
 export async function createItem(input: CreateItemInput, actorUserId: string, requestId?: string) {
   await assertUpgradeItemsExist(input);
+  await assertChestLootItemsExist(input);
   await assertClassExists(input.classId);
 
   const item = await prisma.item.create({
@@ -86,6 +104,14 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
           targetLevel: r.targetLevel,
           requiredItemId: r.requiredItemId,
           requiredQty: r.requiredQty,
+        })),
+      },
+      chestLootEntries: {
+        create: input.chestLoot.map((c) => ({
+          rewardItemId: c.rewardItemId,
+          dropChance: c.dropChance,
+          minQty: c.minQty,
+          maxQty: c.maxQty,
         })),
       },
     },
@@ -113,10 +139,12 @@ export async function updateItem(
   if (!existing) throw new ItemError("Nie znaleziono itemu", 404);
 
   await assertUpgradeItemsExist(input, id);
+  await assertChestLootItemsExist(input, id);
   await assertClassExists(input.classId);
 
   const item = await prisma.$transaction(async (tx) => {
     await tx.itemUpgradeRequirement.deleteMany({ where: { itemId: id } });
+    await tx.chestLoot.deleteMany({ where: { chestItemId: id } });
     return tx.item.update({
       where: { id },
       data: {
@@ -136,6 +164,14 @@ export async function updateItem(
             targetLevel: r.targetLevel,
             requiredItemId: r.requiredItemId,
             requiredQty: r.requiredQty,
+          })),
+        },
+        chestLootEntries: {
+          create: input.chestLoot.map((c) => ({
+            rewardItemId: c.rewardItemId,
+            dropChance: c.dropChance,
+            minQty: c.minQty,
+            maxQty: c.maxQty,
           })),
         },
       },
@@ -158,16 +194,17 @@ export async function deleteItem(id: string, actorUserId: string, requestId?: st
   const existing = await prisma.item.findUnique({ where: { id } });
   if (!existing) throw new ItemError("Nie znaleziono itemu", 404);
 
-  const [inMonsterDrops, inZoneDrops, inInventory, inUpgradeMaterial] = await Promise.all([
+  const [inMonsterDrops, inZoneDrops, inInventory, inUpgradeMaterial, inChestLootReward] = await Promise.all([
     prisma.monsterDrop.count({ where: { itemId: id } }),
     prisma.zoneDrop.count({ where: { itemId: id } }),
     prisma.inventoryItem.count({ where: { itemId: id } }),
     prisma.itemUpgradeRequirement.count({ where: { requiredItemId: id } }),
+    prisma.chestLoot.count({ where: { rewardItemId: id } }),
   ]);
 
-  if (inMonsterDrops || inZoneDrops || inInventory || inUpgradeMaterial) {
+  if (inMonsterDrops || inZoneDrops || inInventory || inUpgradeMaterial || inChestLootReward) {
     throw new ItemError(
-      "Nie można usunąć itemu, który jest używany w dropach, ekwipunku graczy lub jako materiał ulepszenia",
+      "Nie można usunąć itemu, który jest używany w dropach, ekwipunku graczy, jako materiał ulepszenia lub jako zawartość skrzyni",
       409,
     );
   }

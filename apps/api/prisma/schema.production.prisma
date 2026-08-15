@@ -206,6 +206,8 @@ model Item {
   inventoryItems      InventoryItem[]
   upgradeRequirements ItemUpgradeRequirement[] @relation("ItemUpgradeFor")
   usedInUpgrades      ItemUpgradeRequirement[] @relation("ItemUpgradeMaterial")
+  chestLootEntries    ChestLoot[] @relation("ChestLootChest")
+  chestLootRewards    ChestLoot[] @relation("ChestLootReward")
 
   @@index([classId])
   @@index([type])
@@ -222,6 +224,23 @@ model ItemUpgradeRequirement {
   requiredItem    Item   @relation("ItemUpgradeMaterial", fields: [requiredItemId], references: [id])
 
   @@unique([itemId, targetLevel, requiredItemId])
+}
+
+// Chest contents — only meaningful when the owning Item.type === "chest". Rolled independently
+// per row when the chest is opened (modules/inventory/service.ts, openChest).
+model ChestLoot {
+  id           String @id @default(cuid())
+  chestItemId  String
+  rewardItemId String
+  dropChance   Float
+  minQty       Int    @default(1)
+  maxQty       Int    @default(1)
+
+  chestItem    Item   @relation("ChestLootChest", fields: [chestItemId], references: [id], onDelete: Cascade)
+  rewardItem   Item   @relation("ChestLootReward", fields: [rewardItemId], references: [id])
+
+  @@unique([chestItemId, rewardItemId])
+  @@index([chestItemId])
 }
 
 model MonsterDrop {

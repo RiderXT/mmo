@@ -16,6 +16,15 @@ export const UpgradeRequirementInputSchema = z.object({
 });
 export type UpgradeRequirementInput = z.infer<typeof UpgradeRequirementInputSchema>;
 
+// Only meaningful when type === "chest" — what can come out when the chest is opened.
+export const ChestLootInputSchema = z.object({
+  rewardItemId: z.string(),
+  dropChance: z.number().min(0).max(1),
+  minQty: z.number().int().min(1).max(999),
+  maxQty: z.number().int().min(1).max(999),
+});
+export type ChestLootInput = z.infer<typeof ChestLootInputSchema>;
+
 // Only meaningful when type === "consumable" and the item sits in an active-item slot.
 export const PotionConfigSchema = z.object({
   trigger: PotionTriggerSchema,
@@ -43,6 +52,8 @@ export const CreateItemSchema = z
     // null/omitted = usable by any class. Only meaningful for weapon/armor/helmet.
     classId: z.string().nullable().optional(),
     upgradeRequirements: z.array(UpgradeRequirementInputSchema).default([]),
+    // Only meaningful when type === "chest".
+    chestLoot: z.array(ChestLootInputSchema).default([]),
     potion: PotionConfigSchema.optional(),
   })
   .refine((val) => val.stackable || val.maxStack === 1, {

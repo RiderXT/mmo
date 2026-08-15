@@ -18,6 +18,7 @@ export const ItemTypeSchema = z.enum([
   "consumable",
   "material",
   "quest",
+  "chest",
 ]);
 export type ItemType = z.infer<typeof ItemTypeSchema>;
 

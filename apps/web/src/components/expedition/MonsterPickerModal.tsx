@@ -32,7 +32,7 @@ export function MonsterPickerModal({
         <h2 className="font-medium text-parchment">Wybierz potwory do walki</h2>
         <p className="mt-1 text-xs text-parchment-faint">
           Zaznacz potwory, z którymi postać ma walczyć — pojedyncze albo wszystkie naraz.
-          {durationMinutes != null && ` Walka potrwa ${durationMinutes} min.`}
+          {" "}Walka trwa, aż postać zginie{durationMinutes != null ? ` (max. ${durationMinutes} min — zabezpieczenie)` : ""}.
         </p>
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">

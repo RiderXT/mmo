@@ -39,7 +39,7 @@ export async function listInventory(characterId: string, userId: string) {
   await assertCharacterOwnership(characterId, userId);
   const items = await prisma.inventoryItem.findMany({
     where: { characterId },
-    include: { item: true },
+    include: { item: { include: { class: { select: { id: true, name: true } } } } },
     orderBy: { slotIndex: "asc" },
   });
   return items.map((i) => ({
@@ -302,6 +302,58 @@ export async function upgradeItem(
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/** Opens one chest from the stack: rolls each ChestLoot row independently (dropChance:1 =
+ * guaranteed), awards hits via the same addLootToInventory used by real monster drops, and
+ * consumes one unit of the chest itself. */
+export async function openChest(
+  input: { characterId: string; inventoryItemId: string },
+  userId: string,
+  requestId?: string,
+) {
+  await assertCharacterOwnership(input.characterId, userId);
+
+  const inventoryItem = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: true },
+  });
+  if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
+    throw new InventoryError("Nie znaleziono przedmiotu", 404);
+  }
+  if (inventoryItem.item.type !== "chest") {
+    throw new InventoryError("Ten przedmiot nie jest skrzynią", 400);
+  }
+
+  const lootRows = await prisma.chestLoot.findMany({ where: { chestItemId: inventoryItem.itemId } });
+  const awarded: { itemId: string; quantity: number }[] = [];
+  for (const row of lootRows) {
+    if (Math.random() < row.dropChance) {
+      awarded.push({ itemId: row.rewardItemId, quantity: randomInt(row.minQty, row.maxQty) });
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (inventoryItem.quantity <= 1) {
+      await tx.inventoryItem.delete({ where: { id: inventoryItem.id } });
+    } else {
+      await tx.inventoryItem.update({ where: { id: inventoryItem.id }, data: { quantity: inventoryItem.quantity - 1 } });
+    }
+    for (const a of awarded) {
+      await addLootToInventory(tx, input.characterId, a.itemId, a.quantity);
+    }
+  });
+
+  await logAction({
+    module: "inventory",
+    action: "open_chest",
+    actorUserId: userId,
+    actorCharacterId: input.characterId,
+    requestId,
+    payload: { inventoryItemId: input.inventoryItemId, awarded },
+  });
+
+  return { awarded };
 }
 
 /** A narrow range (e.g. critChance 0.01-0.03) is a fractional/percentage stat and must not be

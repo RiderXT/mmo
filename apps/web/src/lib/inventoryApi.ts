@@ -21,6 +21,8 @@ export interface InventoryItemDto {
     description: string;
     baseStats: Partial<Record<StatKey, number>>;
     maxUpgradeStats: Partial<Record<StatKey, number>>;
+    classId: string | null;
+    class: { id: string; name: string } | null;
   };
 }
 
@@ -47,6 +49,12 @@ export const unequipItem = (characterId: string, inventoryItemId: string) =>
 
 export const upgradeItem = (characterId: string, inventoryItemId: string) =>
   apiFetch<{ newLevel: number }>(`/api/inventory/${characterId}/upgrade`, {
+    method: "POST",
+    body: JSON.stringify({ inventoryItemId }),
+  });
+
+export const openChest = (characterId: string, inventoryItemId: string) =>
+  apiFetch<{ awarded: { itemId: string; quantity: number }[] }>(`/api/inventory/${characterId}/open-chest`, {
     method: "POST",
     body: JSON.stringify({ inventoryItemId }),
   });

@@ -15,6 +15,8 @@ import { VitalsPanel } from "../components/character/VitalsPanel";
 import { ApiError } from "../lib/apiClient";
 import { getCharacter } from "../lib/charactersApi";
 import { interpolateUpgrade } from "../lib/statMath";
+import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../lib/statFormat";
+import { listPlayerItems } from "../lib/itemsApi";
 import {
   listInventory,
   moveItem,
@@ -23,6 +25,7 @@ import {
   upgradeItem,
   setActiveSlot,
   clearActiveSlot,
+  openChest,
   type InventoryItemDto,
 } from "../lib/inventoryApi";
 
@@ -37,6 +40,7 @@ export function GamePage() {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [chestResult, setChestResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   // Require a small pointer movement before a drag starts, so a plain click/tap
   // (to select an item and show its details) still fires instead of being
@@ -48,6 +52,8 @@ export function GamePage() {
     queryFn: () => getCharacter(characterId!),
     enabled: !!characterId,
   });
+
+  const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
 
   const inventoryQuery = useQuery({
     queryKey: ["inventory", characterId],
@@ -91,6 +97,23 @@ export function GamePage() {
       setActionError(null);
     },
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się ulepszyć"),
+  });
+
+  const openChestMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => openChest(characterId!, inventoryItemId),
+    onSuccess: (data) => {
+      invalidateInventory();
+      setActionError(null);
+      setChestResult(
+        data.awarded.length === 0
+          ? "Skrzynia była pusta."
+          : `Zdobyto: ${data.awarded
+              .map((a) => `${itemsQuery.data?.find((i) => i.id === a.itemId)?.name ?? a.itemId} ×${a.quantity}`)
+              .join(", ")}`,
+      );
+      setTimeout(() => setChestResult(null), 5000);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się otworzyć skrzyni"),
   });
 
   const setActiveSlotMutation = useMutation({
@@ -205,6 +228,7 @@ export function GamePage() {
                         inventoryItem={item}
                         selected={item.id === selectedId}
                         onSelect={() => setSelectedId(item.id)}
+                        onOpenChest={(id) => openChestMutation.mutate(id)}
                       />
                     )}
                   </EquipSlotBox>
@@ -225,6 +249,7 @@ export function GamePage() {
                         inventoryItem={item}
                         selected={item.id === selectedId}
                         onSelect={() => setSelectedId(item.id)}
+                        onOpenChest={(id) => openChestMutation.mutate(id)}
                       />
                     )}
                   </ActiveItemSlotBox>
@@ -264,6 +289,7 @@ export function GamePage() {
                         inventoryItem={item}
                         selected={item.id === selectedId}
                         onSelect={() => setSelectedId(item.id)}
+                        onOpenChest={(id) => openChestMutation.mutate(id)}
                       />
                     )}
                   </GridSlot>
@@ -275,6 +301,7 @@ export function GamePage() {
       </DndContext>
 
       {actionError && <p className="mt-3 text-sm text-red-400">{actionError}</p>}
+      {chestResult && <p className="mt-3 text-sm text-rarity-uncommon">{chestResult}</p>}
 
       {selected && (
         <div className="mt-6 max-w-sm space-y-2 panel p-4">
@@ -288,7 +315,8 @@ export function GamePage() {
             </button>
           </div>
           <p className="text-xs text-parchment-faint">
-            {selected.item.type} · poziom min. {selected.item.minLevel}
+            {TYPE_LABELS[selected.item.type] ?? selected.item.type} · od poziomu {selected.item.minLevel}
+            {selected.item.class ? ` · dla klasy: ${selected.item.class.name}` : " · uniwersalny"}
             {selected.equippedSlot ? ` · założony (${selected.equippedSlot})` : ""}
             {selected.activeSlotIndex !== null ? ` · aktywny slot ${selected.activeSlotIndex + 1}` : ""}
           </p>
@@ -301,7 +329,7 @@ export function GamePage() {
               .filter(([, v]) => v)
               .map(([k, v]) => (
                 <span key={k} className="mr-3 inline-block">
-                  {k}: {v}
+                  {STAT_LABELS[k as keyof typeof STAT_LABELS] ?? k}: {formatStatValue(k as keyof typeof STAT_LABELS, v as number)}
                 </span>
               ))}
           </div>

@@ -150,6 +150,7 @@ async function buildAndSimulate(
         return {
           monsterId: zm.monster.id,
           name: zm.monster.name,
+          level: zm.monster.level,
           hp: zm.monster.hp,
           attack: monsterStats.attack ?? 0,
           defense: monsterStats.defense ?? 0,
@@ -216,8 +217,12 @@ export async function startExpedition(
   // player could even see this zone's "walcz" action — the expedition itself no longer spans
   // any travel, so arrivedAt/fightEndsAt collapse onto startedAt/endsAt (columns kept, not
   // removed, so expeditions already in flight at deploy time keep working unmodified).
+  // Etap 10: combat now ends at death (or the duration-minutes safety cap), not at a fixed
+  // duration — endsAt reflects the actual last simulated event, so "Odbierz nagrody" appears
+  // exactly when the fight is over instead of only after the full safety-cap duration elapses.
   const startedAt = new Date();
-  const endsAt = new Date(startedAt.getTime() + durationMinutes * 60_000);
+  const actualEndSeconds = outcome.events.at(-1)?.t ?? 0;
+  const endsAt = new Date(startedAt.getTime() + actualEndSeconds * 1000);
 
   const expedition = await prisma.$transaction(async (tx) => {
     const created = await tx.expedition.create({
@@ -323,7 +328,9 @@ function deriveResultFromEvents(events: CombatEvent[]): ExpeditionResult {
 
   for (const event of events) {
     if (event.type === "encounter_result") {
-      if (event.won) monstersDefeated += 1;
+      // Etap 10: an encounter_result is only ever emitted for a won encounter now — a loss ends
+      // the whole expedition via character_died instead of a per-encounter loss marker.
+      monstersDefeated += 1;
       expGained += event.expGained;
       goldGained += event.goldGained;
     } else if (event.type === "loot") {

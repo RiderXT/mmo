@@ -14,6 +14,7 @@ import {
   type ExpeditionClaimResult,
 } from "../../lib/expeditionsApi";
 import { CombatLog } from "./CombatLog";
+import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
 
 function formatDuration(ms: number): string {
@@ -210,6 +211,9 @@ export function ExpeditionPanel({
           </>
         )}
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        <div className="mt-3">
+          <MonsterEncounterPanel events={revealedEvents} />
+        </div>
         <CombatLog events={revealedEvents} itemNameFor={itemNameFor} />
       </div>
     );
@@ -303,7 +307,7 @@ export function ExpeditionPanel({
       <h2 className="font-medium text-parchment">Wyrusz do krainy</h2>
       {durationQuery.data && (
         <p className="mt-1 text-xs text-parchment-faint">
-          Walka trwa {durationQuery.data.minutes} min (ustawienie administratora).
+          Walka trwa, aż postać zginie (max. {durationQuery.data.minutes} min — zabezpieczenie).
         </p>
       )}
 

@@ -90,10 +90,17 @@ export async function computeBalanceStats() {
 
     for (const encounter of splitIntoEncounters(events)) {
       const start = encounter.find((e) => e.type === "encounter_start");
-      const result = encounter.find((e) => e.type === "encounter_result");
-      if (!start || start.type !== "encounter_start" || !result || result.type !== "encounter_result") continue;
+      if (!start || start.type !== "encounter_start" || !start.monsterId) continue; // skip pre-Etap-10 logs, which lack monsterId
 
-      const agg = monsterMap.get(start.monsterName) ?? {
+      // Etap 10: encounters no longer end in a per-encounter "loss" — combat continues until
+      // the character dies (character_died, terminal for the whole expedition) or the monster
+      // does (encounter_result). A chunk with neither is the in-progress final encounter of an
+      // expedition that hit its safety time limit mid-fight — not a completed encounter, skip.
+      const won = encounter.some((e) => e.type === "encounter_result");
+      const died = encounter.some((e) => e.type === "character_died");
+      if (!won && !died) continue;
+
+      const agg = monsterMap.get(start.monsterId) ?? {
         monsterName: start.monsterName,
         encounters: 0,
         wins: 0,
@@ -103,18 +110,18 @@ export async function computeBalanceStats() {
         totalPotionsUsed: 0,
       };
       agg.encounters += 1;
-      if (result.won) agg.wins += 1;
-      else agg.losses += 1;
+      if (won) agg.wins += 1;
+      if (died) agg.losses += 1;
 
       for (const event of encounter) {
-        if (event.type === "monster_attack" && !event.evaded) {
-          agg.totalDamageTaken += event.damagePerRound * event.rounds;
-          agg.totalRounds += event.rounds;
+        if (event.type === "round") {
+          agg.totalDamageTaken += event.monsterDamage;
+          agg.totalRounds += 1;
         } else if (event.type === "potion_used") {
           agg.totalPotionsUsed += 1;
         }
       }
-      monsterMap.set(start.monsterName, agg);
+      monsterMap.set(start.monsterId, agg);
     }
   }
 

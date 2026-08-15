@@ -34,7 +34,7 @@ export function SettingsAdminPage() {
       <h1 className="text-lg font-semibold text-parchment">Ustawienia</h1>
 
       <div className="mt-4 max-w-sm space-y-3 panel p-4">
-        <Field label="Domyślny czas ekspedycji (minuty)">
+        <Field label="Maksymalny czas pojedynczej walki (minuty)">
           <input
             type="number"
             min={1}
@@ -45,7 +45,9 @@ export function SettingsAdminPage() {
           />
         </Field>
         <p className="text-xs text-parchment-faint">
-          Jak długo postać automatycznie walczy w krainie, zanim będzie można odebrać nagrody.
+          Walka trwa, aż postać zginie — to tylko zabezpieczenie na wypadek bardzo silnej
+          postaci, która nigdy by nie przegrała: po tym czasie walka i tak się kończy, a postać
+          przeżywa.
         </p>
         {error && <p className="text-sm text-red-400">{error}</p>}
         {saved && <p className="text-sm text-rarity-uncommon">Zapisano.</p>}
