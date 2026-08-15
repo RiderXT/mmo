@@ -6,15 +6,25 @@
  * budget distributed across the 7 equip slots, shaped after the Metin2 reference data (flat
  * early growth, late-tier spike; boots carry movementSpeed as their unique secondary stat).
  *
+ * Zones are ordered by minLevel (both here and in listZones()'s orderBy), matching the item
+ * sets' own level ordering — keep new tiers in ascending level order when editing this file.
+ *
+ * movementSpeed on boots is a FLAT constant across every tier (BOOTS_MOVEMENT_SPEED_PCT), not
+ * scaled up per tier — by design. Early game should feel like travel takes a while; later
+ * stages add dedicated speed items (e.g. a mount/"koń") as the main lever for cutting it down,
+ * not ever-better boots. Don't reintroduce per-tier scaling here without revisiting that plan.
+ *
  * This is explicitly a FIRST-PASS BASELINE ("baza do dostosowania" per the user) - formulas are
  * simplifications (e.g. monster difficulty is tuned against a character already wearing that
  * zone's own full gear at the zone's minLevel, not modeling gear lag from the previous tier).
- * Re-run after editing the TIERS table below to regenerate; already-created zones (by name) are
- * skipped so it's safe to re-run without duplicating content.
+ * Safe to re-run after editing TIERS below — existing zones/monsters/items (matched by name)
+ * are deleted and recreated rather than skipped, so tuning numbers is just "edit and re-run".
  */
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+const BOOTS_MOVEMENT_SPEED_PCT = 0.1;
 
 interface Tier {
   zoneName: string;
@@ -23,7 +33,6 @@ interface Tier {
   maxLevel: number;
   travelTimeSeconds: number;
   itemPrefix: string;
-  movementSpeedPct: number; // on this tier's boots
 }
 
 const TIERS: Tier[] = [
@@ -34,7 +43,6 @@ const TIERS: Tier[] = [
     maxLevel: 25,
     travelTimeSeconds: 60,
     itemPrefix: "Bagienny",
-    movementSpeedPct: 0.05,
   },
   {
     zoneName: "Krwawy Wąwóz",
@@ -43,7 +51,6 @@ const TIERS: Tier[] = [
     maxLevel: 40,
     travelTimeSeconds: 100,
     itemPrefix: "Wąwozowy",
-    movementSpeedPct: 0.1,
   },
   {
     zoneName: "Popielne Pustkowia",
@@ -52,7 +59,6 @@ const TIERS: Tier[] = [
     maxLevel: 55,
     travelTimeSeconds: 150,
     itemPrefix: "Popielny",
-    movementSpeedPct: 0.17,
   },
   {
     zoneName: "Czarna Twierdza",
@@ -61,7 +67,6 @@ const TIERS: Tier[] = [
     maxLevel: 75,
     travelTimeSeconds: 220,
     itemPrefix: "Twierdzy",
-    movementSpeedPct: 0.25,
   },
   {
     zoneName: "Otchłań Cieni",
@@ -70,7 +75,6 @@ const TIERS: Tier[] = [
     maxLevel: 99,
     travelTimeSeconds: 300,
     itemPrefix: "Otchłanny",
-    movementSpeedPct: 0.35,
   },
 ];
 
@@ -104,13 +108,38 @@ function split(total: number, weight: number): number {
   return Math.max(0, Math.round(total * weight));
 }
 
+/** Deletes a previously-generated tier (by name) so it can be recreated with fresh numbers —
+ * clears the FK chain that blocks a plain zone/monster/item delete: characters parked in the
+ * zone, expeditions referencing it, then the zone/monster/item rows themselves. */
+async function clearTier(tier: Tier) {
+  const zone = await prisma.zone.findUnique({ where: { name: tier.zoneName } });
+  if (zone) {
+    await prisma.character.updateMany({
+      where: { currentZoneId: zone.id },
+      data: { currentZoneId: null, activeExpeditionId: null },
+    });
+    await prisma.expedition.deleteMany({ where: { zoneId: zone.id } });
+    await prisma.zoneDrop.deleteMany({ where: { zoneId: zone.id } });
+    await prisma.zoneMonster.deleteMany({ where: { zoneId: zone.id } });
+    await prisma.zone.delete({ where: { id: zone.id } });
+  }
+
+  const monster = await prisma.monster.findFirst({ where: { name: tier.monsterName } });
+  if (monster) {
+    await prisma.monsterDrop.deleteMany({ where: { monsterId: monster.id } });
+    await prisma.monster.delete({ where: { id: monster.id } });
+  }
+
+  const items = await prisma.item.findMany({ where: { name: { startsWith: tier.itemPrefix } } });
+  for (const item of items) {
+    await prisma.inventoryItem.deleteMany({ where: { itemId: item.id } });
+    await prisma.item.delete({ where: { id: item.id } });
+  }
+}
+
 async function main() {
   for (const [index, tier] of TIERS.entries()) {
-    const existing = await prisma.zone.findUnique({ where: { name: tier.zoneName } });
-    if (existing) {
-      console.log(`Kraina "${tier.zoneName}" już istnieje, pomijam.`);
-      continue;
-    }
+    await clearTier(tier);
 
     // Monster difficulty is targeted against a character already fully geared for THIS tier,
     // at the zone's minLevel (see module doc comment for the simplification this implies).
@@ -206,7 +235,7 @@ async function main() {
           name: `${tier.itemPrefix} Buty`,
           type: "boots",
           minLevel: tier.minLevel,
-          baseStats: JSON.stringify({ defense: bootsDef, hp: bootsHp, movementSpeed: tier.movementSpeedPct }),
+          baseStats: JSON.stringify({ defense: bootsDef, hp: bootsHp, movementSpeed: BOOTS_MOVEMENT_SPEED_PCT }),
           possibleStatRanges: JSON.stringify([
             { stat: "defense", min: Math.round(bootsDef * 0.1), max: Math.round(bootsDef * 0.25), weight: 1 },
           ]),
