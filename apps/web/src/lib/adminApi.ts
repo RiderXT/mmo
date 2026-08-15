@@ -132,6 +132,31 @@ export const grantToCharacter = (characterId: string, input: AdminGrantInput) =>
     body: JSON.stringify(input),
   });
 
+// Expeditions (revert tool)
+export interface RevertExpeditionResult {
+  characterId: string;
+  reverted: {
+    expGained: number;
+    goldGained: number;
+    monstersDefeated: number;
+    loot: { itemId: string; quantity: number }[];
+    levelsGained: number;
+  };
+  shortfalls: { itemId: string; requested: number; removed: number }[];
+  levelBefore: number;
+  levelAfter: number;
+  expBefore: number;
+  expAfter: number;
+}
+export const revertExpedition = (expeditionId: string) =>
+  apiFetch<RevertExpeditionResult>(`/api/admin/expeditions/${expeditionId}/revert`, { method: "POST" });
+
+export const resolveFlaggedExpedition = (expeditionId: string, grant: boolean) =>
+  apiFetch<{ granted: boolean; newLevel?: number; leveledUp?: boolean }>(
+    `/api/admin/expeditions/${expeditionId}/resolve`,
+    { method: "POST", body: JSON.stringify({ grant }) },
+  );
+
 // Balance stats
 export interface BalanceMonsterStat {
   monsterName: string;

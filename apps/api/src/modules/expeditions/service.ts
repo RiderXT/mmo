@@ -346,7 +346,52 @@ function deriveResultFromEvents(events: CombatEvent[]): ExpeditionResult {
   };
 }
 
-async function applyExpeditionReward(
+// Hard safety net, independent of any admin setting (same philosophy as combat.ts's MAX_ROUNDS):
+// a single expedition granting more than this many levels at once is almost certainly a balance
+// bug or exploit, not a legitimately strong character — block the grant instead of paying it out
+// silently, and let an admin review/resolve it via the "Ekspedycje" admin tool.
+const MAX_LEVELS_PER_EXPEDITION = 10;
+
+function checkRewardPlausibility(
+  character: { exp: number; level: number },
+  result: ExpeditionResult,
+): { ok: true } | { ok: false; code: string } {
+  const newLevel = computeLevel(character.exp + result.expGained);
+  const levelsGained = Math.max(0, newLevel - character.level);
+  if (levelsGained > MAX_LEVELS_PER_EXPEDITION) {
+    return { ok: false, code: "SUSPICIOUS_LEVEL_JUMP" };
+  }
+  return { ok: true };
+}
+
+/** Flips the expedition to "flagged" (instead of "claimed") so neither claim nor leave can be
+ * retried, and records why — an admin resolves it via modules/admin/expeditions (grant anyway or
+ * discard). Uses the same atomic updateMany guard as the claim/leave idempotency check. */
+async function flagSuspiciousExpedition(
+  expeditionId: string,
+  characterId: string,
+  result: ExpeditionResult,
+  userId: string,
+  code: string,
+  requestId?: string,
+) {
+  const flagged = await prisma.expedition.updateMany({
+    where: { id: expeditionId, status: "in_progress" },
+    data: { status: "flagged" },
+  });
+  if (flagged.count !== 1) return; // already resolved/flagged by a concurrent request
+  await logAction({
+    module: "expeditions",
+    level: "error",
+    action: "reward_blocked",
+    actorUserId: userId,
+    actorCharacterId: characterId,
+    requestId,
+    payload: { expeditionId, code, ...result },
+  });
+}
+
+export async function applyExpeditionReward(
   expeditionId: string,
   character: { id: string; exp: number; level: number; gold: number; unspentStatPoints: number; unspentSkillPoints: number },
   result: ExpeditionResult,
@@ -398,11 +443,27 @@ export async function claimExpedition(expeditionId: string, userId: string, requ
   if (!expedition || expedition.character.userId !== userId) {
     throw new ExpeditionError("Nie znaleziono ekspedycji", 404);
   }
+  if (expedition.status === "flagged") {
+    throw new ExpeditionError(
+      "Nagroda z tej ekspedycji została wstrzymana do sprawdzenia przez administrację (kod: SUSPICIOUS_REWARD).",
+      409,
+    );
+  }
   if (expedition.status !== "in_progress") {
     throw new ExpeditionError("Nagrody z tej ekspedycji zostały już odebrane", 409);
   }
   if (new Date() < expedition.endsAt) {
     throw new ExpeditionError("Ekspedycja jeszcze trwa", 409);
+  }
+
+  const result = JSON.parse(expedition.result!) as ExpeditionResult;
+  const plausibility = checkRewardPlausibility(expedition.character, result);
+  if (!plausibility.ok) {
+    await flagSuspiciousExpedition(expeditionId, expedition.characterId, result, userId, plausibility.code, requestId);
+    throw new ExpeditionError(
+      `Nagroda z tej ekspedycji wygląda na błąd balansu i została wstrzymana do sprawdzenia przez administrację (kod: ${plausibility.code}).`,
+      422,
+    );
   }
 
   // Idempotency/anti-double-claim guard: only one caller can win this status flip.
@@ -414,7 +475,6 @@ export async function claimExpedition(expeditionId: string, userId: string, requ
     throw new ExpeditionError("Nagrody z tej ekspedycji zostały już odebrane", 409);
   }
 
-  const result = JSON.parse(expedition.result!) as ExpeditionResult;
   return applyExpeditionReward(expeditionId, expedition.character, result, userId, "claim", requestId);
 }
 
@@ -433,8 +493,27 @@ export async function leaveExpedition(expeditionId: string, userId: string, requ
   if (!expedition || expedition.character.userId !== userId) {
     throw new ExpeditionError("Nie znaleziono ekspedycji", 404);
   }
+  if (expedition.status === "flagged") {
+    throw new ExpeditionError(
+      "Nagroda z tej ekspedycji została wstrzymana do sprawdzenia przez administrację (kod: SUSPICIOUS_REWARD).",
+      409,
+    );
+  }
   if (expedition.status !== "in_progress") {
     throw new ExpeditionError("Ta ekspedycja jest już zakończona", 409);
+  }
+
+  const elapsedSeconds = Math.floor((Date.now() - expedition.arrivedAt.getTime()) / 1000);
+  const allEvents = expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [];
+  const result = deriveResultFromEvents(allEvents.filter((e) => e.t <= elapsedSeconds));
+
+  const plausibility = checkRewardPlausibility(expedition.character, result);
+  if (!plausibility.ok) {
+    await flagSuspiciousExpedition(expeditionId, expedition.characterId, result, userId, plausibility.code, requestId);
+    throw new ExpeditionError(
+      `Nagroda z tej ekspedycji wygląda na błąd balansu i została wstrzymana do sprawdzenia przez administrację (kod: ${plausibility.code}).`,
+      422,
+    );
   }
 
   // Idempotency guard, same pattern as claim — also protects against a race with claimExpedition.
@@ -445,10 +524,6 @@ export async function leaveExpedition(expeditionId: string, userId: string, requ
   if (claimed.count !== 1) {
     throw new ExpeditionError("Ta ekspedycja jest już zakończona", 409);
   }
-
-  const elapsedSeconds = Math.floor((Date.now() - expedition.arrivedAt.getTime()) / 1000);
-  const allEvents = expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [];
-  const result = deriveResultFromEvents(allEvents.filter((e) => e.t <= elapsedSeconds));
 
   return applyExpeditionReward(expeditionId, expedition.character, result, userId, "leave_early", requestId);
 }

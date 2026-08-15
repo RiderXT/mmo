@@ -3,7 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminGrantInput, AdminCharacterDto } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
-import { listAllCharacters, grantToCharacter, listItems, listClasses } from "../../lib/adminApi";
+import {
+  listAllCharacters,
+  grantToCharacter,
+  listItems,
+  listClasses,
+  revertExpedition,
+  resolveFlaggedExpedition,
+  type RevertExpeditionResult,
+} from "../../lib/adminApi";
 import { TYPE_LABELS } from "../../lib/statFormat";
 
 function emptyGrant(): AdminGrantInput {
@@ -24,6 +32,12 @@ export function GrantAdminPage() {
   const [itemSearch, setItemSearch] = useState("");
   const [itemTypeFilter, setItemTypeFilter] = useState<string>("all");
   const [itemClassFilter, setItemClassFilter] = useState<string>("all");
+  const [revertId, setRevertId] = useState("");
+  const [revertError, setRevertError] = useState<string | null>(null);
+  const [revertResult, setRevertResult] = useState<RevertExpeditionResult | null>(null);
+  const [resolveId, setResolveId] = useState("");
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [resolveResult, setResolveResult] = useState<string | null>(null);
 
   const characters = charactersQuery.data ?? [];
   const filtered = useMemo(() => {
@@ -60,6 +74,32 @@ export function GrantAdminPage() {
       setTimeout(() => setResult(null), 4000);
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się wykonać"),
+  });
+
+  const revertMutation = useMutation({
+    mutationFn: (expeditionId: string) => revertExpedition(expeditionId),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-characters"] });
+      setRevertError(null);
+      setRevertResult(res);
+    },
+    onError: (err) => {
+      setRevertResult(null);
+      setRevertError(err instanceof ApiError ? err.message : "Nie udało się cofnąć ekspedycji");
+    },
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: ({ id, grant }: { id: string; grant: boolean }) => resolveFlaggedExpedition(id, grant),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-characters"] });
+      setResolveError(null);
+      setResolveResult(res.granted ? "Przyznano nagrodę mimo blokady." : "Odrzucono — nagroda nie została przyznana, slot ekspedycji zwolniony.");
+    },
+    onError: (err) => {
+      setResolveResult(null);
+      setResolveError(err instanceof ApiError ? err.message : "Nie udało się rozwiązać zablokowanej ekspedycji");
+    },
   });
 
   function selectCharacter(id: string) {
@@ -261,6 +301,108 @@ export function GrantAdminPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-6 panel p-4">
+        <h2 className="font-medium text-parchment">Cofnij ekspedycję</h2>
+        <p className="mt-1 text-sm text-parchment-dim">
+          Cofa exp, złoto, poziomy i wypadnięte przedmioty przyznane przez jedną (już rozliczoną)
+          ekspedycję — narzędzie naprawcze na wypadek błędu balansu, np. nienaturalnie szybkiego
+          awansu. Nie da się cofnąć ekspedycji dwukrotnie. Usuwanie przedmiotów jest robione "na
+          tyle, ile się da" — jeśli gracz zdążył je zużyć/sprzedać, brakująca część zostanie
+          zgłoszona poniżej zamiast zepsuć resztę ekwipunku.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            className={`${inputClass} w-72`}
+            placeholder="ID ekspedycji (z panelu Logi, pole expeditionId)"
+            value={revertId}
+            onChange={(e) => setRevertId(e.target.value)}
+          />
+          <button
+            onClick={() => {
+              if (!revertId.trim()) return;
+              if (
+                confirm(
+                  "Cofnąć nagrody z tej ekspedycji? Tej operacji nie da się ponowić na tej samej ekspedycji.",
+                )
+              ) {
+                revertMutation.mutate(revertId.trim());
+              }
+            }}
+            disabled={revertMutation.isPending || !revertId.trim()}
+            className=" border border-red-400 px-4 py-1.5 text-sm font-medium text-red-400 hover:bg-red-400/10 disabled:opacity-50"
+          >
+            Cofnij
+          </button>
+        </div>
+        {revertError && <p className="mt-2 text-sm text-red-400">{revertError}</p>}
+        {revertResult && (
+          <div className="mt-3 space-y-1 border border-line bg-ink/60 p-3 text-sm">
+            <p className="text-parchment">
+              Cofnięto: -{revertResult.reverted.expGained} exp, -{revertResult.reverted.goldGained} złota,
+              -{revertResult.reverted.monstersDefeated} pokonanych potworów.
+            </p>
+            <p className="text-parchment-dim">
+              Poziom: {revertResult.levelBefore} → {revertResult.levelAfter} (exp: {revertResult.expBefore} →{" "}
+              {revertResult.expAfter})
+            </p>
+            {revertResult.reverted.loot.length > 0 && (
+              <p className="text-parchment-dim">
+                Przedmioty do usunięcia: {revertResult.reverted.loot.map((l) => `${l.itemId}×${l.quantity}`).join(", ")}
+              </p>
+            )}
+            {revertResult.shortfalls.length > 0 ? (
+              <p className="text-gold-bright">
+                Uwaga — nie znaleziono pełnej ilości niektórych przedmiotów (pewnie już zużyte/sprzedane):{" "}
+                {revertResult.shortfalls
+                  .map((s) => `${s.itemId} (usunięto ${s.removed}/${s.requested})`)
+                  .join(", ")}
+              </p>
+            ) : (
+              <p className="text-rarity-uncommon">Wszystkie przedmioty z tej ekspedycji zostały usunięte.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 panel p-4">
+        <h2 className="font-medium text-parchment">Zablokowane ekspedycje (kod SUSPICIOUS_LEVEL_JUMP)</h2>
+        <p className="mt-1 text-sm text-parchment-dim">
+          Gdy jedna ekspedycja przyznałaby więcej niż 10 poziomów naraz, system automatycznie
+          wstrzymuje wypłatę zamiast ją przyznać — ekspedycja dostaje status "flagged" i wpis w
+          Logach (moduł "expeditions", akcja "reward_blocked"). Tutaj admin decyduje: przyznać mimo
+          blokady (jeśli to jednak uzasadnione), albo odrzucić bez nagrody i zwolnić slot ekspedycji
+          postaci.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            className={`${inputClass} w-72`}
+            placeholder="ID zablokowanej ekspedycji"
+            value={resolveId}
+            onChange={(e) => setResolveId(e.target.value)}
+          />
+          <button
+            onClick={() => resolveId.trim() && resolveMutation.mutate({ id: resolveId.trim(), grant: true })}
+            disabled={resolveMutation.isPending || !resolveId.trim()}
+            className=" border border-gold px-3 py-1.5 text-sm font-medium text-gold-bright hover:bg-gold/10 disabled:opacity-50"
+          >
+            Przyznaj mimo to
+          </button>
+          <button
+            onClick={() =>
+              resolveId.trim() &&
+              confirm("Odrzucić nagrodę z tej ekspedycji bez przyznawania?") &&
+              resolveMutation.mutate({ id: resolveId.trim(), grant: false })
+            }
+            disabled={resolveMutation.isPending || !resolveId.trim()}
+            className=" border border-line-soft px-3 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
+          >
+            Odrzuć (bez nagrody)
+          </button>
+        </div>
+        {resolveError && <p className="mt-2 text-sm text-red-400">{resolveError}</p>}
+        {resolveResult && <p className="mt-2 text-sm text-rarity-uncommon">{resolveResult}</p>}
       </div>
     </div>
   );

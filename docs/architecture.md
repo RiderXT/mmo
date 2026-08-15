@@ -785,6 +785,60 @@ rev-parse HEAD`. Przeglądarka: przy zgodnych wersjach baner się nie pojawia; p
 `AppShell` (nawigacja SPA między ekranami gry) baner poprawnie się pojawił z właściwym tekstem
 i przyciskiem "Odśwież".
 
+## Zabezpieczenie przed błędem balansu w ekspedycjach + narzędzia naprawcze (Etap 13)
+
+### Kontekst
+
+Realny incydent produkcyjny: postać poziomu 1, po ok. 15 minutach ekspedycji (`leave_early`),
+zdobyła 4485 exp / 299 pokonanych potworów i awansowała od razu na poziom 48. Przyczyna nie
+była błędem w kodzie silnika walki (Etap 10 działał zgodnie ze specyfikacją: walka trwa aż do
+śmierci, cofnięcie w dowolnym momencie liczy nagrodę tylko za realnie upłynięty czas), tylko
+tym, że postać w danej krainie praktycznie nie mogła przegrać (~1 runda na zabicie potwora) —
+przy modelu "walcz aż do śmierci" oznacza to, że ekspedycja może bez końca (do bezpiecznika
+`MAX_ROUNDS`/limitu minut) generować nagrody, jeśli kraina/potwory są za słabe względem postaci.
+To realny efekt uboczny połączenia Etapu 9 (wybór potworów) + Etapu 10 (walka do śmierci) z
+niedostrojonym balansem, a nie usterka pojedynczej funkcji.
+
+### A) Automatyczna blokada podejrzanej nagrody
+
+`apps/api/src/modules/expeditions/service.ts`: `checkRewardPlausibility(character, result)` —
+twardy, niekonfigurowalny przez admina bezpiecznik (analogicznie do `MAX_ROUNDS` w `combat.ts`):
+jeśli pojedyncza ekspedycja przyznałaby więcej niż `MAX_LEVELS_PER_EXPEDITION = 10` poziomów
+naraz, `claimExpedition`/`leaveExpedition` **nie** wywołują `applyExpeditionReward`. Zamiast
+tego `flagSuspiciousExpedition` atomowo (ten sam wzorzec `updateMany` co reszta modułu) zmienia
+`Expedition.status` na `"flagged"` (nowa dozwolona wartość istniejącego pola String — bez
+zmiany schematu) i loguje `GameLog` (`module: "expeditions"`, `action: "reward_blocked"`,
+`level: "error"`, payload z kodem `SUSPICIOUS_LEVEL_JUMP`). Gracz dostaje czytelny błąd 422 z
+kodem; nie może ponowić odbioru ani opuszczenia (obie funkcje odrzucają status `"flagged"`).
+
+### B) Rozwiązywanie zablokowanych ekspedycji (panel admina)
+
+Nowy moduł `apps/api/src/modules/admin/expeditions/` (`resolveFlaggedExpedition`,
+`POST /api/admin/expeditions/:id/resolve` body `{ grant: boolean }`): admin decyduje —
+`grant:true` przyznaje oryginalny wynik mimo blokady (reużywa wyeksportowany teraz
+`applyExpeditionReward`), `grant:false` odrzuca nagrodę i tylko zwalnia
+`character.activeExpeditionId`, żeby postać nie została trwale zablokowana. Panel: sekcja
+"Zablokowane ekspedycje" w `GrantAdminPage.tsx` (zakładka Testowanie).
+
+### C) Cofanie już przyznanej nagrody (dla incydentów sprzed tej zmiany)
+
+`revertExpedition` (ten sam moduł, `POST /api/admin/expeditions/:id/revert`): cofa exp/złoto/
+poziom/przedmioty przyznane przez **już rozliczoną** ekspedycję, bez resetu bazy. Źródłem prawdy
+o tym, co faktycznie przyznano, jest wpis `GameLog` (`action: "claim"` albo `"leave_early"`)
+zapisany przez `applyExpeditionReward` w momencie przyznania — **nie** `Expedition.result`,
+które dla `leave_early` zawiera pełny potencjalny wynik, a nie tylko tę część, która została
+faktycznie wypłacona. Usuwanie przedmiotów jest best-effort (najpierw nieekwipowane, potem
+najnowsze stosy; niedobór — bo gracz już zużył/sprzedał przedmiot — jest raportowany, nie
+przerywa reszty operacji). Nowe pole `Expedition.revertedAt DateTime?` (addytywne) chroni przed
+podwójnym cofnięciem. Panel: sekcja "Cofnij ekspedycję" w `GrantAdminPage.tsx`.
+
+Zweryfikowane lokalnie (curl, testowe konto): spreparowana ekspedycja z `expGained: 999999`
+została poprawnie zablokowana (status `flagged`, wpis w logu z kodem); `resolve` z `grant:false`
+zwolnił slot bez zmiany exp; `resolve` z `grant:true` przyznał nagrodę (i został poprawnie
+wykryty przez `revert` jako w pełni odwracalny); `revert` na zwykłej, wcześniej rozliczonej
+ekspedycji poprawnie odjął dokładnie tyle exp/złota, ile wcześniej przyznano, bez naruszania
+innych danych postaci.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

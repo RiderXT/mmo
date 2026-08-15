@@ -324,6 +324,9 @@ model Expedition {
   // Monster ids (subset of the zone's pool) the player chose to fight — see docs/architecture.md
   // "Etap 9". Empty array = whole zone pool, preserving pre-Etap-9 behavior.
   selectedMonsterIds String @default("[]")
+  // Set by the admin "revert expedition" tool when a claimed/left-early expedition's rewards
+  // were undone (e.g. a balance exploit). Null = never reverted. See docs/architecture.md.
+  revertedAt DateTime?
 
   character   Character @relation("CharacterExpeditions", fields: [characterId], references: [id], onDelete: Cascade)
   zone        Zone      @relation(fields: [zoneId], references: [id])
