@@ -12,6 +12,21 @@ export const allocateStat = (characterId: string, stat: CoreStatKey) =>
     body: JSON.stringify({ stat }),
   });
 
+export interface CombatStatsDto {
+  maxHp: number;
+  maxMana: number;
+  attack: number;
+  defense: number;
+  attackSpeed: number;
+  critChance: number;
+  critDamage: number;
+  evasion: number;
+  damageReduction: number;
+}
+
+export const getCombatStats = (characterId: string) =>
+  apiFetch<CombatStatsDto>(`/api/characters/${characterId}/combat-stats`);
+
 export interface CharacterSkillDto {
   id: string;
   characterId: string;

@@ -15,7 +15,10 @@ export function StatsPanel({ character }: { character: Character }) {
 
   const mutation = useMutation({
     mutationFn: (stat: CoreStatKey) => allocateStat(character.id, stat),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["character", character.id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["character", character.id] });
+      queryClient.invalidateQueries({ queryKey: ["combat-stats", character.id] });
+    },
     onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się przydzielić punktu"),
   });
 

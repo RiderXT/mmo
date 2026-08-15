@@ -11,6 +11,7 @@ import { ItemBox } from "../components/inventory/ItemBox";
 import { ExpeditionPanel } from "../components/expedition/ExpeditionPanel";
 import { StatsPanel } from "../components/character/StatsPanel";
 import { SkillsPanel } from "../components/character/SkillsPanel";
+import { VitalsPanel } from "../components/character/VitalsPanel";
 import { ApiError } from "../lib/apiClient";
 import { getCharacter } from "../lib/charactersApi";
 import {
@@ -27,12 +28,15 @@ import {
 const GRID_SLOTS = 24;
 const ACTIVE_SLOTS = 6;
 const EQUIP_SLOTS: EquipSlot[] = ["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"];
+const INVENTORY_TABS = 4;
+const TAB_LABELS = ["I", "II", "III", "IV"];
 
 export function GamePage() {
   const { characterId } = useParams<{ characterId: string }>();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
   // Require a small pointer movement before a drag starts, so a plain click/tap
   // (to select an item and show its details) still fires instead of being
   // swallowed by the drag sensor.
@@ -54,6 +58,11 @@ export function GamePage() {
     queryClient.invalidateQueries({ queryKey: ["inventory", characterId] });
   }
 
+  function invalidateInventoryAndCombatStats() {
+    invalidateInventory();
+    queryClient.invalidateQueries({ queryKey: ["combat-stats", characterId] });
+  }
+
   const moveMutation = useMutation({
     mutationFn: (vars: { inventoryItemId: string; toSlotIndex: number }) =>
       moveItem(characterId!, vars.inventoryItemId, vars.toSlotIndex),
@@ -64,13 +73,13 @@ export function GamePage() {
   const equipMutation = useMutation({
     mutationFn: (vars: { inventoryItemId: string; equipSlot: EquipSlot }) =>
       equipItem(characterId!, vars.inventoryItemId, vars.equipSlot),
-    onSuccess: invalidateInventory,
+    onSuccess: invalidateInventoryAndCombatStats,
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie można założyć przedmiotu"),
   });
 
   const unequipMutation = useMutation({
     mutationFn: (inventoryItemId: string) => unequipItem(characterId!, inventoryItemId),
-    onSuccess: invalidateInventory,
+    onSuccess: invalidateInventoryAndCombatStats,
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się zdjąć przedmiotu"),
   });
 
@@ -134,6 +143,13 @@ export function GamePage() {
     else if (item.activeSlotIndex !== null) byActiveSlot.set(item.activeSlotIndex, item);
     else byGridSlot.set(item.slotIndex, item);
   }
+  const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
+    let count = 0;
+    for (const slotIndex of byGridSlot.keys()) {
+      if (Math.floor(slotIndex / GRID_SLOTS) === tab) count += 1;
+    }
+    return count;
+  });
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
   const character = characterQuery.data;
@@ -158,7 +174,8 @@ export function GamePage() {
       </div>
 
       {character && (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <VitalsPanel characterId={character.id} />
           <StatsPanel character={character} />
           <SkillsPanel character={character} />
         </div>
@@ -217,9 +234,28 @@ export function GamePage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">Ekwipunek (przeciągnij, by przenieść)</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-slate-400">Ekwipunek (przeciągnij, by przenieść)</p>
+              <div className="flex gap-1">
+                {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
+                      activeTab === tab
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                    } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
+                    title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
+                  >
+                    {TAB_LABELS[tab]}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-6 gap-2">
-              {Array.from({ length: GRID_SLOTS }, (_, slotIndex) => {
+              {Array.from({ length: GRID_SLOTS }, (_, slotInTab) => {
+                const slotIndex = activeTab * GRID_SLOTS + slotInTab;
                 const item = byGridSlot.get(slotIndex);
                 return (
                   <GridSlot key={slotIndex} slotIndex={slotIndex}>

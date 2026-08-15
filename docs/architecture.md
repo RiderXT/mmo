@@ -196,6 +196,34 @@ na potiony — `handleDragEnd` rozróżnia trzy typy drop-targetu (`grid`/`equip
 `ItemsAdminPage.tsx` ma warunkową sekcję konfiguracji potionu widoczną tylko dla
 `type === "consumable"`.
 
+## Kondycja (HP/MP) i zakładki ekwipunku (post-Etap 5)
+
+Dwie niezależne zmiany UI, zrobione razem bo obie dotykają `GamePage.tsx`:
+
+**Kondycja.** `computeDerivedStats` (`combat.ts`) był dotąd wołany tylko wewnątrz symulacji
+ekspedycji — HP/mana nie miały żadnego API do odczytu poza kontekstem walki. Wydzielono wspólną
+funkcję `gatherCombatBuild` (`expeditions/service.ts`, budowa core stats + staty ekwipunku +
+pasywne umiejętności) używaną teraz zarówno przez `buildAndSimulate`, jak i nowy
+`getCharacterCombatStats`, wystawiony jako `GET /api/characters/:id/combat-stats`. Front
+(`VitalsPanel.tsx`) pokazuje `maxHp`/`maxMana` jako paski — **to są maksima z aktualnego builda,
+nie żywy licznik obrażeń** (HP/mana i tak resetują się do maksimum na starcie każdej ekspedycji,
+patrz `combat.ts`), więc pasek zawsze pokazuje 100% wypełnienia; wartość ma sens jako odczyt "jak
+silny jest mój build", nie jako pasek życia w czasie rzeczywistym. Zapytanie `combat-stats` jest
+unieważniane przy każdej zmianie builda (`allocate-stat`, `allocate-skill`, `equip`, `unequip`).
+
+**4 zakładki ekwipunku.** Backend nigdy nie ograniczał `slotIndex` do zakresu 0-23 — front po
+prostu renderował tylko tyle slotów. Zakładki to więc czysto frontendowa zmiana: siatka nadal ma
+24 widocznych slotów, ale `GamePage.tsx` przesuwa okno o `activeTab * 24`, więc realna pojemność
+rośnie do 96 slotów (4 × 24) bez żadnej migracji ani zmiany w `moveItem`/`addLootToInventory`.
+Drag&drop działa identycznie — `GridSlot` dostaje już absolutny `slotIndex`, więc przeciąganie
+między zakładkami wymaga tylko przełączenia zakładki między akcjami (nie ma jednego widoku "ze
+wszystkimi zakładkami naraz").
+
+Zweryfikowane: curl (`combat-stats` zwraca `maxHp: 250, maxMana: 50` zgodne z buildem: witalność
+20 → 50+200, inteligencja 6 → 20+30); przeglądarka (paski HP/MP w `/game/:id`, przełączanie
+zakładek I-IV z licznikiem przedmiotów na przycisku, przedmiot widoczny tylko w swojej
+zakładce).
+
 ## Dziennik walki na żywo (post-Etap 5)
 
 Gracz widzi w panelu "Ekspedycja w toku" szczegółowy, na żywo odsłaniany zapis starć (atak vs

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { CreateCharacterSchema, AllocateStatSchema, AllocateSkillSchema } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
+import { getCharacterCombatStats, ExpeditionError } from "../expeditions/service.js";
 import {
   listCharacters,
   getCharacter,
@@ -21,6 +22,16 @@ export async function charactersRoutes(app: FastifyInstance): Promise<void> {
     const character = await getCharacter(id, request.user!.sub);
     if (!character) return reply.code(404).send({ error: "Nie znaleziono postaci" });
     return reply.send(character);
+  });
+
+  app.get("/:id/combat-stats", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return reply.send(await getCharacterCombatStats(id, request.user!.sub));
+    } catch (err) {
+      if (err instanceof ExpeditionError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
   });
 
   app.get("/:id/skills", { preHandler: requireAuth }, async (request, reply) => {

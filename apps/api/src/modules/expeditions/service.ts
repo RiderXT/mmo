@@ -10,6 +10,7 @@ import {
   type ActiveSkillDef,
   type PotionSlot,
   type SimZone,
+  type DerivedStats,
 } from "./combat.js";
 import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey, CombatEvent } from "@mmo/shared";
 
@@ -37,9 +38,9 @@ async function assertCharacterOwnership(characterId: string, userId: string) {
   return character;
 }
 
-/** Gathers the character's full combat build (base stats, equipped item stats, passive/active skills, active-slot potions) and runs the deterministic simulation. */
-async function buildAndSimulate(characterId: string, zoneId: string, durationMinutes: number) {
-  const [character, equipped, characterSkills, activePotionItems, zone] = await Promise.all([
+/** Gathers the character's full combat build (base stats, equipped item stats, passive/active skills, active-slot potions) — shared by the expedition simulation and the standalone combat-stats readout. */
+async function gatherCombatBuild(characterId: string) {
+  const [character, equipped, characterSkills, activePotionItems] = await Promise.all([
     prisma.character.findUniqueOrThrow({ where: { id: characterId } }),
     prisma.inventoryItem.findMany({
       where: { characterId, equippedSlot: { not: null } },
@@ -50,13 +51,7 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
       where: { characterId, activeSlotIndex: { not: null } },
       include: { item: true },
     }),
-    prisma.zone.findUnique({
-      where: { id: zoneId },
-      include: { monsters: { include: { monster: { include: { drops: true } } } }, drops: true },
-    }),
   ]);
-
-  if (!zone) throw new ExpeditionError("Nie znaleziono krainy", 404);
 
   const core: CharacterCoreStats = {
     strength: character.strength,
@@ -103,6 +98,28 @@ async function buildAndSimulate(characterId: string, zoneId: string, durationMin
       magnitudePct: inv.item.potionMagnitudePct ?? 0.3,
       durationSeconds: inv.item.potionDurationSec,
     }));
+
+  return { character, core, equipmentStats, passiveSkills, activeSkills, potions };
+}
+
+/** Computes a character's current derived combat stats (HP/MP/attack/defense/...) from their build — independent of any zone, used for the character sheet readout outside of an expedition. */
+export async function getCharacterCombatStats(characterId: string, userId: string): Promise<DerivedStats> {
+  await assertCharacterOwnership(characterId, userId);
+  const { core, equipmentStats, passiveSkills } = await gatherCombatBuild(characterId);
+  return computeDerivedStats(core, equipmentStats, passiveSkills);
+}
+
+/** Gathers the character's full combat build and runs the deterministic expedition simulation. */
+async function buildAndSimulate(characterId: string, zoneId: string, durationMinutes: number) {
+  const [{ character, core, equipmentStats, passiveSkills, activeSkills, potions }, zone] = await Promise.all([
+    gatherCombatBuild(characterId),
+    prisma.zone.findUnique({
+      where: { id: zoneId },
+      include: { monsters: { include: { monster: { include: { drops: true } } } }, drops: true },
+    }),
+  ]);
+
+  if (!zone) throw new ExpeditionError("Nie znaleziono krainy", 404);
 
   const stats = computeDerivedStats(core, equipmentStats, passiveSkills);
 

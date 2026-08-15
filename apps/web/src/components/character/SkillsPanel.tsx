@@ -23,6 +23,7 @@ export function SkillsPanel({ character }: { character: Character }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["character-skills", character.id] });
       queryClient.invalidateQueries({ queryKey: ["character", character.id] });
+      queryClient.invalidateQueries({ queryKey: ["combat-stats", character.id] });
     },
     onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się przydzielić punktu"),
   });
