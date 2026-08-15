@@ -224,6 +224,40 @@ Zweryfikowane: curl (kształt eventów z realnymi liczbami — atak/obrona/bonus
 krytyk/unik), przeglądarka (log odsłania się dokładnie w momencie przekroczenia znacznika `t`
 przez licznik, nie wcześniej; bieżące sumy Pokonano/Exp/Złoto rosną wraz z odsłanianiem).
 
+## Opuszczenie ekspedycji przed czasem (post-Etap 5)
+
+Gracz może zakończyć ekspedycję w dowolnym momencie i odebrać nagrody tylko za starcia, które
+faktycznie już się odbyły — zamiast czekać do `endsAt` albo tracić cały postęp.
+
+**Mechanizm**: żadnej nowej symulacji. `leaveExpedition`
+(`apps/api/src/modules/expeditions/service.ts`) liczy `elapsedSeconds = now - startedAt`,
+filtruje ten sam zapisany `eventLog` (patrz sekcja wyżej) do `events.filter(e => e.t <=
+elapsedSeconds)` i sumuje `encounter_result`/`loot` z tej przyciętej listy
+(`deriveResultFromEvents`) — dokładnie te starcia, które gracz już widział w dzienniku walki na
+żywo. Reszta zdarzeń (tych z `t` > `elapsedSeconds`) po prostu przepada. `claimExpedition` i
+`leaveExpedition` dzielą teraz wspólną funkcję `applyExpeditionReward` (zapis exp/gold/loot/
+punktów, czyszczenie `activeExpeditionId`/`currentZoneId`, log akcji z polem `action: "claim" |
+"leave_early"` do rozróżnienia w `GameLog`).
+
+Ochrona przed podwójnym odebraniem jest identyczna jak przy `claim`: atomowy
+`updateMany({ where: { status: "in_progress" } })` + sprawdzenie `count === 1` — `leave` i
+`claim` na tej samej (już zakończonej) ekspedycji wzajemnie się blokują (409), niezależnie od
+kolejności wywołań.
+
+Front: przycisk "Opuść ekspedycję (odbierz zdobyte)" widoczny w panelu "Ekspedycja w toku"
+dopóki licznik nie dojdzie do zera, z natywnym `confirm()` ostrzegającym że reszta czasu
+przepadnie. Używa tego samego `handleRewardSuccess` co odbiór po czasie (ten sam komponent
+podsumowania, ten sam refetch aktywnej ekspedycji/postaci/ekwipunku).
+
+Zweryfikowane: curl — rozpoczęcie ekspedycji, cofnięcie `startedAt` o 70s (symulacja upływu
+czasu bez czekania), `leave` zwrócił dokładnie nagrodę pierwszego starcia (t=60: 25 exp/5
+złota/1 potwór/2× łup), NIE pełną sumę trzech starć (75/15/3/3×łup); ponowny `claim` na tej
+samej ekspedycji odrzucony (409 "już odebrane"); `currentZoneId`/`activeExpeditionId`
+poprawnie wyczyszczone. Przeglądarka: kliknięcie przycisku w trakcie odliczania pokazało
+natywny dialog potwierdzenia z poprawnym tekstem ostrzeżenia, po potwierdzeniu panel przeszedł
+w "Ekspedycja zakończona" z poprawnym (zerowym, bo opuszczono przed pierwszym starciem o t=60s)
+podsumowaniem nagród.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

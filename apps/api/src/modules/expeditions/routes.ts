@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../../lib/authGuard.js";
-import { startExpedition, getActiveExpedition, claimExpedition, ExpeditionError } from "./service.js";
+import {
+  startExpedition,
+  getActiveExpedition,
+  claimExpedition,
+  leaveExpedition,
+  ExpeditionError,
+} from "./service.js";
 
 const StartExpeditionBodySchema = z.object({
   characterId: z.string(),
@@ -35,6 +41,17 @@ export async function expeditionsRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     try {
       const outcome = await claimExpedition(id, request.user!.sub, request.id);
+      return reply.send(outcome);
+    } catch (err) {
+      if (err instanceof ExpeditionError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:id/leave", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const outcome = await leaveExpedition(id, request.user!.sub, request.id);
       return reply.send(outcome);
     } catch (err) {
       if (err instanceof ExpeditionError) return reply.code(err.statusCode).send({ error: err.message });

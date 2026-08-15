@@ -40,5 +40,8 @@ export const startExpedition = (characterId: string, zoneId: string) =>
 export const claimExpedition = (expeditionId: string) =>
   apiFetch<ExpeditionClaimResult>(`/api/expeditions/${expeditionId}/claim`, { method: "POST" });
 
+export const leaveExpedition = (expeditionId: string) =>
+  apiFetch<ExpeditionClaimResult>(`/api/expeditions/${expeditionId}/leave`, { method: "POST" });
+
 export const getExpeditionDuration = () =>
   apiFetch<{ minutes: number }>("/api/settings/expedition-duration");

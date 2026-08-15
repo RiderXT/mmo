@@ -238,32 +238,41 @@ export async function getActiveExpedition(characterId: string, userId: string) {
   };
 }
 
-export async function claimExpedition(expeditionId: string, userId: string, requestId?: string) {
-  const expedition = await prisma.expedition.findUnique({
-    where: { id: expeditionId },
-    include: { character: true },
-  });
-  if (!expedition || expedition.character.userId !== userId) {
-    throw new ExpeditionError("Nie znaleziono ekspedycji", 404);
-  }
-  if (expedition.status !== "in_progress") {
-    throw new ExpeditionError("Nagrody z tej ekspedycji zostały już odebrane", 409);
-  }
-  if (new Date() < expedition.endsAt) {
-    throw new ExpeditionError("Ekspedycja jeszcze trwa", 409);
+/** Recomputes an ExpeditionResult from a (possibly partial) slice of the pre-computed event
+ * timeline — used to grant only the rewards from encounters that had actually happened by the
+ * moment the player chose to leave early. */
+function deriveResultFromEvents(events: CombatEvent[]): ExpeditionResult {
+  let expGained = 0;
+  let goldGained = 0;
+  let monstersDefeated = 0;
+  const lootMap = new Map<string, number>();
+
+  for (const event of events) {
+    if (event.type === "encounter_result") {
+      if (event.won) monstersDefeated += 1;
+      expGained += event.expGained;
+      goldGained += event.goldGained;
+    } else if (event.type === "loot") {
+      lootMap.set(event.itemId, (lootMap.get(event.itemId) ?? 0) + event.quantity);
+    }
   }
 
-  // Idempotency/anti-double-claim guard: only one caller can win this status flip.
-  const claimed = await prisma.expedition.updateMany({
-    where: { id: expeditionId, status: "in_progress" },
-    data: { status: "claimed" },
-  });
-  if (claimed.count !== 1) {
-    throw new ExpeditionError("Nagrody z tej ekspedycji zostały już odebrane", 409);
-  }
+  return {
+    expGained,
+    goldGained,
+    monstersDefeated,
+    loot: Array.from(lootMap.entries()).map(([itemId, quantity]) => ({ itemId, quantity })),
+  };
+}
 
-  const result = JSON.parse(expedition.result!) as ExpeditionResult;
-  const character = expedition.character;
+async function applyExpeditionReward(
+  expeditionId: string,
+  character: { id: string; exp: number; level: number; gold: number; unspentStatPoints: number; unspentSkillPoints: number },
+  result: ExpeditionResult,
+  userId: string,
+  action: "claim" | "leave_early",
+  requestId?: string,
+) {
   const newExp = character.exp + result.expGained;
   const newLevel = computeLevel(newExp);
   const leveledUp = newLevel > character.level;
@@ -289,7 +298,7 @@ export async function claimExpedition(expeditionId: string, userId: string, requ
 
   await logAction({
     module: "expeditions",
-    action: "claim",
+    action,
     actorUserId: userId,
     actorCharacterId: character.id,
     requestId,
@@ -297,4 +306,63 @@ export async function claimExpedition(expeditionId: string, userId: string, requ
   });
 
   return { result, leveledUp, newLevel };
+}
+
+export async function claimExpedition(expeditionId: string, userId: string, requestId?: string) {
+  const expedition = await prisma.expedition.findUnique({
+    where: { id: expeditionId },
+    include: { character: true },
+  });
+  if (!expedition || expedition.character.userId !== userId) {
+    throw new ExpeditionError("Nie znaleziono ekspedycji", 404);
+  }
+  if (expedition.status !== "in_progress") {
+    throw new ExpeditionError("Nagrody z tej ekspedycji zostały już odebrane", 409);
+  }
+  if (new Date() < expedition.endsAt) {
+    throw new ExpeditionError("Ekspedycja jeszcze trwa", 409);
+  }
+
+  // Idempotency/anti-double-claim guard: only one caller can win this status flip.
+  const claimed = await prisma.expedition.updateMany({
+    where: { id: expeditionId, status: "in_progress" },
+    data: { status: "claimed" },
+  });
+  if (claimed.count !== 1) {
+    throw new ExpeditionError("Nagrody z tej ekspedycji zostały już odebrane", 409);
+  }
+
+  const result = JSON.parse(expedition.result!) as ExpeditionResult;
+  return applyExpeditionReward(expeditionId, expedition.character, result, userId, "claim", requestId);
+}
+
+/** Ends an expedition before its scheduled endsAt, granting rewards only for the encounters
+ * that had already happened by now (derived from the same pre-computed event timeline the
+ * player sees in the combat log — nothing is recomputed, just summed over a shorter slice). */
+export async function leaveExpedition(expeditionId: string, userId: string, requestId?: string) {
+  const expedition = await prisma.expedition.findUnique({
+    where: { id: expeditionId },
+    include: { character: true },
+  });
+  if (!expedition || expedition.character.userId !== userId) {
+    throw new ExpeditionError("Nie znaleziono ekspedycji", 404);
+  }
+  if (expedition.status !== "in_progress") {
+    throw new ExpeditionError("Ta ekspedycja jest już zakończona", 409);
+  }
+
+  // Idempotency guard, same pattern as claim — also protects against a race with claimExpedition.
+  const claimed = await prisma.expedition.updateMany({
+    where: { id: expeditionId, status: "in_progress" },
+    data: { status: "claimed" },
+  });
+  if (claimed.count !== 1) {
+    throw new ExpeditionError("Ta ekspedycja jest już zakończona", 409);
+  }
+
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - expedition.startedAt.getTime()) / 1000));
+  const allEvents = expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [];
+  const result = deriveResultFromEvents(allEvents.filter((e) => e.t <= elapsedSeconds));
+
+  return applyExpeditionReward(expeditionId, expedition.character, result, userId, "leave_early", requestId);
 }

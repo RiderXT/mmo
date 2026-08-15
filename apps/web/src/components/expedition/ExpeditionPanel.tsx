@@ -7,6 +7,7 @@ import {
   getActiveExpedition,
   startExpedition,
   claimExpedition,
+  leaveExpedition,
   getExpeditionDuration,
   type ExpeditionClaimResult,
 } from "../../lib/expeditionsApi";
@@ -65,17 +66,25 @@ export function ExpeditionPanel({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się wysłać postaci"),
   });
 
+  function handleRewardSuccess(data: ExpeditionClaimResult) {
+    setError(null);
+    setClaimResult(data);
+    queryClient.invalidateQueries({ queryKey: ["active-expedition", characterId] });
+    queryClient.invalidateQueries({ queryKey: ["character", characterId] });
+    queryClient.invalidateQueries({ queryKey: ["inventory", characterId] });
+    onClaimed();
+  }
+
   const claimMutation = useMutation({
     mutationFn: (expeditionId: string) => claimExpedition(expeditionId),
-    onSuccess: (data) => {
-      setError(null);
-      setClaimResult(data);
-      queryClient.invalidateQueries({ queryKey: ["active-expedition", characterId] });
-      queryClient.invalidateQueries({ queryKey: ["character", characterId] });
-      queryClient.invalidateQueries({ queryKey: ["inventory", characterId] });
-      onClaimed();
-    },
+    onSuccess: handleRewardSuccess,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się odebrać nagród"),
+  });
+
+  const leaveMutation = useMutation({
+    mutationFn: (expeditionId: string) => leaveExpedition(expeditionId),
+    onSuccess: handleRewardSuccess,
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się opuścić ekspedycji"),
   });
 
   const itemNameFor = (itemId: string) => itemsQuery.data?.find((i) => i.id === itemId)?.name ?? itemId;
@@ -129,9 +138,26 @@ export function ExpeditionPanel({
             Odbierz nagrody
           </button>
         ) : (
-          <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-100">
-            {formatDuration((endsAtMs ?? now) - now)}
-          </p>
+          <>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-100">
+              {formatDuration((endsAtMs ?? now) - now)}
+            </p>
+            <button
+              onClick={() => {
+                if (
+                  confirm(
+                    "Opuścić ekspedycję teraz? Odbierzesz tylko to, co widać już w dzienniku walki poniżej — reszta czasu przepadnie.",
+                  )
+                ) {
+                  leaveMutation.mutate(expedition.id);
+                }
+              }}
+              disabled={leaveMutation.isPending}
+              className="mt-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            >
+              Opuść ekspedycję (odbierz zdobyte)
+            </button>
+          </>
         )}
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
         <CombatLog events={revealedEvents} itemNameFor={itemNameFor} />
