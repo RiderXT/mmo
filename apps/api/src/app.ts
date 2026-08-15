@@ -8,6 +8,8 @@ import { zonesRoutes } from "./modules/admin/zones/routes.js";
 import { monstersRoutes } from "./modules/admin/monsters/routes.js";
 import { itemsRoutes } from "./modules/admin/items/routes.js";
 import { classesAdminRoutes } from "./modules/admin/classes/routes.js";
+import { adminCharactersRoutes } from "./modules/admin/characters/routes.js";
+import { balanceStatsRoutes } from "./modules/admin/balance/routes.js";
 import { publicClassesRoutes } from "./modules/classes/routes.js";
 import { charactersRoutes } from "./modules/characters/routes.js";
 import { inventoryRoutes } from "./modules/inventory/routes.js";
@@ -43,6 +45,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(monstersRoutes, { prefix: "/api/admin/monsters" });
   await app.register(itemsRoutes, { prefix: "/api/admin/items" });
   await app.register(classesAdminRoutes, { prefix: "/api/admin/classes" });
+  await app.register(adminCharactersRoutes, { prefix: "/api/admin/characters" });
+  await app.register(balanceStatsRoutes, { prefix: "/api/admin/balance-stats" });
   await app.register(publicClassesRoutes, { prefix: "/api/classes" });
   await app.register(charactersRoutes, { prefix: "/api/characters" });
   await app.register(inventoryRoutes, { prefix: "/api/inventory" });

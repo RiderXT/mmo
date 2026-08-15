@@ -37,3 +37,25 @@ export type AllocateStatInput = z.infer<typeof AllocateStatSchema>;
 
 export const AllocateSkillSchema = z.object({ classSkillId: z.string() });
 export type AllocateSkillInput = z.infer<typeof AllocateSkillSchema>;
+
+// Admin testing tool — grant exp/gold/items directly to a character, bypassing expeditions.
+export const AdminGrantItemSchema = z.object({
+  itemId: z.string(),
+  quantity: z.number().int().min(1).max(9999),
+});
+export const AdminGrantSchema = z.object({
+  exp: z.number().int().min(0).max(1_000_000).optional(),
+  gold: z.number().int().min(0).max(1_000_000).optional(),
+  items: z.array(AdminGrantItemSchema).default([]),
+});
+export type AdminGrantInput = z.infer<typeof AdminGrantSchema>;
+
+export interface AdminCharacterDto {
+  id: string;
+  name: string;
+  level: number;
+  exp: number;
+  gold: number;
+  classId: string | null;
+  ownerEmail: string;
+}

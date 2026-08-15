@@ -8,7 +8,6 @@ import {
   PotionEffectSchema,
   type CreateItemInput,
 } from "@mmo/shared";
-import { AppShell } from "../../components/AppShell";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import { listItems, createItem, updateItem, deleteItem, listClasses, type ItemDto } from "../../lib/adminApi";
@@ -188,7 +187,7 @@ export function ItemsAdminPage() {
   const otherItems = (itemsQuery.data ?? []).filter((i) => i.id !== editingId);
 
   return (
-    <AppShell>
+    <div>
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-parchment">Itemy</h1>
         <button
@@ -636,6 +635,6 @@ export function ItemsAdminPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </div>
   );
 }

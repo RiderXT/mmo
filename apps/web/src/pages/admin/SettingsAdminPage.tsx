@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AppShell } from "../../components/AppShell";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import { getExpeditionDurationSetting, setExpeditionDurationSetting } from "../../lib/adminSettingsApi";
@@ -31,7 +30,7 @@ export function SettingsAdminPage() {
   });
 
   return (
-    <AppShell>
+    <div>
       <h1 className="text-lg font-semibold text-parchment">Ustawienia</h1>
 
       <div className="mt-4 max-w-sm space-y-3 panel p-4">
@@ -58,6 +57,6 @@ export function SettingsAdminPage() {
           Zapisz
         </button>
       </div>
-    </AppShell>
+    </div>
   );
 }

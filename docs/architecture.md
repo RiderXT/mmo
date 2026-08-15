@@ -18,6 +18,16 @@ hełm, buty, naszyjnik, kolczyki, pierścień) plus osobny 6-slotowy panel aktyw
 skonfigurowanych na itemie (próg %, interwał). Build postaci (staty, ekwipunek, umiejętności)
 realnie wpływa na wynik symulacji walki — patrz `apps/api/src/modules/expeditions/combat.ts`.
 
+## Zasady dalszego rozwoju
+
+Gra jest w ciągłym rozwoju — kolejne Etapy będą regularnie dokładać nowe mechaniki, bonusy i
+treść. **Zmiany schematu Prisma mają być addytywne** (pola `nullable` albo z `@default`) i nie
+wymagać resetu `apps/api/prisma/dev.db` ani utraty kont/postaci graczy, chyba że naprawdę nie
+da się inaczej — wtedy zgłosić to wprost jako świadomy wyjątek przed wykonaniem, tak jak przy
+Etapach 5-6 (nowe kolumny `NOT NULL` bez sensownego backfillu). Etap 7 (`Item.classId`,
+`Item.maxUpgradeStats`) i Etap 8 pokazują wzorzec docelowy: nowe pola zawsze z defaultem,
+`prisma db push` bez utraty danych.
+
 ## Stack technologiczny
 
 - **Monorepo**: pnpm workspaces (`apps/api`, `apps/web`, `packages/shared`)
@@ -449,6 +459,74 @@ poziom 30 w kompletnym secie Wojownika tej krainy) — 30/30 wygranych na wszyst
 potwora, potwierdzając że wzór trudności z Etapu 6 skaluje się poprawnie przy nowej, gęstszej
 strukturze. Przeglądarka: formularz admina pokazuje select klasy i oba edytory statów
 (bazowe/+9) dla itemu typu weapon z poprawnie wypełnionymi wartościami.
+
+## Nawigacja w sidebar, panel testowy admina, statystyki balansu (Etap 8)
+
+Po zweryfikowaniu Etapu 7 użytkownik chciał: (1) trwałą zasadę rozwoju — nowe mechaniki mają
+dawać się dopisywać bez resetu `dev.db`/postaci (opisane w sekcji "Zasady dalszego rozwoju"
+powyżej), (2) pionowe menu po lewej zamiast poziomego paska, z panelami `Klasy`/`Krainy`/
+`Potwory`/`Itemy`/`Ustawienia` skonsolidowanymi w jedną zakładkę, (3) narzędzie admina do
+dodawania postaci exp/złota/itemów bez przechodzenia przez ekspedycje (dotąd robione ręcznie
+skryptami Prisma przy każdej weryfikacji), (4) statystyki balansu z rzeczywistych ekspedycji —
+ile razy i z jakim skutkiem walczono z danym potworem, ile obrażeń zabierał, jakie itemy
+realnie wypadały, exp/h i złoto/h per kraina.
+
+**Nawigacja**: `AppShell.tsx` przebudowany z poziomego paska na `<aside>` (`w-56`, stałe na
+desktopie) + `<main className="flex-1">`. Poniżej `md:` sidebar chowany, zastąpiony wąskim
+paskiem z przyciskiem-hamburgerem otwierającym nakładkę (`fixed inset-0`, półprzezroczyste tło,
+lokalny `useState` na `open` — bez globalnego store). Menu: `Postacie` (zawsze), `Ustawienia`
+(jedna pozycja, tylko admin, → `/admin/settings`), `Logi` (admin/moderator), email+wyloguj na
+dole. `ClassesAdminPage`/`ZonesAdminPage`/`MonstersAdminPage`/`ItemsAdminPage`/
+`SettingsAdminPage` straciły własny `<AppShell>` (zostały gołą treścią) — teraz owija je raz
+`AdminSettingsPage.tsx`, nowy tab-container na `useSearchParams` (`?tab=classes` itd., więc
+każda zakładka ma własny, odświeżalny adres URL). Siedem zakładek: `Ogólne`, `Klasy`, `Krainy`,
+`Potwory`, `Itemy`, oraz dwie nowe: `Testowanie`, `Statystyki balansu`. `App.tsx`: pięć
+osobnych tras `/admin/classes|zones|monsters|items|settings` skolapsowane do jednej
+`/admin/settings`.
+
+**Panel testowy** (`Testowanie`): nowy moduł backendu `modules/admin/characters`
+(`GET /api/admin/characters` — lista wszystkich postaci wszystkich graczy z emailem
+właściciela; `POST /:id/grant` — body `{exp?, gold?, items?: [{itemId, quantity}]}`).
+`grantToCharacter` liczy `newLevel` przez już istniejące (wyeksportowane) `computeLevel`
+(`expeditions/service.ts`), przyznaje `4×levelsGained` punktów statystyk i `1×levelsGained`
+punktów umiejętności — te same mnożniki co przy `claimExpedition` — i dla każdego itemu woła
+już istniejące (wyeksportowane) `addLootToInventory` (`inventory/service.ts`), dokładnie ten
+sam kod co przy realnym dropie (losowanie statów, stackowanie) — zero zduplikowanej logiki
+lootu. Całość w jednej transakcji Prisma, więc udany zapis postaci jest dowodem że item też
+wylądował w ekwipunku. Frontend `GrantAdminPage.tsx`: wyszukiwarka postaci (filtr tekstowy po
+stronie klienta), formularz exp/złoto + edytor listy itemów (wzorzec identyczny jak istniejący
+edytor `upgradeRequirements` w `ItemsAdminPage.tsx`).
+
+**Statystyki balansu** (`Statystyki balansu`): kluczowa decyzja — dane już istnieją w
+`Expedition.eventLog` (pełny `CombatEvent[]` zapisywany raz przy starcie, patrz "Dziennik walki
+na żywo" wyżej), więc nie trzeba nowej infrastruktury logowania, tylko agregacji po fakcie.
+Nowy moduł `modules/admin/balance` (`GET /api/admin/balance-stats`, tylko admin): pobiera
+wszystkie `Expedition` ze statusem `claimed`, dzieli `eventLog` na starcia po granicach
+`encounter_start` (`splitIntoEncounters`), agreguje **per potwór** (starcia, wygrane/przegrane,
+% wygranych, średnie obrażenia otrzymane, średnia liczba rund, średnie zużycie potionów — wprost
+odpowiada na "ile hp zabiera potwór" i "czy gracz musi pić potiony"), **per item** (zdarzenia
+`loot` w całym logu — łączna liczba dropów, dropy na ekspedycję, liczone z rzeczywistych
+przebiegów, nie tylko skonfigurowanego `dropChance`), **per krainę** (exp/h i złoto/h liczone
+dwojako: z pełnego cyklu `endsAt - startedAt` i z samej walki `fightEndsAt - arrivedAt` — różnica
+między nimi pokazuje wprost koszt podróży do dalekich krain). Świadomie prosty pierwszy przebieg
+(pełny skan `Expedition` w Node) — wystarczający przy obecnej skali danych; materializowana
+tabela to problem do rozwiązania dopiero gdyby skan realnie spowolniał. Frontend
+`BalanceStatsPage.tsx`: trzy tabele w stylu istniejących tabel admina.
+
+Zweryfikowane: `pnpm typecheck` czysty (`shared`/`api`/`web`); curl —
+`GET /api/admin/characters` zwraca postacie z emailem właściciela, `POST .../grant` z exp=500
+podniosło poziom testowej postaci o 5 (poz. 8→13) i przyznało punkty statów/umiejętności
+identycznie jak `claimExpedition`; `GET /api/admin/balance-stats` na rzeczywistej,
+rozstrzygniętej ekspedycji zwrócił poprawne, niepuste agregaty per potwór (5 wariantów "Wilka",
+w tym 100% wygranych dla najsłabszego wariantu i 0% dla silniejszych — spójne z jedną,
+częściowo przegraną ekspedycją), per item (1 drop hełma) i per krainę (exp/h i złoto/h liczone
+oboma metodami, bez dzielenia przez zero). Przeglądarka: sidebar poprawnie zwężony na desktopie,
+na mobile (375×812) chowa się za hamburgerem i otwiera jako nakładka z tymi samymi pozycjami
+menu; `/admin/settings?tab=...` przełącza zakładki i aktualizuje URL (przetestowano głębokie
+linkowanie przez pełne przeładowanie strony); wszystkie 5 przeniesionych paneli (Ogólne, Klasy,
+Krainy, Potwory, Itemy) działają bez regresji; zakładka Testowanie faktycznie podniosła poziom i
+złoto wskazanej postaci widoczne od razu w odpowiedzi API; zakładka Statystyki balansu pokazuje
+te same dane co curl.
 
 ## Weryfikacja przeprowadzona
 

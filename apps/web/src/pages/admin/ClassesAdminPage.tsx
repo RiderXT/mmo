@@ -8,7 +8,6 @@ import {
   StatKeySchema,
   type CreateCharacterClassInput,
 } from "@mmo/shared";
-import { AppShell } from "../../components/AppShell";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import { listClasses, createClass, updateClass, deleteClass, type ClassDto } from "../../lib/adminApi";
@@ -112,7 +111,7 @@ export function ClassesAdminPage() {
   }
 
   return (
-    <AppShell>
+    <div>
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-parchment">Klasy postaci</h1>
         <button
@@ -348,6 +347,6 @@ export function ClassesAdminPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </div>
   );
 }

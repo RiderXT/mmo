@@ -9,6 +9,8 @@ import type {
   SkillKind,
   SkillEffectType,
   PotionConfig,
+  AdminGrantInput,
+  AdminCharacterDto,
 } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
@@ -112,3 +114,50 @@ export const updateClass = (id: string, input: CreateCharacterClassInput) =>
   apiFetch<ClassDto>(`/api/admin/classes/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteClass = (id: string) =>
   apiFetch<void>(`/api/admin/classes/${id}`, { method: "DELETE" });
+
+// Characters (testing tool)
+export const listAllCharacters = () => apiFetch<AdminCharacterDto[]>("/api/admin/characters");
+export const grantToCharacter = (characterId: string, input: AdminGrantInput) =>
+  apiFetch<{ newLevel: number; levelsGained: number }>(`/api/admin/characters/${characterId}/grant`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+// Balance stats
+export interface BalanceMonsterStat {
+  monsterName: string;
+  encounters: number;
+  wins: number;
+  losses: number;
+  winRatePct: number;
+  avgDamageTaken: number;
+  avgRounds: number;
+  avgPotionsUsed: number;
+}
+
+export interface BalanceItemStat {
+  itemId: string;
+  itemName: string;
+  totalDropped: number;
+  expeditionsWithDrop: number;
+  dropsPerExpedition: number;
+}
+
+export interface BalanceZoneStat {
+  zoneId: string;
+  zoneName: string;
+  expeditions: number;
+  expPerHourCombat: number;
+  goldPerHourCombat: number;
+  expPerHourRoundTrip: number;
+  goldPerHourRoundTrip: number;
+}
+
+export interface BalanceStatsDto {
+  expeditionsAnalyzed: number;
+  byMonster: BalanceMonsterStat[];
+  byItem: BalanceItemStat[];
+  byZone: BalanceZoneStat[];
+}
+
+export const getBalanceStats = () => apiFetch<BalanceStatsDto>("/api/admin/balance-stats");

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateZoneSchema, type CreateZoneInput } from "@mmo/shared";
-import { AppShell } from "../../components/AppShell";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -85,7 +84,7 @@ export function ZonesAdminPage() {
   const items = itemsQuery.data ?? [];
 
   return (
-    <AppShell>
+    <div>
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-parchment">Krainy</h1>
         <button
@@ -333,6 +332,6 @@ export function ZonesAdminPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </div>
   );
 }
