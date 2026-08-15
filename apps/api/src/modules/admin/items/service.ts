@@ -194,17 +194,19 @@ export async function deleteItem(id: string, actorUserId: string, requestId?: st
   const existing = await prisma.item.findUnique({ where: { id } });
   if (!existing) throw new ItemError("Nie znaleziono itemu", 404);
 
-  const [inMonsterDrops, inZoneDrops, inInventory, inUpgradeMaterial, inChestLootReward] = await Promise.all([
-    prisma.monsterDrop.count({ where: { itemId: id } }),
-    prisma.zoneDrop.count({ where: { itemId: id } }),
-    prisma.inventoryItem.count({ where: { itemId: id } }),
-    prisma.itemUpgradeRequirement.count({ where: { requiredItemId: id } }),
-    prisma.chestLoot.count({ where: { rewardItemId: id } }),
-  ]);
+  const [inMonsterDrops, inZoneDrops, inInventory, inUpgradeMaterial, inChestLootReward, inClassStarterItem] =
+    await Promise.all([
+      prisma.monsterDrop.count({ where: { itemId: id } }),
+      prisma.zoneDrop.count({ where: { itemId: id } }),
+      prisma.inventoryItem.count({ where: { itemId: id } }),
+      prisma.itemUpgradeRequirement.count({ where: { requiredItemId: id } }),
+      prisma.chestLoot.count({ where: { rewardItemId: id } }),
+      prisma.classStarterItem.count({ where: { itemId: id } }),
+    ]);
 
-  if (inMonsterDrops || inZoneDrops || inInventory || inUpgradeMaterial || inChestLootReward) {
+  if (inMonsterDrops || inZoneDrops || inInventory || inUpgradeMaterial || inChestLootReward || inClassStarterItem) {
     throw new ItemError(
-      "Nie można usunąć itemu, który jest używany w dropach, ekwipunku graczy, jako materiał ulepszenia lub jako zawartość skrzyni",
+      "Nie można usunąć itemu, który jest używany w dropach, ekwipunku graczy, jako materiał ulepszenia, jako zawartość skrzyni lub jako przedmiot startowy klasy",
       409,
     );
   }

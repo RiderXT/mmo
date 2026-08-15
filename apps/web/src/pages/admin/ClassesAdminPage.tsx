@@ -10,7 +10,7 @@ import {
 } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
-import { listClasses, createClass, updateClass, deleteClass, type ClassDto } from "../../lib/adminApi";
+import { listClasses, createClass, updateClass, deleteClass, listItems, type ClassDto } from "../../lib/adminApi";
 
 const CORE_STATS = CoreStatKeySchema.options;
 const SKILL_KINDS = SkillKindSchema.options;
@@ -37,6 +37,8 @@ function emptyForm(): CreateCharacterClassInput {
     description: "",
     primaryStat: "strength",
     skills: Array.from({ length: 6 }, emptySkill),
+    startingGold: 0,
+    starterItems: [],
   };
 }
 
@@ -56,12 +58,15 @@ function fromDto(cls: ClassDto): CreateCharacterClassInput {
       effectType: s.effectType ?? undefined,
       cooldownSeconds: s.cooldownSeconds ?? undefined,
     })),
+    startingGold: cls.startingGold,
+    starterItems: cls.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
   };
 }
 
 export function ClassesAdminPage() {
   const queryClient = useQueryClient();
   const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateCharacterClassInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +134,7 @@ export function ClassesAdminPage() {
               <th className="px-3 py-2">Nazwa</th>
               <th className="px-3 py-2">Główny staty</th>
               <th className="px-3 py-2">Umiejętności</th>
+              <th className="px-3 py-2">Start: złoto/itemy</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -138,6 +144,9 @@ export function ClassesAdminPage() {
                 <td className="px-3 py-2 text-parchment">{cls.name}</td>
                 <td className="px-3 py-2 text-parchment-dim">{cls.primaryStat}</td>
                 <td className="px-3 py-2 text-parchment-dim">{cls.skills.length}</td>
+                <td className="px-3 py-2 text-parchment-dim">
+                  {cls.startingGold} / {cls.starterItems.length}
+                </td>
                 <td className="space-x-2 px-3 py-2 text-right">
                   <button onClick={() => openEdit(cls)} className="text-gold-bright hover:underline">
                     Edytuj
@@ -153,7 +162,7 @@ export function ClassesAdminPage() {
             ))}
             {classesQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-parchment-faint">
+                <td colSpan={5} className="px-3 py-6 text-center text-parchment-faint">
                   Brak klas. Dodaj pierwszą.
                 </td>
               </tr>
@@ -199,6 +208,70 @@ export function ClassesAdminPage() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </Field>
+
+          <Field label="Złoto startowe (przyznawane raz, przy utworzeniu postaci)">
+            <input
+              type="number"
+              min={0}
+              className={`${inputClass} sm:w-48`}
+              value={form.startingGold}
+              onChange={(e) => setForm({ ...form, startingGold: Number(e.target.value) })}
+            />
+          </Field>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
+              Przedmioty startowe (trafiają do ekwipunku raz, przy utworzeniu postaci)
+            </p>
+            <div className="space-y-2">
+              {form.starterItems.map((entry, idx) => (
+                <div key={idx} className="flex flex-wrap items-center gap-2">
+                  <select
+                    className={`${inputClass} w-56`}
+                    value={entry.itemId}
+                    onChange={(e) => {
+                      const next = [...form.starterItems];
+                      next[idx] = { ...entry, itemId: e.target.value };
+                      setForm({ ...form, starterItems: next });
+                    }}
+                  >
+                    <option value="">wybierz item</option>
+                    {itemsQuery.data?.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="ilość"
+                    className={`${inputClass} w-20`}
+                    value={entry.quantity}
+                    onChange={(e) => {
+                      const next = [...form.starterItems];
+                      next[idx] = { ...entry, quantity: Number(e.target.value) };
+                      setForm({ ...form, starterItems: next });
+                    }}
+                  />
+                  <button
+                    onClick={() => setForm({ ...form, starterItems: form.starterItems.filter((_, i) => i !== idx) })}
+                    className="text-red-400 hover:underline"
+                  >
+                    Usuń
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() =>
+                  setForm({ ...form, starterItems: [...form.starterItems, { itemId: "", quantity: 1 }] })
+                }
+                className="text-sm text-gold-bright hover:underline"
+              >
+                + Dodaj przedmiot startowy
+              </button>
+            </div>
+          </div>
 
           <div>
             <div className="mb-2 flex items-center justify-between">

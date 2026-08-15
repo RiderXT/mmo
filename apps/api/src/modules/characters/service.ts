@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
 import { resolveTravelArrival } from "../../lib/travelResolution.js";
+import { addLootToInventory } from "../inventory/service.js";
 import type { CreateCharacterInput, CoreStatKey } from "@mmo/shared";
 
 export class CharacterError extends Error {
@@ -59,13 +60,27 @@ export async function createCharacter(
     throw new CharacterError("Ta nazwa postaci jest już zajęta", 409);
   }
 
-  const characterClass = await prisma.characterClass.findUnique({ where: { id: input.classId } });
+  const characterClass = await prisma.characterClass.findUnique({
+    where: { id: input.classId },
+    include: { starterItems: true },
+  });
   if (!characterClass) {
     throw new CharacterError("Nie znaleziono wybranej klasy postaci", 400);
   }
 
-  const character = await prisma.character.create({
-    data: { userId, name: input.name, classId: characterClass.id },
+  const character = await prisma.$transaction(async (tx) => {
+    const created = await tx.character.create({
+      data: {
+        userId,
+        name: input.name,
+        classId: characterClass.id,
+        gold: characterClass.startingGold,
+      },
+    });
+    for (const starter of characterClass.starterItems) {
+      await addLootToInventory(tx, created.id, starter.itemId, starter.quantity);
+    }
+    return created;
   });
 
   await logAction({
@@ -74,7 +89,12 @@ export async function createCharacter(
     actorUserId: userId,
     actorCharacterId: character.id,
     requestId,
-    payload: { name: character.name, classId: characterClass.id },
+    payload: {
+      name: character.name,
+      classId: characterClass.id,
+      startingGold: characterClass.startingGold,
+      starterItems: characterClass.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
+    },
   });
 
   return character;

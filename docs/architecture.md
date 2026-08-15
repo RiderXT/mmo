@@ -723,6 +723,38 @@ realnie zawężają ~174 itemy, prawy klik na skrzyni w ekwipunku poprawnie ją 
 ze stosu, gwarantowana nagroda trafiła do plecaka) — przez rzeczywisty kod UI
 (`ItemBox`→`onContextMenu`→mutacja→invalidacja), nie tylko przez curl.
 
+## Złoto i przedmioty startowe per klasa (Etap 11)
+
+Żądanie: panel admina, w którym można skonfigurować jaki przedmiot lub bonus dostaje nowo
+założona postać. Zinterpretowane jako konfigurowalny **per klasa** zestaw startowy (złoto +
+lista przedmiotów) — spójne z tym, że gra już różnicuje sety per klasa (Etap 7). "Bonus"
+ograniczony świadomie do złota (najprostszy, uniwersalny bonus) — bez rozszerzania o
+punkty statystyk/exp, o co wprost nie proszono.
+
+**Model danych** (addytywne, bez resetu `dev.db`): `CharacterClass` dostał `startingGold Int
+@default(0)`. Nowy model `ClassStarterItem` (wzorem `ChestLoot`/`ItemUpgradeRequirement`):
+`classId`, `itemId`, `quantity`, `@@unique([classId, itemId])`. Wszystkie istniejące klasy mają
+`startingGold: 0` i pustą listę — zero zmiany zachowania dla klas, których admin nie skonfiguruje.
+
+**Przyznawanie** (`modules/characters/service.ts`, `createCharacter`): `characterClass` pobierana
+z `include: { starterItems: true }`; tworzenie postaci opakowane w `prisma.$transaction` —
+`character.gold` ustawione od razu na `characterClass.startingGold`, potem dla każdego
+`starterItem` wywołane reużyte `addLootToInventory` (ten sam kod co realny drop z potwora czy
+otwarcie skrzyni — losuje staty jeśli item niestakujący, stackuje jeśli tak). Admin CRUD
+(`modules/admin/classes/service.ts`) — `starterItems` persystowane wzorem
+`upgradeRequirements`/`chestLoot` (`deleteMany`+`create` przy update), nowa
+`assertStarterItemsExist`. `deleteItem` (`modules/admin/items/service.ts`) — guard rozszerzony
+o `classStarterItem.count`, żeby nie dało się usunąć itemu użytego jako startowy.
+
+**Admin UI** (`ClassesAdminPage.tsx`): pole "Złoto startowe" + edytor "Przedmioty startowe"
+(item + ilość, wzorem edytora `chestLoot`), nowa kolumna "Start: złoto/itemy" w tabeli klas.
+
+Zweryfikowane: curl — aktualizacja klasy Mag (`startingGold:50`, 2 przedmioty startowe) →
+utworzenie nowej postaci tej klasy → `gold:50` w odpowiedzi, ekwipunek zawiera dokładnie
+skonfigurowane przedmioty z poprawną ilością; próba usunięcia itemu użytego jako startowy →
+409. Przeglądarka: formularz edycji klasy poprawnie ładuje istniejące złoto/przedmioty startowe,
+tabela pokazuje "50 / 2" dla Maga.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

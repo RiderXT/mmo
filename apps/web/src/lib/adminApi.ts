@@ -84,6 +84,8 @@ export interface ClassDto {
   description: string;
   primaryStat: CoreStatKey;
   skills: ClassSkillDto[];
+  startingGold: number;
+  starterItems: { id: string; itemId: string; quantity: number; item: { id: string; name: string } }[];
 }
 
 // Zones

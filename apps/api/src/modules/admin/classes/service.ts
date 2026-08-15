@@ -2,7 +2,10 @@ import { prisma } from "../../../lib/prismaClient.js";
 import { logAction } from "../../../lib/gameLog.js";
 import type { CreateCharacterClassInput, ClassSkillInput } from "@mmo/shared";
 
-const classInclude = { skills: true } as const;
+const classInclude = {
+  skills: true,
+  starterItems: { include: { item: { select: { id: true, name: true } } } },
+} as const;
 
 export class ClassError extends Error {
   constructor(
@@ -26,6 +29,15 @@ function skillData(skill: ClassSkillInput) {
   };
 }
 
+async function assertStarterItemsExist(input: CreateCharacterClassInput) {
+  const itemIds = input.starterItems.map((s) => s.itemId);
+  if (!itemIds.length) return;
+  const count = await prisma.item.count({ where: { id: { in: itemIds } } });
+  if (count !== new Set(itemIds).size) {
+    throw new ClassError("Jeden lub więcej przedmiotów startowych nie istnieje", 400);
+  }
+}
+
 export function listCharacterClasses() {
   return prisma.characterClass.findMany({ include: classInclude, orderBy: { name: "asc" } });
 }
@@ -46,13 +58,18 @@ export async function createCharacterClass(
   if (skillNames.size !== input.skills.length) {
     throw new ClassError("Nazwy umiejętności w tej klasie muszą być unikalne", 400);
   }
+  await assertStarterItemsExist(input);
 
   const characterClass = await prisma.characterClass.create({
     data: {
       name: input.name,
       description: input.description,
       primaryStat: input.primaryStat,
+      startingGold: input.startingGold,
       skills: { create: input.skills.map((s) => ({ name: s.name, ...skillData(s) })) },
+      starterItems: {
+        create: input.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
+      },
     },
     include: classInclude,
   });
@@ -84,6 +101,7 @@ export async function updateCharacterClass(
   if (skillNames.size !== input.skills.length) {
     throw new ClassError("Nazwy umiejętności w tej klasie muszą być unikalne", 400);
   }
+  await assertStarterItemsExist(input);
 
   const toRemove = existing.skills.filter((s) => !skillNames.has(s.name));
   for (const skill of toRemove) {
@@ -107,9 +125,18 @@ export async function updateCharacterClass(
         update: skillData(skill),
       });
     }
+    await tx.classStarterItem.deleteMany({ where: { classId: id } });
     return tx.characterClass.update({
       where: { id },
-      data: { name: input.name, description: input.description, primaryStat: input.primaryStat },
+      data: {
+        name: input.name,
+        description: input.description,
+        primaryStat: input.primaryStat,
+        startingGold: input.startingGold,
+        starterItems: {
+          create: input.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
+        },
+      },
       include: classInclude,
     });
   });

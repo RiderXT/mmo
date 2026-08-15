@@ -25,11 +25,20 @@ export const ClassSkillInputSchema = z
   });
 export type ClassSkillInput = z.infer<typeof ClassSkillInputSchema>;
 
+// Granted once, automatically, when a character of this class is created.
+export const ClassStarterItemInputSchema = z.object({
+  itemId: z.string(),
+  quantity: z.number().int().min(1).max(999),
+});
+export type ClassStarterItemInput = z.infer<typeof ClassStarterItemInputSchema>;
+
 export const CreateCharacterClassSchema = z.object({
   name: z.string().trim().min(2).max(60),
   description: z.string().trim().max(2000).optional().default(""),
   primaryStat: CoreStatKeySchema,
   skills: z.array(ClassSkillInputSchema).default([]),
+  startingGold: z.number().int().min(0).max(999999).default(0),
+  starterItems: z.array(ClassStarterItemInputSchema).default([]),
 });
 export type CreateCharacterClassInput = z.infer<typeof CreateCharacterClassSchema>;
 
