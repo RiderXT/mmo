@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { logoutRequest } from "../lib/authApi";
 import { useAuthStore } from "../store/authStore";
@@ -8,10 +8,10 @@ import { listPlayerZones } from "../lib/zonesApi";
 import { UpdateBanner } from "./UpdateBanner";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition ${
+  `flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition ${
     isActive
-      ? "border border-gold/60 bg-gold/10 text-parchment"
-      : "border border-transparent text-parchment-dim hover:bg-panel-raised"
+      ? "border-gold-bright bg-gold/10 text-parchment"
+      : "border-transparent text-parchment-dim hover:bg-panel-raised"
   }`;
 
 function NavIcon({ color, active }: { color: string; active: boolean }) {
@@ -102,12 +102,42 @@ function CharacterHeaderBar() {
   );
 }
 
-/** Character-scoped nav links (Postać/Ekspedycje/Kowadło) — only rendered while inside
- * /game/:characterId/* (Kowadło additionally gated to town zones). Shares the exact
+/** All character-scoped tabs live at the same pathname (/game/:characterId) and differ only by
+ * ?tab=, which react-router's NavLink does not consider when computing its built-in isActive —
+ * every link on this pathname would otherwise light up together. So the active tab is compared
+ * manually against the current ?tab= value instead of relying on NavLink's own matching. */
+function TabNavLink({
+  characterId,
+  tab,
+  activeTab,
+  icon,
+  label,
+  onNavigate,
+}: {
+  characterId: string;
+  tab: string;
+  activeTab: string;
+  icon: string;
+  label: string;
+  onNavigate?: () => void;
+}) {
+  const isActive = activeTab === tab;
+  return (
+    <NavLink to={`/game/${characterId}?tab=${tab}`} className={navLinkClass({ isActive })} onClick={onNavigate}>
+      <NavIconImg src={icon} alt="" active={isActive} />
+      {label}
+    </NavLink>
+  );
+}
+
+/** Character-scoped nav links (Postać/Ekwipunek/Ekspedycje/Kowadło/NPC) — only rendered while
+ * inside /game/:characterId/* (Kowadło/NPC additionally gated to town zones). Shares the exact
  * ["character", characterId] / ["player-zones"] query keys GamePage.tsx and ExpeditionPanel.tsx
  * already use, so react-query dedupes the fetch instead of firing an extra request. */
 function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const { characterId } = useParams<{ characterId: string }>();
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") ?? "character";
   const characterQuery = useQuery({
     queryKey: ["character", characterId],
     queryFn: () => getCharacter(characterId!),
@@ -128,43 +158,43 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <SectionTitle>Postać</SectionTitle>
       <div className="space-y-1 px-2">
-        <NavLink to={`/game/${characterId}?tab=character`} className={navLinkClass} onClick={onNavigate}>
-          {({ isActive }) => (
-            <>
-              <NavIconImg src="/icons/nav/postac.png" alt="" active={isActive} />
-              Postać
-            </>
-          )}
-        </NavLink>
-        <NavLink to={`/game/${characterId}?tab=equipment`} className={navLinkClass} onClick={onNavigate}>
-          {({ isActive }) => (
-            <>
-              <NavIconImg src="/icons/nav/ekwipunek.png" alt="" active={isActive} />
-              Ekwipunek
-            </>
-          )}
-        </NavLink>
-        <NavLink to={`/game/${characterId}?tab=expeditions`} className={navLinkClass} onClick={onNavigate}>
-          {({ isActive }) => (
-            <>
-              <NavIconImg src="/icons/nav/ekspedycje.png" alt="" active={isActive} />
-              Ekspedycje
-            </>
-          )}
-        </NavLink>
+        <TabNavLink
+          characterId={characterId}
+          tab="character"
+          activeTab={activeTab}
+          icon="/icons/nav/postac.png"
+          label="Postać"
+          onNavigate={onNavigate}
+        />
+        <TabNavLink
+          characterId={characterId}
+          tab="equipment"
+          activeTab={activeTab}
+          icon="/icons/nav/ekwipunek.png"
+          label="Ekwipunek"
+          onNavigate={onNavigate}
+        />
+        <TabNavLink
+          characterId={characterId}
+          tab="expeditions"
+          activeTab={activeTab}
+          icon="/icons/nav/ekspedycje.png"
+          label="Ekspedycje"
+          onNavigate={onNavigate}
+        />
       </div>
 
       <SectionTitle>Miasto</SectionTitle>
       <div className="space-y-1 px-2">
         {inTown ? (
-          <NavLink to={`/game/${characterId}?tab=anvil`} className={navLinkClass} onClick={onNavigate}>
-            {({ isActive }) => (
-              <>
-                <NavIconImg src="/icons/nav/kowadlo.png" alt="" active={isActive} />
-                Kowadło
-              </>
-            )}
-          </NavLink>
+          <TabNavLink
+            characterId={characterId}
+            tab="anvil"
+            activeTab={activeTab}
+            icon="/icons/nav/kowadlo.png"
+            label="Kowadło"
+            onNavigate={onNavigate}
+          />
         ) : (
           <div
             title="Dostępne tylko w mieście"
@@ -175,14 +205,14 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         )}
         {inTown ? (
-          <NavLink to={`/game/${characterId}?tab=npc`} className={navLinkClass} onClick={onNavigate}>
-            {({ isActive }) => (
-              <>
-                <NavIconImg src="/icons/nav/npc.png" alt="" active={isActive} />
-                NPC
-              </>
-            )}
-          </NavLink>
+          <TabNavLink
+            characterId={characterId}
+            tab="npc"
+            activeTab={activeTab}
+            icon="/icons/nav/npc.png"
+            label="NPC"
+            onNavigate={onNavigate}
+          />
         ) : (
           <div
             title="Dostępne tylko w mieście"

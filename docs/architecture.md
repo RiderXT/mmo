@@ -1556,6 +1556,26 @@ panel szczegółów); Kowadło pokazuje nowy panel z dużą ikoną w złotej ram
 materiałów; NPC pokazuje odświeżone karty towaru i otwiera `BuyItemModal` poprawnie. `pnpm
 --filter web typecheck` czysto.
 
+**Poprawka po dalszym feedbacku użytkownika** — screenshot pokazał kwadratowe ramki wokół
+Postać/Ekwipunek/Ekspedycje/Kowadło/NPC jednocześnie (nie tylko wokół aktywnej). Przyczyna:
+wszystkie te linki żyją pod tym samym pathname `/game/:characterId`, różniąc się tylko `?tab=`, a
+`NavLink`'s domyślne `isActive` dopasowuje wyłącznie pathname — więc wszystkie zapalały się razem.
+Naprawione nowym `TabNavLink` w `AppShell.tsx`, który liczy aktywność ręcznie przez
+`useSearchParams().get("tab")` zamiast polegać na wbudowanym dopasowaniu `NavLink`. Przy okazji
+`navLinkClass` zamieniony z pełnego `border` (czytanego jako "kwadratowa ramka") na
+`border-l-2` — subtelny lewy pasek koloru tylko dla aktywnej zakładki, zero ramki dla
+pozostałych (tak jak "Postacie", które nigdy jej nie miało).
+
+Użytkownik przesłał też własny plik `border_corner.svg` jako przykład stylu, ale poprosił o
+**własną** grafikę zamiast dosłownego reużycia jego assetu na obu rogach. Nowy
+`components/inventory/SocketCorners.tsx` — mały, ręcznie narysowany narożnik (ta sama konwencja
+`viewBox 0 0 20 20`, `stroke="currentColor"` co `ItemTypeIcon.tsx`/`CombatIcon.tsx`, plus
+kwadracik obrócony o 45° nawiązujący do już istniejącego diamentowego markera w `SectionTitle`),
+doklejony do `GridSlot`/`EquipSlotBox`/`ActiveItemSlotBox`/`AnvilSlotBox` (ten ostatni w
+większym rozmiarze, 14px zamiast 10px). Zweryfikowane w przeglądarce: dokładnie jeden link
+aktywny naraz przy przełączaniu zakładek, każda kratka ekwipunku renderuje 2 SVG narożnika bez
+błędów konsoli. `pnpm --filter web typecheck` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
