@@ -4,6 +4,7 @@ import type { CreateItemInput, UpdateItemInput } from "@mmo/shared";
 
 const itemInclude = {
   upgradeRequirements: { include: { requiredItem: { select: { id: true, name: true } } } },
+  upgradeLevelConfigs: true,
   chestLootEntries: { include: { rewardItem: { select: { id: true, name: true } } } },
 } as const;
 
@@ -107,6 +108,12 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
           requiredQty: r.requiredQty,
         })),
       },
+      upgradeLevelConfigs: {
+        create: input.upgradeLevelConfigs.map((c) => ({
+          targetLevel: c.targetLevel,
+          successChance: c.successChance,
+        })),
+      },
       chestLootEntries: {
         create: input.chestLoot.map((c) => ({
           rewardItemId: c.rewardItemId,
@@ -145,6 +152,7 @@ export async function updateItem(
 
   const item = await prisma.$transaction(async (tx) => {
     await tx.itemUpgradeRequirement.deleteMany({ where: { itemId: id } });
+    await tx.itemUpgradeLevelConfig.deleteMany({ where: { itemId: id } });
     await tx.chestLoot.deleteMany({ where: { chestItemId: id } });
     return tx.item.update({
       where: { id },
@@ -166,6 +174,12 @@ export async function updateItem(
             targetLevel: r.targetLevel,
             requiredItemId: r.requiredItemId,
             requiredQty: r.requiredQty,
+          })),
+        },
+        upgradeLevelConfigs: {
+          create: input.upgradeLevelConfigs.map((c) => ({
+            targetLevel: c.targetLevel,
+            successChance: c.successChance,
           })),
         },
         chestLootEntries: {

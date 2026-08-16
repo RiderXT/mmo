@@ -78,6 +78,7 @@ export interface ItemDto {
   possibleStatRanges: { stat: StatKey; min: number; max: number; weight: number }[];
   classId: string | null;
   upgradeRequirements: { id: string; targetLevel: number; requiredItemId: string; requiredQty: number; requiredItem: { id: string; name: string } }[];
+  upgradeLevelConfigs: { id: string; targetLevel: number; successChance: number }[];
   chestLoot: { id: string; rewardItemId: string; dropChance: number; minQty: number; maxQty: number; rewardItem: { id: string; name: string } }[];
   sellPrice: number;
   potionTrigger: PotionConfig["trigger"] | null;

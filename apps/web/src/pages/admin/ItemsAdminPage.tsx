@@ -38,6 +38,7 @@ function emptyForm(): CreateItemInput {
     possibleStatRanges: [],
     classId: null,
     upgradeRequirements: [],
+    upgradeLevelConfigs: [],
     chestLoot: [],
     sellPrice: 0,
   };
@@ -59,6 +60,10 @@ function fromDto(item: ItemDto): CreateItemInput {
       targetLevel: r.targetLevel,
       requiredItemId: r.requiredItemId,
       requiredQty: r.requiredQty,
+    })),
+    upgradeLevelConfigs: item.upgradeLevelConfigs.map((c) => ({
+      targetLevel: c.targetLevel,
+      successChance: c.successChance,
     })),
     chestLoot: item.chestLoot.map((c) => ({
       rewardItemId: c.rewardItemId,
@@ -714,6 +719,66 @@ export function ItemsAdminPage() {
                 className="text-sm text-gold-bright hover:underline"
               >
                 + Dodaj wymaganie
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
+              Nadpisanie szansy powodzenia ulepszenia (opcjonalnie) — poziom bez wiersza tutaj
+              używa domyślnej, malejącej z poziomem krzywej
+            </p>
+            <div className="space-y-2">
+              {form.upgradeLevelConfigs.map((cfg, idx) => (
+                <div key={idx} className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="poziom ulepszenia"
+                    className={`${inputClass} w-36`}
+                    value={cfg.targetLevel}
+                    onChange={(e) => {
+                      const next = [...form.upgradeLevelConfigs];
+                      next[idx] = { ...cfg, targetLevel: Number(e.target.value) };
+                      setForm({ ...form, upgradeLevelConfigs: next });
+                    }}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={1}
+                    placeholder="szansa (0-1)"
+                    className={`${inputClass} w-32`}
+                    value={cfg.successChance}
+                    onChange={(e) => {
+                      const next = [...form.upgradeLevelConfigs];
+                      next[idx] = { ...cfg, successChance: Number(e.target.value) };
+                      setForm({ ...form, upgradeLevelConfigs: next });
+                    }}
+                  />
+                  <button
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        upgradeLevelConfigs: form.upgradeLevelConfigs.filter((_, i) => i !== idx),
+                      })
+                    }
+                    className="text-red-400 hover:underline"
+                  >
+                    Usuń
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    upgradeLevelConfigs: [...form.upgradeLevelConfigs, { targetLevel: 1, successChance: 1 }],
+                  })
+                }
+                className="text-sm text-gold-bright hover:underline"
+              >
+                + Dodaj nadpisanie
               </button>
             </div>
           </div>

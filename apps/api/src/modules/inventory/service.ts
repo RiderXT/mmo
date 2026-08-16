@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
-import type { EquipSlot, ItemType, StatRange } from "@mmo/shared";
+import { defaultUpgradeSuccessChance, type EquipSlot, type ItemType, type StatRange } from "@mmo/shared";
 
 export class InventoryError extends Error {
   constructor(
@@ -263,6 +263,15 @@ export async function upgradeItem(
     stacksByRequiredItem.set(req.requiredItemId, stacks);
   }
 
+  const targetLevel = inventoryItem.upgradeLevel + 1;
+  const levelConfig = await prisma.itemUpgradeLevelConfig.findUnique({
+    where: { itemId_targetLevel: { itemId: inventoryItem.itemId, targetLevel } },
+  });
+  const chance = levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel);
+  // Materials are always consumed on an upgrade attempt, win or lose — rolled before the
+  // transaction so the same outcome is used for both the material consumption and the level bump.
+  const success = Math.random() < chance;
+
   await prisma.$transaction(async (tx) => {
     for (const req of requirements) {
       let remaining = req.requiredQty;
@@ -282,10 +291,12 @@ export async function upgradeItem(
       }
     }
 
-    await tx.inventoryItem.update({
-      where: { id: inventoryItem.id },
-      data: { upgradeLevel: inventoryItem.upgradeLevel + 1 },
-    });
+    if (success) {
+      await tx.inventoryItem.update({
+        where: { id: inventoryItem.id },
+        data: { upgradeLevel: targetLevel },
+      });
+    }
   });
 
   await logAction({
@@ -294,10 +305,10 @@ export async function upgradeItem(
     actorUserId: userId,
     actorCharacterId: input.characterId,
     requestId,
-    payload: { inventoryItemId: input.inventoryItemId, newLevel: inventoryItem.upgradeLevel + 1 },
+    payload: { inventoryItemId: input.inventoryItemId, targetLevel, chance, success },
   });
 
-  return { newLevel: inventoryItem.upgradeLevel + 1 };
+  return { success, newLevel: success ? targetLevel : inventoryItem.upgradeLevel, chance };
 }
 
 function randomInt(min: number, max: number): number {

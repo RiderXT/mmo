@@ -4,6 +4,7 @@ import { AppShell } from "../components/AppShell";
 import { getCharacter } from "../lib/charactersApi";
 import { CharacterTab } from "./game/CharacterTab";
 import { ExpeditionsTab } from "./game/ExpeditionsTab";
+import { AnvilTab } from "./game/AnvilTab";
 
 const TABS = [
   { key: "character", label: "Postać" },
@@ -68,9 +69,7 @@ export function GamePage() {
               onClaimed={() => queryClient.invalidateQueries({ queryKey: ["character", characterId] })}
             />
           )}
-          {activeTab === "anvil" && (
-            <p className="text-sm text-parchment-faint">Kowadło — wkrótce.</p>
-          )}
+          {activeTab === "anvil" && <AnvilTab character={character} />}
         </div>
       )}
     </AppShell>

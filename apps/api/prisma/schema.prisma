@@ -245,6 +245,7 @@ model Item {
   inventoryItems      InventoryItem[]
   upgradeRequirements ItemUpgradeRequirement[] @relation("ItemUpgradeFor")
   usedInUpgrades      ItemUpgradeRequirement[] @relation("ItemUpgradeMaterial")
+  upgradeLevelConfigs ItemUpgradeLevelConfig[]
   chestLootEntries    ChestLoot[] @relation("ChestLootChest")
   chestLootRewards    ChestLoot[] @relation("ChestLootReward")
   starterForClasses   ClassStarterItem[]
@@ -267,6 +268,20 @@ model ItemUpgradeRequirement {
   requiredItem    Item   @relation("ItemUpgradeMaterial", fields: [requiredItemId], references: [id])
 
   @@unique([itemId, targetLevel, requiredItemId])
+}
+
+// Optional per-(item, targetLevel) override of the upgrade success chance shown/used by the
+// Kowadło (anvil) tab. No row for a given targetLevel = the shared default decreasing curve
+// applies (packages/shared/src/lib/upgradeSuccess.ts), used identically by server and client.
+model ItemUpgradeLevelConfig {
+  id             String @id @default(cuid())
+  itemId         String
+  targetLevel    Int
+  successChance  Float
+
+  item           Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, targetLevel])
 }
 
 // Chest contents — only meaningful when the owning Item.type === "chest". Rolled independently

@@ -16,6 +16,14 @@ export const UpgradeRequirementInputSchema = z.object({
 });
 export type UpgradeRequirementInput = z.infer<typeof UpgradeRequirementInputSchema>;
 
+// Optional override of the default decreasing success-chance curve (see
+// packages/shared/src/lib/upgradeSuccess.ts) for a specific upgrade level of this item.
+export const UpgradeLevelConfigInputSchema = z.object({
+  targetLevel: z.number().int().min(1).max(50),
+  successChance: z.number().min(0).max(1),
+});
+export type UpgradeLevelConfigInput = z.infer<typeof UpgradeLevelConfigInputSchema>;
+
 // Only meaningful when type === "chest" — what can come out when the chest is opened.
 export const ChestLootInputSchema = z.object({
   rewardItemId: z.string(),
@@ -52,6 +60,7 @@ export const CreateItemSchema = z
     // null/omitted = usable by any class. Only meaningful for weapon/armor/helmet.
     classId: z.string().nullable().optional(),
     upgradeRequirements: z.array(UpgradeRequirementInputSchema).default([]),
+    upgradeLevelConfigs: z.array(UpgradeLevelConfigInputSchema).default([]),
     // Only meaningful when type === "chest".
     chestLoot: z.array(ChestLootInputSchema).default([]),
     potion: PotionConfigSchema.optional(),

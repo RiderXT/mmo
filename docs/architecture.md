@@ -1038,6 +1038,65 @@ widzi panel NPC zamiast "Walcz", przycisk zakupu wyłączony przy niewystarczaj�
 nie wywołuje żądania), po obniżeniu ceny zakup przechodzi — złoto w nagłówku i panelu spada z
 30 na 25, komunikat "Kupiono Mikstura Życia za 5 złota." się pojawia.
 
+## Zakładka "Kowadło" — realna szansa powodzenia ulepszenia (Etap 22)
+
+### Kontekst
+
+Przycisk "Ulepsz" w panelu szczegółów przedmiotu był w 100% deterministyczny — ulepszenie zawsze
+się udawało, o ile postać miała materiały. Użytkownik poprosił o zastąpienie go zakładką
+"Kowadło" z **prawdziwą mechaniką ryzyka**: malejącą z poziomem szansą powodzenia, materiały
+zawsze zużywane niezależnie od wyniku, bez niszczenia itemu przy porażce (na razie).
+
+### Shared
+
+`packages/shared/src/lib/upgradeSuccess.ts` — `defaultUpgradeSuccessChance(targetLevel)`:
+krzywa `1 - ((targetLevel-1)/8)^1.5 * 0.9`, floor `MIN_UPGRADE_SUCCESS_CHANCE = 0.05`, anchored
+na `MAX_UPGRADE_LEVEL = 9` (ten sam cap co `Item.maxUpgradeStats` "stats at +9"). Ta sama funkcja
+jest importowana identycznie przez serwer (losowanie) i klienta (podgląd % przed kliknięciem) —
+jedno źródło prawdy, zero ryzyka rozjazdu.
+
+### Model danych
+
+Nowy model `ItemUpgradeLevelConfig {id, itemId, targetLevel, successChance}` (addytywne) —
+opcjonalne nadpisanie krzywej domyślnej dla konkretnej pary (item, poziom docelowy). Brak wiersza
+dla danego poziomu = stosuje się `defaultUpgradeSuccessChance`. Przy okazji naprawiono
+rozjazd między `schema.prisma` a `schema.production.prisma`: produkcyjny plik nie miał pola
+zwrotnego `Item.npcShopEntries` dodanego w Etapie 21 (NpcShopItem→Item istniało, ale nie
+Item→NpcShopItem), co złamałoby `prisma validate`/deploy na produkcji — wykryte i naprawione
+przed pierwszym użyciem produkcyjnego pliku po Etapie 21.
+
+### Backend
+
+`inventory/service.ts`'s `upgradeItem` — po sprawdzeniu materiałów (bez zmian) losuje
+`Math.random() < chance` **przed** transakcją (`chance` = `ItemUpgradeLevelConfig` dla
+`(itemId, targetLevel)` albo `defaultUpgradeSuccessChance(targetLevel)`). Materiały są
+konsumowane zawsze wewnątrz transakcji (pętla bez zmian); `upgradeLevel` ustawiane na
+`targetLevel` **tylko przy sukcesie**. Zwraca `{success, newLevel, chance}` zamiast dawnego
+`{newLevel}` — `newLevel` przy porażce to niezmieniony bieżący poziom. `admin/items/service.ts`
+— `upgradeLevelConfigs` w `itemInclude` + create/update przez delete-then-recreate (wzorzec
+identyczny jak `upgradeRequirements`/`chestLootEntries`).
+
+### Frontend
+
+Nowy `apps/web/src/pages/game/AnvilTab.tsx` — lista przedmiotów z ekwipunku/plecaka
+ograniczona do typów wyposażalnych (broń/zbroja/hełm/buty/naszyjnik/kolczyki/pierścień;
+materiały/questowe/skrzynie pominięte jako nieulepszalne), klik pokazuje: aktualny poziom →
+docelowy, % szansy (z configu albo domyślnej krzywej — ta sama funkcja `@mmo/shared`),
+wymagane materiały z porównaniem posiadane/potrzebne (czerwone gdy brakuje), przycisk "Ulepsz"
+wyłączony przy braku materiałów. Po odpowiedzi z serwera wyświetla czytelny komunikat
+sukcesu/porażki i odświeża zapytania `inventory`/`combat-stats`/`combat-stats-breakdown`.
+Przycisk "Ulepsz" usunięty z panelu szczegółów przedmiotu w zakładce "Postać"
+(`CharacterTab.tsx`) — zastąpiony odnośnikiem tekstowym do zakładki "Kowadło".
+`ItemsAdminPage.tsx` — nowa sekcja "Nadpisanie szansy powodzenia" (poziom + szansa 0-1),
+analogiczna do istniejącej sekcji materiałów.
+
+Zweryfikowane: curl — override `successChance:0` dla poziomu docelowego → `{success:false,
+newLevel:0}`, materiały i tak zużyte (4→2 sztuki); override `successChance:1` → `{success:true,
+newLevel:1}`, materiały wyzerowane. Przeglądarka: zakładka Kowadło pokazuje poprawny % (96% dla
+poziomu +2, zgodny z ręcznym przeliczeniem krzywej), przycisk wyłączony przy niewystarczających
+materiałach (klik bez efektu), po uzupełnieniu materiałów klik kończy się komunikatem "Sukces!
+Przedmiot ulepszony do +2." i panel automatycznie pokazuje kolejny poziom (+2→+3, 89%, 0/6).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

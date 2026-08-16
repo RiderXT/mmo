@@ -48,8 +48,14 @@ export const unequipItem = (characterId: string, inventoryItemId: string) =>
     body: JSON.stringify({ inventoryItemId }),
   });
 
+export interface UpgradeItemResultDto {
+  success: boolean;
+  newLevel: number;
+  chance: number;
+}
+
 export const upgradeItem = (characterId: string, inventoryItemId: string) =>
-  apiFetch<{ newLevel: number }>(`/api/inventory/${characterId}/upgrade`, {
+  apiFetch<UpgradeItemResultDto>(`/api/inventory/${characterId}/upgrade`, {
     method: "POST",
     body: JSON.stringify({ inventoryItemId }),
   });

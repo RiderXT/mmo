@@ -20,7 +20,6 @@ import {
   moveItem,
   equipItem,
   unequipItem,
-  upgradeItem,
   setActiveSlot,
   clearActiveSlot,
   openChest,
@@ -88,15 +87,6 @@ export function CharacterTab({ character }: { character: Character }) {
     mutationFn: (inventoryItemId: string) => unequipItem(characterId, inventoryItemId),
     onSuccess: invalidateInventoryAndCombatStats,
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się zdjąć przedmiotu"),
-  });
-
-  const upgradeMutation = useMutation({
-    mutationFn: (inventoryItemId: string) => upgradeItem(characterId, inventoryItemId),
-    onSuccess: () => {
-      invalidateInventory();
-      setActionError(null);
-    },
-    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się ulepszyć"),
   });
 
   const openChestMutation = useMutation({
@@ -371,13 +361,7 @@ export function CharacterTab({ character }: { character: Character }) {
               ))}
           </div>
           {selected.item.type !== "consumable" && (
-            <button
-              onClick={() => upgradeMutation.mutate(selected.id)}
-              disabled={upgradeMutation.isPending}
-              className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
-            >
-              Ulepsz
-            </button>
+            <p className="text-xs text-parchment-faint">Ulepszanie — zobacz zakładkę "Kowadło".</p>
           )}
         </div>
       )}
