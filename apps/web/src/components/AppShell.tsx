@@ -1,13 +1,67 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { logoutRequest } from "../lib/authApi";
 import { useAuthStore } from "../store/authStore";
+import { getCharacter } from "../lib/charactersApi";
+import { listPlayerZones } from "../lib/zonesApi";
 import { UpdateBanner } from "./UpdateBanner";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `block px-3 py-2 text-sm transition ${
     isActive ? "bg-gold text-ink" : "text-parchment-dim hover:bg-panel-raised"
   }`;
+
+/** Character-scoped nav links (Postać/Ekspedycje/Kowadło) — only rendered while inside
+ * /game/:characterId/* (Kowadło additionally gated to town zones). Shares the exact
+ * ["character", characterId] / ["player-zones"] query keys GamePage.tsx and ExpeditionPanel.tsx
+ * already use, so react-query dedupes the fetch instead of firing an extra request. */
+function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const { characterId } = useParams<{ characterId: string }>();
+  const characterQuery = useQuery({
+    queryKey: ["character", characterId],
+    queryFn: () => getCharacter(characterId!),
+    enabled: !!characterId,
+  });
+  const zonesQuery = useQuery({
+    queryKey: ["player-zones"],
+    queryFn: listPlayerZones,
+    enabled: !!characterId,
+  });
+
+  if (!characterId) return null;
+
+  const currentZone = zonesQuery.data?.find((z) => z.id === characterQuery.data?.currentZoneId);
+  const inTown = currentZone?.isTown ?? false;
+
+  return (
+    <div className="mt-4">
+      <div className="px-3 text-[10px] uppercase tracking-wide text-parchment-faint">
+        {characterQuery.data?.name ?? "Postać"}
+      </div>
+      <div className="mt-1 space-y-1">
+        <NavLink to={`/game/${characterId}?tab=character`} className={navLinkClass} onClick={onNavigate}>
+          Postać
+        </NavLink>
+        <NavLink to={`/game/${characterId}?tab=expeditions`} className={navLinkClass} onClick={onNavigate}>
+          Ekspedycje
+        </NavLink>
+        {inTown ? (
+          <NavLink to={`/game/${characterId}?tab=anvil`} className={navLinkClass} onClick={onNavigate}>
+            Kowadło
+          </NavLink>
+        ) : (
+          <div
+            title="Dostępne tylko w mieście"
+            className="block cursor-not-allowed px-3 py-2 text-sm text-parchment-faint/50"
+          >
+            Kowadło
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
@@ -29,6 +83,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink to="/characters" className={navLinkClass} onClick={onNavigate}>
           Postacie
         </NavLink>
+        <CharacterNavLinks onNavigate={onNavigate} />
         {user?.role === "admin" && (
           <NavLink to="/admin/settings" className={navLinkClass} onClick={onNavigate}>
             Ustawienia

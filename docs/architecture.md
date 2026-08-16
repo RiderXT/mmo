@@ -1234,6 +1234,40 @@ Zweryfikowane: curl — sztucznie oflagowana ekspedycja: `GET .../flagged-count`
 podglądem nagrody; po `resolve` znika z listy. Przeglądarka: panel Testowanie pokazuje tabelę z
 poprawnymi danymi i działającymi przyciskami akcji.
 
+## Ekspedycje i Kowadło w lewym menu (Etap B post-24)
+
+### Kontekst
+
+Użytkownik poprosił, żeby "Ekspedycje" i "Kowadło" przestały być zakładkami wewnątrz strony
+postaci, a stały się osobnymi pozycjami w **lewym menu bocznym** (`AppShell`) — z zapowiedzią, że
+zakładka Ekspedycje docelowo pokaże dodatkowe rzeczy zależne od krainy (bossy, kopalnie — poza
+zakresem tej zmiany, tylko uzasadnienie architektoniczne). Kowadło ma być klikalne w menu tylko,
+gdy postać stoi w krainie typu miasto.
+
+### Implementacja
+
+Bez nowych tras w `App.tsx` — `/game/:characterId` zostaje jedną trasą, `GamePage.tsx` nadal
+przełącza treść po `?tab=` (mechanizm z Etapu 17 bez zmian, domyślnie `"character"`). Zmieniło
+się tylko **skąd** można to nawigować — usunięty wizualny pasek zakładek w `GamePage.tsx`.
+
+`AppShell.tsx` — nowy wewnętrzny `CharacterNavLinks`: woła `useParams<{characterId?:string}>()`
+(działa transparentnie, bo `AppShell` renderuje się wewnątrz drzewa `GamePage`, które jest
+elementem trasy `/game/:characterId`; na innych stronach `characterId` jest `undefined` i nic się
+nie renderuje). Gdy obecny: `useQuery(["character", characterId], getCharacter)` +
+`useQuery(["player-zones"], listPlayerZones)` — te same klucze co już używane w
+`GamePage.tsx`/`ExpeditionPanel.tsx`, więc react-query dzieli cache (zero dodatkowych żądań
+sieciowych w praktyce). Renderuje nagłówek z imieniem postaci, `NavLink` "Postać"/"Ekspedycje"
+(zawsze aktywne), i "Kowadło" — `NavLink` gdy `currentZone?.isTown`, w przeciwnym razie
+nieklikalny, wyszarzony wiersz z `title="Dostępne tylko w mieście"`. Dodane do współdzielonego
+`SidebarContent` (już używanego zarówno w stałym sidebarze, jak i mobilnej szufladzie —
+Etap 8.5), więc działa na obu bez dodatkowej pracy.
+
+Zweryfikowane w przeglądarce: na `/characters` sekcja postaci nie pojawia się; po utworzeniu i
+wejściu na postać sidebar pokazuje jej imię + "Postać"/"Ekspedycje" jako linki, "Kowadło" jako
+wyszarzony, nieklikalny wiersz (kraina dzicz); po przeniesieniu postaci do testowej krainy typu
+miasto "Kowadło" staje się klikalnym linkiem prowadzącym do `?tab=anvil`; kliknięcie
+"Ekspedycje"/"Kowadło" poprawnie przełącza treść bez przeładowania strony.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

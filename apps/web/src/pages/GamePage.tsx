@@ -6,19 +6,13 @@ import { CharacterTab } from "./game/CharacterTab";
 import { ExpeditionsTab } from "./game/ExpeditionsTab";
 import { AnvilTab } from "./game/AnvilTab";
 
-const TABS = [
-  { key: "character", label: "Postać" },
-  { key: "expeditions", label: "Ekspedycje" },
-  { key: "anvil", label: "Kowadło" },
-] as const;
-
-type TabKey = (typeof TABS)[number]["key"];
+type TabKey = "character" | "expeditions" | "anvil";
 
 export function GamePage() {
   const { characterId } = useParams<{ characterId: string }>();
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get("tab") as TabKey | null) ?? TABS[0].key;
+  const [searchParams] = useSearchParams();
+  const activeTab = (searchParams.get("tab") as TabKey | null) ?? "character";
 
   const characterQuery = useQuery({
     queryKey: ["character", characterId],
@@ -37,27 +31,13 @@ export function GamePage() {
 
   return (
     <AppShell>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
         <h1 className="text-lg font-semibold text-parchment">{character?.name ?? "…"}</h1>
         {character && (
           <p className="text-sm text-parchment-dim">
             Poziom {character.level} · {character.exp} exp · {character.gold} złota
           </p>
         )}
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-1 border-b border-line pb-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setSearchParams({ tab: tab.key })}
-            className={`px-3 py-1.5 text-sm transition ${
-              tab.key === activeTab ? "bg-gold text-ink" : "text-parchment-dim hover:bg-panel-raised"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       {character && (
