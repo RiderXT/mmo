@@ -267,6 +267,7 @@ async function main() {
           type: "weapon",
           minLevel: tier.minLevel,
           classId: cls.id,
+          gridWidth: 2,
           baseStats: JSON.stringify({ attack: weaponAttack }),
           maxUpgradeStats: JSON.stringify({ attack: weaponAttackMax }),
           possibleStatRanges: JSON.stringify([
@@ -281,6 +282,7 @@ async function main() {
           type: "armor",
           minLevel: tier.minLevel,
           classId: cls.id,
+          gridWidth: 2,
           baseStats: JSON.stringify({ defense: armorDef, hp: armorHp }),
           maxUpgradeStats: JSON.stringify({ defense: armorDefMax, hp: armorHpMax }),
           possibleStatRanges: JSON.stringify([

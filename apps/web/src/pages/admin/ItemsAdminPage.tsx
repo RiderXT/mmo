@@ -41,6 +41,7 @@ function emptyForm(): CreateItemInput {
     upgradeLevelConfigs: [],
     chestLoot: [],
     sellPrice: 0,
+    gridWidth: 1,
   };
 }
 
@@ -64,6 +65,7 @@ function fromDto(item: ItemDto): CreateItemInput {
     upgradeLevelConfigs: item.upgradeLevelConfigs.map((c) => ({
       targetLevel: c.targetLevel,
       successChance: c.successChance,
+      goldCost: c.goldCost,
     })),
     chestLoot: item.chestLoot.map((c) => ({
       rewardItemId: c.rewardItemId,
@@ -72,6 +74,7 @@ function fromDto(item: ItemDto): CreateItemInput {
       maxQty: c.maxQty,
     })),
     sellPrice: item.sellPrice,
+    gridWidth: item.gridWidth,
     potion:
       item.type === "consumable" && item.potionTrigger && item.potionEffect
         ? {
@@ -414,6 +417,16 @@ export function ItemsAdminPage() {
                 )}
               </div>
             </Field>
+            <Field label="Szerokość w siatce ekwipunku (kratki)">
+              <input
+                type="number"
+                min={1}
+                max={3}
+                className={`${inputClass} w-24`}
+                value={form.gridWidth}
+                onChange={(e) => setForm({ ...form, gridWidth: Number(e.target.value) })}
+              />
+            </Field>
           </div>
 
           <Field label="Opis">
@@ -736,8 +749,8 @@ export function ItemsAdminPage() {
 
           <div>
             <p className="mb-2 text-xs font-medium text-parchment-dim">
-              Nadpisanie szansy powodzenia ulepszenia (opcjonalnie) — poziom bez wiersza tutaj
-              używa domyślnej, malejącej z poziomem krzywej
+              Nadpisanie szansy powodzenia i/lub kosztu ulepszenia (opcjonalnie) — poziom bez
+              wiersza tutaj używa domyślnych krzywych (szansa malejąca, koszt rosnący z poziomem)
             </p>
             <div className="space-y-2">
               {form.upgradeLevelConfigs.map((cfg, idx) => (
@@ -767,6 +780,18 @@ export function ItemsAdminPage() {
                       setForm({ ...form, upgradeLevelConfigs: next });
                     }}
                   />
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="koszt (puste = domyślny)"
+                    className={`${inputClass} w-44`}
+                    value={cfg.goldCost ?? ""}
+                    onChange={(e) => {
+                      const next = [...form.upgradeLevelConfigs];
+                      next[idx] = { ...cfg, goldCost: e.target.value === "" ? null : Number(e.target.value) };
+                      setForm({ ...form, upgradeLevelConfigs: next });
+                    }}
+                  />
                   <button
                     onClick={() =>
                       setForm({
@@ -784,7 +809,10 @@ export function ItemsAdminPage() {
                 onClick={() =>
                   setForm({
                     ...form,
-                    upgradeLevelConfigs: [...form.upgradeLevelConfigs, { targetLevel: 1, successChance: 1 }],
+                    upgradeLevelConfigs: [
+                      ...form.upgradeLevelConfigs,
+                      { targetLevel: 1, successChance: 1, goldCost: null },
+                    ],
                   })
                 }
                 className="text-sm text-gold-bright hover:underline"

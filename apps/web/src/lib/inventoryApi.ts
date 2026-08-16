@@ -24,6 +24,7 @@ export interface InventoryItemDto {
     classId: string | null;
     class: { id: string; name: string } | null;
     sellPrice: number;
+    gridWidth: number;
   };
 }
 
@@ -52,6 +53,8 @@ export interface UpgradeItemResultDto {
   success: boolean;
   newLevel: number;
   chance: number;
+  goldCost: number;
+  itemDestroyed: boolean;
 }
 
 export const upgradeItem = (characterId: string, inventoryItemId: string) =>

@@ -3,6 +3,13 @@ import { EquipSlotSchema, StatBlockSchema } from "./enums.js";
 
 const ACTIVE_SLOT_COUNT = 6;
 
+// Grid geometry shared by client (rendering) and server (multi-cell placement/collision for
+// Item.gridWidth > 1) — must stay identical on both sides or a 2-wide item could be validated
+// against one row width and rendered against another.
+const INVENTORY_GRID_COLS = 5;
+const INVENTORY_GRID_ROWS = 7;
+const INVENTORY_GRID_SLOTS_PER_TAB = INVENTORY_GRID_COLS * INVENTORY_GRID_ROWS;
+
 export const MoveItemSchema = z.object({
   inventoryItemId: z.string(),
   toSlotIndex: z.number().int().min(0).max(9999),
@@ -64,4 +71,17 @@ export const InventoryItemSchema = z.object({
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
-export { ACTIVE_SLOT_COUNT };
+export { ACTIVE_SLOT_COUNT, INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, INVENTORY_GRID_SLOTS_PER_TAB };
+
+/** Cells occupied by an item of `width` starting at `slotIndex` (tab-relative or absolute — only
+ * the column matters). Returns null if placing it here would spill past the row into the next
+ * one, which is invalid regardless of whether those cells are otherwise free. */
+export function inventoryOccupiedRange(slotIndex: number, width: number): number[] | null {
+  const cells: number[] = [];
+  for (let w = 0; w < width; w++) {
+    const cell = slotIndex + w;
+    if (w > 0 && cell % INVENTORY_GRID_COLS === 0) return null;
+    cells.push(cell);
+  }
+  return cells;
+}

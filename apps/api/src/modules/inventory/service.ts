@@ -1,7 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
-import { defaultUpgradeSuccessChance, type EquipSlot, type ItemType, type StatRange } from "@mmo/shared";
+import {
+  defaultUpgradeSuccessChance,
+  defaultUpgradeGoldCost,
+  inventoryOccupiedRange,
+  type EquipSlot,
+  type ItemType,
+  type StatRange,
+} from "@mmo/shared";
 
 export class InventoryError extends Error {
   constructor(
@@ -60,23 +67,49 @@ export async function moveItem(
 ) {
   await assertCharacterOwnership(input.characterId, userId);
 
-  const moving = await prisma.inventoryItem.findUnique({ where: { id: input.inventoryItemId } });
+  const moving = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: { select: { gridWidth: true } } },
+  });
   if (!moving || moving.characterId !== input.characterId) {
     throw new InventoryError("Nie znaleziono przedmiotu", 404);
   }
 
-  const occupant = await prisma.inventoryItem.findUnique({
-    where: { characterId_slotIndex: { characterId: input.characterId, slotIndex: input.toSlotIndex } },
+  const width = moving.item.gridWidth;
+  const targetRange = inventoryOccupiedRange(input.toSlotIndex, width);
+  if (!targetRange) {
+    throw new InventoryError("Przedmiot nie mieści się w tym miejscu (wychodzi poza wiersz)", 400);
+  }
+
+  // Grid-placed items only — equipped/active-slot items don't occupy a grid cell and can't
+  // collide. Width>1 items have no DB row for their extra cell(s), so every candidate's range
+  // must be expanded from its own primary slotIndex + gridWidth to catch those too.
+  const others = await prisma.inventoryItem.findMany({
+    where: { characterId: input.characterId, equippedSlot: null, activeSlotIndex: null, id: { not: moving.id } },
+    include: { item: { select: { gridWidth: true } } },
+  });
+  const overlapping = others.filter((o) => {
+    const range = inventoryOccupiedRange(o.slotIndex, o.item.gridWidth) ?? [o.slotIndex];
+    return range.some((c) => targetRange.includes(c));
   });
 
   await prisma.$transaction(async (tx) => {
-    if (occupant && occupant.id !== moving.id) {
-      // free the target slot first (temp negative slot) to avoid unique constraint clash, then swap
+    if (overlapping.length === 0) {
+      await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: input.toSlotIndex } });
+    } else if (
+      overlapping.length === 1 &&
+      width === 1 &&
+      overlapping[0].item.gridWidth === 1 &&
+      overlapping[0].slotIndex === input.toSlotIndex
+    ) {
+      // Classic single-cell swap — both items are 1-wide and exactly trade places. Wider items
+      // never swap: an ambiguous partial overlap is rejected instead (see else branch).
+      const occupant = overlapping[0];
       await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: -1 } });
       await tx.inventoryItem.update({ where: { id: occupant.id }, data: { slotIndex: moving.slotIndex } });
       await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: input.toSlotIndex } });
     } else {
-      await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: input.toSlotIndex } });
+      throw new InventoryError("Docelowe miejsce jest zajęte", 409);
     }
   });
 
@@ -233,7 +266,7 @@ export async function upgradeItem(
   userId: string,
   requestId?: string,
 ) {
-  await assertCharacterOwnership(input.characterId, userId);
+  const owner = await assertCharacterOwnership(input.characterId, userId);
 
   const inventoryItem = await prisma.inventoryItem.findUnique({
     where: { id: input.inventoryItemId },
@@ -268,11 +301,21 @@ export async function upgradeItem(
     where: { itemId_targetLevel: { itemId: inventoryItem.itemId, targetLevel } },
   });
   const chance = levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel);
-  // Materials are always consumed on an upgrade attempt, win or lose — rolled before the
-  // transaction so the same outcome is used for both the material consumption and the level bump.
+  const goldCost = levelConfig?.goldCost ?? defaultUpgradeGoldCost(targetLevel);
+  if (owner.gold < goldCost) {
+    throw new InventoryError("Za mało złota na ulepszenie", 409);
+  }
+  // Gold and materials are always consumed on an upgrade attempt, win or lose — rolled before the
+  // transaction so the same outcome is used for the gold/material consumption and the level bump
+  // (or, on failure, the item's destruction — see below).
   const success = Math.random() < chance;
 
   await prisma.$transaction(async (tx) => {
+    await tx.character.update({
+      where: { id: input.characterId },
+      data: { gold: { decrement: goldCost } },
+    });
+
     for (const req of requirements) {
       let remaining = req.requiredQty;
       const stacks = stacksByRequiredItem.get(req.requiredItemId)!;
@@ -296,6 +339,10 @@ export async function upgradeItem(
         where: { id: inventoryItem.id },
         data: { upgradeLevel: targetLevel },
       });
+    } else {
+      // On failure the item itself is destroyed, not just the materials/gold — upgrading is a
+      // real risk, not a free retry.
+      await tx.inventoryItem.delete({ where: { id: inventoryItem.id } });
     }
   });
 
@@ -305,10 +352,16 @@ export async function upgradeItem(
     actorUserId: userId,
     actorCharacterId: input.characterId,
     requestId,
-    payload: { inventoryItemId: input.inventoryItemId, targetLevel, chance, success },
+    payload: { inventoryItemId: input.inventoryItemId, targetLevel, chance, goldCost, success },
   });
 
-  return { success, newLevel: success ? targetLevel : inventoryItem.upgradeLevel, chance };
+  return {
+    success,
+    newLevel: success ? targetLevel : inventoryItem.upgradeLevel,
+    chance,
+    goldCost,
+    itemDestroyed: !success,
+  };
 }
 
 function randomInt(min: number, max: number): number {
@@ -476,12 +529,27 @@ function rollItemStats(possibleStatRanges: StatRange[], count = 3): Record<strin
   return stats;
 }
 
-async function findNextFreeSlotIndex(tx: Prisma.TransactionClient, characterId: string): Promise<number> {
-  const used = await tx.inventoryItem.findMany({ where: { characterId }, select: { slotIndex: true } });
-  const usedSet = new Set(used.map((u) => u.slotIndex));
+async function findNextFreeSlotIndex(
+  tx: Prisma.TransactionClient,
+  characterId: string,
+  width: number,
+): Promise<number> {
+  const existing = await tx.inventoryItem.findMany({
+    where: { characterId, equippedSlot: null, activeSlotIndex: null },
+    select: { slotIndex: true, item: { select: { gridWidth: true } } },
+  });
+  const occupied = new Set<number>();
+  for (const e of existing) {
+    for (const cell of inventoryOccupiedRange(e.slotIndex, e.item.gridWidth) ?? [e.slotIndex]) {
+      occupied.add(cell);
+    }
+  }
+
   const MAX_SLOTS = 500;
   for (let i = 0; i < MAX_SLOTS; i++) {
-    if (!usedSet.has(i)) return i;
+    const range = inventoryOccupiedRange(i, width);
+    if (!range) continue; // would spill past this row — not a valid start position
+    if (range.every((cell) => !occupied.has(cell))) return i;
   }
   throw new InventoryError("Ekwipunek jest pełny", 409);
 }
@@ -513,7 +581,7 @@ export async function addLootToInventory(
     }
 
     while (remaining > 0) {
-      const slotIndex = await findNextFreeSlotIndex(tx, characterId);
+      const slotIndex = await findNextFreeSlotIndex(tx, characterId, item.gridWidth);
       const add = Math.min(item.maxStack, remaining);
       await tx.inventoryItem.create({
         data: { characterId, itemId, slotIndex, quantity: add, rolledStats: JSON.stringify({}) },
@@ -523,7 +591,7 @@ export async function addLootToInventory(
   } else {
     const possibleStatRanges = JSON.parse(item.possibleStatRanges) as StatRange[];
     for (let i = 0; i < quantity; i++) {
-      const slotIndex = await findNextFreeSlotIndex(tx, characterId);
+      const slotIndex = await findNextFreeSlotIndex(tx, characterId, item.gridWidth);
       await tx.inventoryItem.create({
         data: {
           characterId,

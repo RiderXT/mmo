@@ -100,6 +100,7 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
       possibleStatRanges: JSON.stringify(input.possibleStatRanges),
       classId: input.classId ?? null,
       sellPrice: input.sellPrice,
+      gridWidth: input.gridWidth,
       ...potionData(input),
       upgradeRequirements: {
         create: input.upgradeRequirements.map((r) => ({
@@ -112,6 +113,7 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
         create: input.upgradeLevelConfigs.map((c) => ({
           targetLevel: c.targetLevel,
           successChance: c.successChance,
+          goldCost: c.goldCost,
         })),
       },
       chestLootEntries: {
@@ -168,6 +170,7 @@ export async function updateItem(
         possibleStatRanges: JSON.stringify(input.possibleStatRanges),
         classId: input.classId ?? null,
         sellPrice: input.sellPrice,
+        gridWidth: input.gridWidth,
         ...potionData(input),
         upgradeRequirements: {
           create: input.upgradeRequirements.map((r) => ({
@@ -180,6 +183,7 @@ export async function updateItem(
           create: input.upgradeLevelConfigs.map((c) => ({
             targetLevel: c.targetLevel,
             successChance: c.successChance,
+            goldCost: c.goldCost,
           })),
         },
         chestLootEntries: {

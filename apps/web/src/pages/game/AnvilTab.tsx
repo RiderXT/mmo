@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Character, EquipSlot, ItemType } from "@mmo/shared";
-import { defaultUpgradeSuccessChance } from "@mmo/shared";
+import { defaultUpgradeSuccessChance, defaultUpgradeGoldCost } from "@mmo/shared";
 import { GridSlot } from "../../components/inventory/GridSlot";
 import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { AnvilSlotBox } from "../../components/inventory/AnvilSlotBox";
@@ -14,11 +14,13 @@ import { ApiError } from "../../lib/apiClient";
 import { listInventory, upgradeItem, type InventoryItemDto } from "../../lib/inventoryApi";
 import { listPlayerItems } from "../../lib/itemsApi";
 import { listPlayerZones } from "../../lib/zonesApi";
+import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
 import type { ItemDto } from "../../lib/adminApi";
 
 const UPGRADABLE_TYPES = new Set<ItemType>(["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"]);
-const EQUIP_SLOTS: EquipSlot[] = ["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"];
-const GRID_SLOTS = 24;
+const LEFT_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "necklace", "boots"];
+const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "ring", "earrings"];
+const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
 
@@ -55,9 +57,10 @@ export function AnvilTab({ character }: { character: Character }) {
       setResultMessage(
         result.success
           ? `Sukces! Przedmiot ulepszony do +${result.newLevel}.`
-          : `Porażka — przedmiot pozostał na poziomie +${result.newLevel}, materiały przepadły.`,
+          : "Porażka — przedmiot został zniszczony, a złoto i materiały przepadły.",
       );
       queryClient.invalidateQueries({ queryKey: ["inventory", characterId] });
+      queryClient.invalidateQueries({ queryKey: ["character", characterId] });
       queryClient.invalidateQueries({ queryKey: ["combat-stats", characterId] });
       queryClient.invalidateQueries({ queryKey: ["combat-stats-breakdown", characterId] });
     },
@@ -116,6 +119,8 @@ export function AnvilTab({ character }: { character: Character }) {
   const targetLevel = selected ? selected.upgradeLevel + 1 : null;
   const levelConfig = selectedCatalogItem?.upgradeLevelConfigs.find((c) => c.targetLevel === targetLevel);
   const chance = targetLevel !== null ? (levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel)) : null;
+  const goldCost = targetLevel !== null ? (levelConfig?.goldCost ?? defaultUpgradeGoldCost(targetLevel)) : null;
+  const hasEnoughGold = goldCost !== null && character.gold >= goldCost;
   const requirements = selectedCatalogItem?.upgradeRequirements.filter((r) => r.targetLevel === targetLevel) ?? [];
   const hasPath = requirements.length > 0;
   const hasAllMaterials = requirements.every((r) => (ownedQtyByItemId.get(r.requiredItemId) ?? 0) >= r.requiredQty);
@@ -132,77 +137,90 @@ export function AnvilTab({ character }: { character: Character }) {
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr]">
+      <div className="grid gap-4 lg:grid-cols-[auto_1fr_1.1fr]">
+        {/* Założony ekwipunek — osobna ramka, całkowicie z lewej strony. */}
         <div className="panel p-4">
-          <h2 className="font-medium text-parchment">Kowadło</h2>
-          <p className="mt-1 text-xs text-parchment-faint">
-            Przeciągnij przedmiot (z ekwipunku lub założony) na kowadło, żeby go wybrać, albo kliknij.
-          </p>
-
-          <div className="mt-3 flex flex-wrap items-start gap-4">
-            <AnvilSlotBox>
-              {selected && (
-                <ItemBox inventoryItem={selected} selected onSelect={() => selectItem(selected.id)} />
-              )}
-            </AnvilSlotBox>
-
-            <div>
-              <p className="mb-1 text-[10px] uppercase tracking-wide text-parchment-faint">Założony ekwipunek</p>
-              <div className="flex flex-wrap gap-2">
-                {EQUIP_SLOTS.map((slot) => {
-                  const item = byEquipSlot.get(slot);
-                  return (
-                    <EquipSlotBox key={slot} slot={slot}>
-                      {item && (
-                        <ItemBox inventoryItem={item} selected={item.id === selectedId} onSelect={() => selectItem(item.id)} />
-                      )}
-                    </EquipSlotBox>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium text-parchment-dim">Ekwipunek</p>
-              <div className="flex gap-1">
-                {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
-                      activeTab === tab ? "bg-gold text-ink" : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
-                    } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
-                    title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
-                  >
-                    {TAB_LABELS[tab]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-6 gap-2">
-              {Array.from({ length: GRID_SLOTS }, (_, slotInTab) => {
-                const slotIndex = activeTab * GRID_SLOTS + slotInTab;
-                const item = byGridSlot.get(slotIndex);
+          <h2 className="font-medium text-parchment">Założony ekwipunek</h2>
+          <div className="mt-3 flex justify-center gap-4">
+            <div className="flex flex-col items-center gap-3">
+              {LEFT_EQUIP_SLOTS.map((slot) => {
+                const item = byEquipSlot.get(slot);
                 return (
-                  <GridSlot key={slotIndex} slotIndex={slotIndex}>
+                  <EquipSlotBox key={slot} slot={slot}>
                     {item && (
                       <ItemBox inventoryItem={item} selected={item.id === selectedId} onSelect={() => selectItem(item.id)} />
                     )}
-                  </GridSlot>
+                  </EquipSlotBox>
+                );
+              })}
+            </div>
+            <div className="flex flex-col items-center gap-3">
+              {RIGHT_EQUIP_SLOTS.map((slot) => {
+                const item = byEquipSlot.get(slot);
+                return (
+                  <EquipSlotBox key={slot} slot={slot}>
+                    {item && (
+                      <ItemBox inventoryItem={item} selected={item.id === selectedId} onSelect={() => selectItem(item.id)} />
+                    )}
+                  </EquipSlotBox>
                 );
               })}
             </div>
           </div>
         </div>
 
+        {/* Ekwipunek do wyboru — siatka materiałów/przedmiotów do ulepszenia. */}
         <div className="panel p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-parchment-dim">Ekwipunek (przeciągnij na kowadło albo kliknij)</p>
+            <div className="flex gap-1">
+              {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
+                    activeTab === tab ? "bg-gold text-ink" : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
+                  } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
+                  title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
+                >
+                  {TAB_LABELS[tab]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {layoutGridTab(byGridSlot, activeTab * GRID_SLOTS).map((cell) => (
+              <GridSlot key={cell.slotIndex} slotIndex={cell.slotIndex} width={cell.width}>
+                {cell.item && (
+                  <ItemBox
+                    inventoryItem={cell.item}
+                    wide={cell.width === 2}
+                    selected={cell.item.id === selectedId}
+                    onSelect={() => selectItem(cell.item!.id)}
+                  />
+                )}
+              </GridSlot>
+            ))}
+          </div>
+        </div>
+
+        {/* Kowadło — miejsce, w którym ląduje wybrany przedmiot, plus szczegóły ulepszenia. */}
+        <div className="panel p-4">
+          <h2 className="font-medium text-parchment">Kowadło</h2>
+          <p className="mt-1 text-xs text-parchment-faint">
+            Przeciągnij przedmiot (z ekwipunku lub założony) tutaj, żeby go wybrać, albo kliknij.
+          </p>
+          <div className="mt-3 flex justify-center">
+            <AnvilSlotBox>
+              {selected && <ItemBox inventoryItem={selected} selected onSelect={() => selectItem(selected.id)} />}
+            </AnvilSlotBox>
+          </div>
+
           {!selected ? (
-            <p className="text-sm text-parchment-faint">Wybierz przedmiot z ekwipunku po lewej.</p>
+            <p className="mt-4 text-sm text-parchment-faint">Wybierz przedmiot z ekwipunku, żeby zobaczyć szczegóły.</p>
           ) : (
             <>
-              <div className="flex items-center gap-4">
+              <div className="mt-4 flex items-center gap-4">
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-gold/60 bg-gradient-to-br from-panel-raised to-panel shadow-[0_0_14px_oklch(76%_0.09_85_/_0.25)]">
                   <ItemTypeIcon type={selected.item.type} className="h-9 w-9 text-gold-bright" />
                 </div>
@@ -221,7 +239,7 @@ export function AnvilTab({ character }: { character: Character }) {
               {selected.item.description && <p className="mt-3 text-sm text-parchment-dim">{selected.item.description}</p>}
 
               <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[360px] text-left text-sm">
+                <table className="w-full min-w-[300px] text-left text-sm">
                   <thead className="text-parchment-dim">
                     <tr>
                       <th className="py-1 pr-3">Staty</th>
@@ -258,10 +276,16 @@ export function AnvilTab({ character }: { character: Character }) {
               ) : (
                 <>
                   <p className="mt-3 text-sm text-parchment-dim">
+                    Koszt w złocie:{" "}
+                    <span className={`font-medium ${hasEnoughGold ? "text-gold-bright" : "text-red-400"}`}>
+                      {goldCost}g
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-parchment-dim">
                     Szansa powodzenia: <span className="font-medium text-gold-bright">{Math.round((chance ?? 0) * 100)}%</span>
                   </p>
                   <p className="mt-1 text-xs text-parchment-faint">
-                    Przy porażce materiały przepadają, a przedmiot pozostaje bez zmian.
+                    Przy porażce przedmiot zostaje zniszczony, a złoto i materiały przepadają.
                   </p>
 
                   <p className="mt-4 text-[10px] font-bold uppercase tracking-wide text-parchment-faint">
@@ -271,6 +295,7 @@ export function AnvilTab({ character }: { character: Character }) {
                     {requirements.map((r) => {
                       const owned = ownedQtyByItemId.get(r.requiredItemId) ?? 0;
                       const ok = owned >= r.requiredQty;
+                      const materialType = itemFor(r.requiredItemId)?.type ?? "material";
                       return (
                         <li
                           key={r.requiredItemId}
@@ -279,7 +304,7 @@ export function AnvilTab({ character }: { character: Character }) {
                           }`}
                         >
                           <ItemTypeIcon
-                            type="material"
+                            type={materialType}
                             className={`h-5 w-5 shrink-0 ${ok ? "text-parchment-dim" : "text-red-400"}`}
                           />
                           <span className={ok ? "text-parchment-dim" : "text-red-400"}>{r.requiredItem.name}</span>
@@ -293,18 +318,18 @@ export function AnvilTab({ character }: { character: Character }) {
 
                   <button
                     onClick={() => upgradeMutation.mutate(selected.id)}
-                    disabled={upgradeMutation.isPending || !hasAllMaterials}
+                    disabled={upgradeMutation.isPending || !hasAllMaterials || !hasEnoughGold}
                     className="mt-4 w-full rounded-md bg-gold px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Ulepsz przedmiot
                   </button>
                 </>
               )}
-
-              {resultMessage && <p className="mt-3 text-sm text-rarity-uncommon">{resultMessage}</p>}
-              {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
             </>
           )}
+
+          {resultMessage && <p className="mt-3 text-sm text-rarity-uncommon">{resultMessage}</p>}
+          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
         </div>
       </div>
     </DndContext>

@@ -12,8 +12,9 @@ import { listPlayerZones } from "../../lib/zonesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
 import { listInventory, sellItem, discardItem, openChest, type InventoryItemDto } from "../../lib/inventoryApi";
 import { listNpcsForZone, buyFromNpc, type NpcShopItemPublicDto } from "../../lib/npcShopApi";
+import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
 
-const GRID_SLOTS = 24;
+const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
 
@@ -238,23 +239,20 @@ export function NpcTab({ character }: { character: Character }) {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-6 gap-2">
-            {Array.from({ length: GRID_SLOTS }, (_, slotInTab) => {
-              const slotIndex = activeTab * GRID_SLOTS + slotInTab;
-              const item = byGridSlot.get(slotIndex);
-              return (
-                <GridSlot key={slotIndex} slotIndex={slotIndex}>
-                  {item && (
-                    <ItemBox
-                      inventoryItem={item}
-                      selected={selectMode && selection.has(item.id)}
-                      onSelect={() => (selectMode ? toggleSelected(item) : undefined)}
-                      onContextMenu={handleItemContextMenu}
-                    />
-                  )}
-                </GridSlot>
-              );
-            })}
+          <div className="mt-3 grid grid-cols-5 gap-2">
+            {layoutGridTab(byGridSlot, activeTab * GRID_SLOTS).map((cell) => (
+              <GridSlot key={cell.slotIndex} slotIndex={cell.slotIndex} width={cell.width}>
+                {cell.item && (
+                  <ItemBox
+                    inventoryItem={cell.item}
+                    wide={cell.width === 2}
+                    selected={selectMode && selection.has(cell.item.id)}
+                    onSelect={() => (selectMode ? toggleSelected(cell.item!) : undefined)}
+                    onContextMenu={handleItemContextMenu}
+                  />
+                )}
+              </GridSlot>
+            ))}
           </div>
 
           {selection.size > 0 && (

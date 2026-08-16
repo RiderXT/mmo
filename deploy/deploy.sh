@@ -12,6 +12,7 @@ pnpm --filter @mmo/api prisma:push:prod
 # Additive, idempotent data fixes (updateMany only, never deletes) — safe to run on every
 # deploy; no-ops once already applied. See prisma/scripts/*.ts for what each one does.
 (cd apps/api && npx tsx prisma/scripts/lower-drop-rates.ts)
+(cd apps/api && npx tsx prisma/scripts/set-weapon-armor-grid-width.ts)
 pnpm --filter @mmo/api build
 pnpm --filter @mmo/web build
 sudo systemctl restart mmo-api

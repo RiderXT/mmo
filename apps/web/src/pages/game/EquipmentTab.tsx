@@ -12,6 +12,7 @@ import { getPlayerClass } from "../../lib/classesApi";
 import { interpolateUpgrade } from "../../lib/statMath";
 import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
 import { listPlayerItems } from "../../lib/itemsApi";
+import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
 import {
   listInventory,
   moveItem,
@@ -25,7 +26,7 @@ import {
   type InventoryItemDto,
 } from "../../lib/inventoryApi";
 
-const GRID_SLOTS = 24;
+const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const ACTIVE_SLOTS = 6;
 const LEFT_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "necklace", "boots"];
 const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "ring", "earrings"];
@@ -302,23 +303,20 @@ export function EquipmentTab({ character }: { character: Character }) {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-6 gap-2">
-              {Array.from({ length: GRID_SLOTS }, (_, slotInTab) => {
-                const slotIndex = activeTab * GRID_SLOTS + slotInTab;
-                const item = byGridSlot.get(slotIndex);
-                return (
-                  <GridSlot key={slotIndex} slotIndex={slotIndex}>
-                    {item && (
-                      <ItemBox
-                        inventoryItem={item}
-                        selected={item.id === selectedId}
-                        onSelect={() => setSelectedId(item.id)}
-                        onContextMenu={handleItemContextMenu}
-                      />
-                    )}
-                  </GridSlot>
-                );
-              })}
+            <div className="grid grid-cols-5 gap-2">
+              {layoutGridTab(byGridSlot, activeTab * GRID_SLOTS).map((cell) => (
+                <GridSlot key={cell.slotIndex} slotIndex={cell.slotIndex} width={cell.width}>
+                  {cell.item && (
+                    <ItemBox
+                      inventoryItem={cell.item}
+                      wide={cell.width === 2}
+                      selected={cell.item.id === selectedId}
+                      onSelect={() => setSelectedId(cell.item!.id)}
+                      onContextMenu={handleItemContextMenu}
+                    />
+                  )}
+                </GridSlot>
+              ))}
             </div>
           </div>
         </div>

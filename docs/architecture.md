@@ -1576,6 +1576,80 @@ większym rozmiarze, 14px zamiast 10px). Zweryfikowane w przeglądarce: dokładn
 aktywny naraz przy przełączaniu zakładek, każda kratka ekwipunku renderuje 2 SVG narożnika bez
 błędów konsoli. `pnpm --filter web typecheck` czysto.
 
+## Siatka 5×7, przebudowa Kowadła na 3 kolumny, koszt ulepszenia w złocie, 2-kratkowe bronie/zbroje
+
+### Kontekst
+
+Użytkownik zgłosił pięć powiązanych zmian w ekwipunku i Kowadle: siatka ekwipunku miała 6
+kolumn/4 wiersze — zmienić na 5×7; sekcja "kowadło" (miejsce, w które ląduje wybrany przedmiot)
+miała być po prawej stronie razem ze szczegółami, a "Założony ekwipunek" w osobnej ramce
+całkowicie po lewej; wymagane materiały ulepszenia miały pokazywać ikonę konkretnego itemu, nie
+generyczny placeholder; ulepszanie nie miało żadnego kosztu w złocie — każdy poziom każdego
+itemu musi mieć ustalony (rosnący z poziomem) koszt; a broń i zbroja miały zajmować 2 kratki w
+siatce. To ostatnie wymagało prawdziwej mechaniki multi-slot (nie tylko wizualnej sztuczki) —
+backend musiał zacząć egzekwować kolizje/umieszczanie względem "śladu" zajmowanego przez item, bo
+`InventoryItem.slotIndex` to wciąż pojedyncza liczba (jeden wiersz DB = jeden przedmiot = jedna
+"główna" kratka; druga kratka szerokiego itemu nie ma własnego wiersza).
+
+### Zmiany
+
+- **Geometria siatki** — nowe stałe współdzielone przez klienta i serwer:
+  `packages/shared/src/schemas/inventory.ts`'s `INVENTORY_GRID_COLS` (5), `INVENTORY_GRID_ROWS`
+  (7), `INVENTORY_GRID_SLOTS_PER_TAB` (35) oraz `inventoryOccupiedRange(slotIndex, width)` —
+  zwraca listę zajętych komórek dla danej szerokości, `null` gdy umieszczenie wychodziłoby poza
+  wiersz. Backend i frontend importują te same stałe/funkcję, żeby walidacja i renderowanie nigdy
+  się nie rozjechały.
+- **`Item.gridWidth Int @default(1)`** (Prisma, additive) — ile kratek poziomo zajmuje item
+  odłożony w ekwipunku. `packages/shared`'s `CreateItemSchema` + panel `/admin/items` (nowe pole
+  liczbowe) + `seed-zones.ts` (broń/zbroja tworzone od razu z `gridWidth: 2`). Istniejące w bazie
+  itemy typu weapon/armor donastawione jednorazowym skryptem
+  `prisma/scripts/set-weapon-armor-grid-width.ts` (dopisany do `deploy.sh`, idempotentny —
+  aktualizuje tylko wiersze wciąż na domyślnym `gridWidth=1`, bezpieczny na produkcji).
+- **Backend `inventory/service.ts`** — `moveItem` liczy teraz pełny zakres docelowych komórek
+  przez `inventoryOccupiedRange` i porównuje go z zakresami WSZYSTKICH innych przedmiotów w
+  siatce (rozszerzonymi o ich własny `gridWidth` — druga kratka szerokiego itemu nie ma wiersza w
+  DB, więc kolizję trzeba liczyć w locie); klasyczna zamiana miejscami działa tylko dla pary
+  1-kratka/1-kratka, każdy inny częściowy nakład jest odrzucany (409 "Docelowe miejsce jest
+  zajęte"). `findNextFreeSlotIndex`/`addLootToInventory` (loot, skrzynie, przedmioty startowe,
+  zakupy NPC — wszystkie przez wspólny `addLootToInventory`) analogicznie szukają pierwszej
+  pozycji, której pełny zakres jest wolny i nie wychodzi poza wiersz.
+- **Frontend `lib/inventoryGrid.ts`** (nowy) — `layoutGridTab()` układa jedną stronę siatki:
+  rozwija każdy przedmiot do jego `gridWidth`, pomija komórki już "skonsumowane" przez
+  poprzedzający szeroki item. `GridSlot`/`ItemBox` dostały prop `width`/`wide` (2-kratkowy item =
+  `col-span-2` + `w-[7.5rem]` zamiast `w-14`). Użyte identycznie w `EquipmentTab.tsx`,
+  `AnvilTab.tsx`, `NpcTab.tsx` (wszystkie trzy muszą się zgadzać co do geometrii, bo renderują tę
+  samą przestrzeń `slotIndex` tej samej postaci).
+- **`AnvilTab.tsx` — przebudowa na 3 kolumny**: lewa — nowa, osobna ramka "Założony ekwipunek"
+  (paperdoll 2×3 jak w `EquipmentTab.tsx`, bez portretu); środkowa — siatka do wyboru materiału/
+  przedmiotu (bez zmian funkcjonalnych, tylko 5×7); prawa — `AnvilSlotBox` przeniesiony tu z
+  lewej kolumny + panel szczegółów. Wymagane materiały renderują teraz `ItemTypeIcon` dla
+  faktycznego typu itemu (`itemFor(r.requiredItemId)?.type`, wcześniej zahardkodowane
+  `"material"`).
+- **Koszt ulepszenia w złocie** — `ItemUpgradeLevelConfig.goldCost Int?` (Prisma, nullable —
+  `null` = użyj wspólnej rosnącej krzywej domyślnej, dokładnie ten sam wzorzec co istniejące
+  `successChance`/`defaultUpgradeSuccessChance`). Nowa `defaultUpgradeGoldCost(targetLevel)` w
+  `packages/shared/src/lib/upgradeSuccess.ts` (`round(100 * poziom^1.6)` — tania na niskich
+  poziomach, gwałtownie droższa bliżej +9, tak jak szansa powodzenia gwałtownie maleje). Panel
+  `/admin/items`'s edytor nadpisań poziomów dostał trzecie pole (puste = domyślny koszt).
+  `upgradeItem` w `inventory/service.ts` sprawdza `owner.gold >= goldCost` (409 przy braku),
+  potrąca złoto w tej samej transakcji co materiały. **Przy porażce przedmiot jest teraz
+  całkowicie niszczony** (`tx.inventoryItem.delete`), nie tylko "zostaje bez zmian" jak wcześniej
+  — złoto i materiały i tak przepadają przy każdej próbie, sukces czy porażka.
+- Poprawka przy okazji: komunikat wyniku (`resultMessage`/`error`) w `AnvilTab.tsx` był
+  renderowany wewnątrz bloku `{selected && ...}` — po zniszczeniu przedmiotu `selected` staje się
+  `null` i komunikat "przedmiot został zniszczony" nigdy by się nie pokazał. Przeniesiony poza ten
+  blok.
+
+Zweryfikowane w przeglądarce (nowa postać klasy Wojownik + ręcznie przyznana broń/zbroja/materiał
++ tymczasowa krainy-miasto, dane usunięte po weryfikacji): siatka Ekwipunku ma 5 kolumn (33
+wyrenderowane komórki na 35 dla dwóch 2-kratkowych itemów — zgodne z matematyką), broń i zbroja
+renderują się jako `col-span-2` o szerokości 120px; Kowadło pokazuje 3 kolumny z "Założony
+ekwipunek" w osobnej ramce po lewej i kowadłem po prawej; wybranie broni pokazuje koszt (100g dla
+poziomu 1, zgodnie ze wzorem), szansę (100%), i materiał z ikoną (dokładnie 1 SVG w wierszu);
+udane ulepszenie poprawnie potrąciło złoto i podniosło poziom; wymuszona (nadpisanie
+`successChance=0`) próba na kolejnym poziomie potrąciła złoto, **usunęła przedmiot z ekwipunku**,
+i poprawnie pokazała komunikat porażki. `pnpm -r typecheck` czysto (shared/api/web).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

@@ -12,3 +12,14 @@ export function defaultUpgradeSuccessChance(targetLevel: number): number {
   const chance = 1 - Math.pow(ratio, 1.5) * 0.9;
   return Math.max(MIN_UPGRADE_SUCCESS_CHANCE, Math.min(1, chance));
 }
+
+// Mirrors defaultUpgradeSuccessChance's shape but increasing instead of decreasing: cheap early
+// levels, steeply more expensive near the +9 cap. Used identically by server (charging gold) and
+// client (showing cost beforehand) whenever an item has no per-level goldCost override configured
+// in the admin panel.
+const BASE_UPGRADE_GOLD_COST = 100;
+
+export function defaultUpgradeGoldCost(targetLevel: number): number {
+  const level = Math.max(1, targetLevel);
+  return Math.round(BASE_UPGRADE_GOLD_COST * Math.pow(level, 1.6));
+}

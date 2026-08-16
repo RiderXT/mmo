@@ -21,6 +21,8 @@ export type UpgradeRequirementInput = z.infer<typeof UpgradeRequirementInputSche
 export const UpgradeLevelConfigInputSchema = z.object({
   targetLevel: z.number().int().min(1).max(50),
   successChance: z.number().min(0).max(1),
+  // null = use the shared default increasing cost curve (defaultUpgradeGoldCost).
+  goldCost: z.number().int().min(0).max(999999).nullable().default(null),
 });
 export type UpgradeLevelConfigInput = z.infer<typeof UpgradeLevelConfigInputSchema>;
 
@@ -69,6 +71,8 @@ export const CreateItemSchema = z
     potion: PotionConfigSchema.optional(),
     // Gold for selling one unit via the inventory context menu. 0 = not sellable.
     sellPrice: z.number().int().min(0).max(999999).default(0),
+    // Horizontal grid cells occupied when unequipped (see apps/web/src/lib/inventoryGrid.ts).
+    gridWidth: z.number().int().min(1).max(3).default(1),
   })
   .refine((val) => val.stackable || val.maxStack === 1, {
     message: "Przedmiot niestakujący się musi mieć maxStack = 1",
