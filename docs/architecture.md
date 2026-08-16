@@ -1268,6 +1268,50 @@ wyszarzony, nieklikalny wiersz (kraina dzicz); po przeniesieniu postaci do testo
 miasto "Kowadło" staje się klikalnym linkiem prowadzącym do `?tab=anvil`; kliknięcie
 "Ekspedycje"/"Kowadło" poprawnie przełącza treść bez przeładowania strony.
 
+## Kowadło — pełny ekwipunek + porównanie przed/po (Etap C post-24)
+
+### Kontekst
+
+Użytkownik poprosił, żeby Kowadło zamiast klikalnej listy przedmiotów wyglądało jak pełny
+ekwipunek — przeciągamy item z ekwipunku na kowadło, a panel szczegółów pokazuje te same
+informacje co popup w zakładce Postać, plus obok jakie staty będą **po** ulepszeniu.
+
+### Implementacja
+
+`AnvilTab.tsx` przepisany na wzór `CharacterTab.tsx`: `DndContext` + rząd slotów założonego
+ekwipunku (`EquipSlotBox`, tylko źródło przeciągania/kliku) + siatka 4-zakładkowa
+`GridSlot`×24 (filtrowana do `UPGRADABLE_TYPES` — potiony/materiały się tam nie pojawiają).
+Nowy `AnvilSlotBox` (`components/inventory/AnvilSlotBox.tsx`) — jedyny realny cel upuszczenia
+(`useDroppable({id:"anvil-slot", data:{type:"anvil"}})`); upuszczenie tam **lub** klik na
+przedmiot w gridzie/slocie equip wywołują tę samą funkcję `selectItem`, więc oba sposoby
+wyboru są w pełni równoważne. Wybrany przedmiot jest pomijany przy budowaniu
+`byEquipSlot`/`byGridSlot` (żeby nie renderować tego samego `inventoryItemId` jako dwóch
+draggable naraz w jednym `DndContext` — dnd-kit wymaga unikalnych id) i renderuje się
+wyłącznie wewnątrz `AnvilSlotBox`, wizualnie "przeniesiony" na kowadło.
+
+Panel szczegółów pokazuje dokładnie te same pola co popup w zakładce Postać (nazwa+poziom,
+typ/poziom min/klasa, opis, staty) reużywając `interpolateUpgrade`/`STAT_LABELS`/
+`formatStatValue`/`TYPE_LABELS`. Obok dodana kolumna "Po ulepszeniu (+N+1)" — te same klucze
+statów przeliczone przez `interpolateUpgrade(item.baseStats, item.maxUpgradeStats,
+upgradeLevel + 1)` + niezmienione `rolledStats`; zmienione wartości podświetlone na złoto.
+Poniżej bez zmian: szansa powodzenia, lista wymaganych materiałów (posiadane/potrzebne),
+przycisk "Ulepsz" (cała logika `upgradeMutation` z Etapu 22 bez zmian).
+
+Blokada "tylko w mieście" na poziomie strony (nie tylko linku w sidebarze) — `zonesQuery` +
+sprawdzenie `currentZone?.isTown`; gdy nieprawda, panel z komunikatem zamiast reszty UI.
+
+Zweryfikowane w przeglądarce (postać `Mag` w testowej krainie-mieście, założona broń +
+materiały nadane przez panel admina): zakładka Kowadło pokazuje założony ekwipunek + siatkę
+4-zakładkową; klik na przedmiot (założony i z siatki) ustawia go jako wybrany na kowadle;
+panel szczegółów pokazuje pełne informacje + kolumnę "Teraz (+0)"/"Po ulepszeniu (+1)" z
+poprawnie przeliczonym atakiem (+31→+33); przycisk "Ulepsz" konsumuje materiały (2/2→0/4) i
+podnosi poziom do +1, tabela i wymagania odświeżają się natychmiast (96% szansy na +2). Poza
+miastem zakładka i link w sidebarze poprawnie pokazują blokadę zamiast UI. Rzeczywista
+symulacja przeciągnięcia myszą (fizyczny drag) nie została w tej sesji zweryfikowana z
+przyczyn środowiskowych (podgląd przeglądarki nie kompozytował klatek do zrzutów ekranu) —
+`onDragEnd` woła identyczną funkcję `selectItem` co klik, a wzorzec `DndContext`/
+`useDraggable`/`useDroppable` jest 1:1 tym już działającym w `CharacterTab.tsx`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

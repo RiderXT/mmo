@@ -1,29 +1,42 @@
 import { useMemo, useState } from "react";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Character, ItemType } from "@mmo/shared";
+import type { Character, EquipSlot, ItemType } from "@mmo/shared";
 import { defaultUpgradeSuccessChance } from "@mmo/shared";
-import { ItemTypeIcon } from "../../components/inventory/ItemTypeIcon";
+import { GridSlot } from "../../components/inventory/GridSlot";
+import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
+import { AnvilSlotBox } from "../../components/inventory/AnvilSlotBox";
+import { ItemBox } from "../../components/inventory/ItemBox";
+import { interpolateUpgrade } from "../../lib/statMath";
+import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
 import { ApiError } from "../../lib/apiClient";
 import { listInventory, upgradeItem, type InventoryItemDto } from "../../lib/inventoryApi";
 import { listPlayerItems } from "../../lib/itemsApi";
+import { listPlayerZones } from "../../lib/zonesApi";
 import type { ItemDto } from "../../lib/adminApi";
 
 const UPGRADABLE_TYPES = new Set<ItemType>(["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"]);
+const EQUIP_SLOTS: EquipSlot[] = ["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"];
+const GRID_SLOTS = 24;
+const INVENTORY_TABS = 4;
+const TAB_LABELS = ["I", "II", "III", "IV"];
 
 export function AnvilTab({ character }: { character: Character }) {
   const characterId = character.id;
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
+  const zonesQuery = useQuery({ queryKey: ["player-zones"], queryFn: listPlayerZones });
   const inventoryQuery = useQuery({
     queryKey: ["inventory", characterId],
     queryFn: () => listInventory(characterId),
   });
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
 
-  const upgradableItems = (inventoryQuery.data ?? []).filter((inv) => UPGRADABLE_TYPES.has(inv.item.type));
   const itemFor = (itemId: string): ItemDto | undefined => itemsQuery.data?.find((i) => i.id === itemId);
 
   const ownedQtyByItemId = useMemo(() => {
@@ -33,15 +46,6 @@ export function AnvilTab({ character }: { character: Character }) {
     }
     return map;
   }, [inventoryQuery.data]);
-
-  const selected = upgradableItems.find((i) => i.id === selectedId) ?? null;
-  const selectedCatalogItem = selected ? itemFor(selected.itemId) : undefined;
-  const targetLevel = selected ? selected.upgradeLevel + 1 : null;
-  const levelConfig = selectedCatalogItem?.upgradeLevelConfigs.find((c) => c.targetLevel === targetLevel);
-  const chance = targetLevel !== null ? (levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel)) : null;
-  const requirements = selectedCatalogItem?.upgradeRequirements.filter((r) => r.targetLevel === targetLevel) ?? [];
-  const hasPath = requirements.length > 0;
-  const hasAllMaterials = requirements.every((r) => (ownedQtyByItemId.get(r.requiredItemId) ?? 0) >= r.requiredQty);
 
   const upgradeMutation = useMutation({
     mutationFn: (inventoryItemId: string) => upgradeItem(characterId, inventoryItemId),
@@ -68,85 +72,219 @@ export function AnvilTab({ character }: { character: Character }) {
     setError(null);
   }
 
-  return (
-    <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || over.data.current?.type !== "anvil") return;
+    const inventoryItem = active.data.current?.inventoryItem as InventoryItemDto | undefined;
+    if (!inventoryItem) return;
+    selectItem(inventoryItem.id);
+  }
+
+  const currentZone = zonesQuery.data?.find((z) => z.id === character.currentZoneId);
+  const inTown = currentZone?.isTown ?? false;
+
+  if (zonesQuery.data && !inTown) {
+    return (
       <div className="panel p-4">
         <h2 className="font-medium text-parchment">Kowadło</h2>
-        <p className="mt-1 text-xs text-parchment-faint">Wybierz przedmiot do ulepszenia.</p>
+        <p className="mt-2 text-sm text-parchment-faint">Kowadło jest dostępne tylko w mieście.</p>
+      </div>
+    );
+  }
 
-        <div className="mt-3 space-y-1.5">
-          {upgradableItems.map((inv) => (
-            <button
-              key={inv.id}
-              onClick={() => selectItem(inv.id)}
-              className={`flex w-full items-center gap-2 border px-3 py-2 text-left text-sm transition ${
-                inv.id === selectedId ? "border-gold bg-gold/10" : "border-line hover:border-line-soft"
-              }`}
-            >
-              <ItemTypeIcon type={inv.item.type} className="h-4 w-4 shrink-0 text-parchment-dim" />
-              <span className="text-parchment">{inv.item.name}</span>
-              {inv.upgradeLevel > 0 && <span className="text-gold-bright">+{inv.upgradeLevel}</span>}
-              {inv.equippedSlot && <span className="ml-auto text-xs text-parchment-faint">założony</span>}
-            </button>
-          ))}
-          {upgradableItems.length === 0 && (
-            <p className="text-sm text-parchment-faint">Brak przedmiotów, które można ulepszyć.</p>
+  const items = inventoryQuery.data ?? [];
+  const byEquipSlot = new Map<EquipSlot, InventoryItemDto>();
+  const byGridSlot = new Map<number, InventoryItemDto>();
+  for (const item of items) {
+    // The selected item is shown "on the anvil" instead of its normal spot — otherwise the same
+    // inventoryItemId would render as two separate dnd-kit draggables at once.
+    if (item.id === selectedId) continue;
+    if (item.equippedSlot) byEquipSlot.set(item.equippedSlot, item);
+    else if (item.activeSlotIndex === null && UPGRADABLE_TYPES.has(item.item.type)) byGridSlot.set(item.slotIndex, item);
+  }
+  const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
+    let count = 0;
+    for (const slotIndex of byGridSlot.keys()) {
+      if (Math.floor(slotIndex / GRID_SLOTS) === tab) count += 1;
+    }
+    return count;
+  });
+
+  const selected = items.find((i) => i.id === selectedId) ?? null;
+  const selectedCatalogItem = selected ? itemFor(selected.itemId) : undefined;
+  const targetLevel = selected ? selected.upgradeLevel + 1 : null;
+  const levelConfig = selectedCatalogItem?.upgradeLevelConfigs.find((c) => c.targetLevel === targetLevel);
+  const chance = targetLevel !== null ? (levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel)) : null;
+  const requirements = selectedCatalogItem?.upgradeRequirements.filter((r) => r.targetLevel === targetLevel) ?? [];
+  const hasPath = requirements.length > 0;
+  const hasAllMaterials = requirements.every((r) => (ownedQtyByItemId.get(r.requiredItemId) ?? 0) >= r.requiredQty);
+
+  const currentStats = selected
+    ? { ...interpolateUpgrade(selected.item.baseStats, selected.item.maxUpgradeStats, selected.upgradeLevel), ...selected.rolledStats }
+    : {};
+  const afterStats = selected
+    ? { ...interpolateUpgrade(selected.item.baseStats, selected.item.maxUpgradeStats, selected.upgradeLevel + 1), ...selected.rolledStats }
+    : {};
+  const statKeys = Array.from(new Set([...Object.keys(currentStats), ...Object.keys(afterStats)])).filter(
+    (k) => currentStats[k as keyof typeof currentStats] || afterStats[k as keyof typeof afterStats],
+  );
+
+  return (
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr]">
+        <div className="panel p-4">
+          <h2 className="font-medium text-parchment">Kowadło</h2>
+          <p className="mt-1 text-xs text-parchment-faint">
+            Przeciągnij przedmiot (z ekwipunku lub założony) na kowadło, żeby go wybrać, albo kliknij.
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-start gap-4">
+            <AnvilSlotBox>
+              {selected && (
+                <ItemBox inventoryItem={selected} selected onSelect={() => selectItem(selected.id)} />
+              )}
+            </AnvilSlotBox>
+
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-parchment-faint">Założony ekwipunek</p>
+              <div className="flex flex-wrap gap-2">
+                {EQUIP_SLOTS.map((slot) => {
+                  const item = byEquipSlot.get(slot);
+                  return (
+                    <EquipSlotBox key={slot} slot={slot}>
+                      {item && (
+                        <ItemBox inventoryItem={item} selected={item.id === selectedId} onSelect={() => selectItem(item.id)} />
+                      )}
+                    </EquipSlotBox>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-parchment-dim">Ekwipunek</p>
+              <div className="flex gap-1">
+                {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex h-6 w-6 items-center justify-center text-xs font-medium transition ${
+                      activeTab === tab ? "bg-gold text-ink" : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
+                    } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
+                    title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
+                  >
+                    {TAB_LABELS[tab]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-6 gap-2">
+              {Array.from({ length: GRID_SLOTS }, (_, slotInTab) => {
+                const slotIndex = activeTab * GRID_SLOTS + slotInTab;
+                const item = byGridSlot.get(slotIndex);
+                return (
+                  <GridSlot key={slotIndex} slotIndex={slotIndex}>
+                    {item && (
+                      <ItemBox inventoryItem={item} selected={item.id === selectedId} onSelect={() => selectItem(item.id)} />
+                    )}
+                  </GridSlot>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="panel p-4">
+          {!selected ? (
+            <p className="text-sm text-parchment-faint">Wybierz przedmiot z ekwipunku po lewej.</p>
+          ) : (
+            <>
+              <h2 className="font-medium text-parchment">
+                {selected.item.name}
+                {selected.upgradeLevel > 0 && <span className="text-gold-bright"> +{selected.upgradeLevel}</span>}
+              </h2>
+              <p className="mt-1 text-xs text-parchment-faint">
+                {TYPE_LABELS[selected.item.type] ?? selected.item.type} · od poziomu {selected.item.minLevel}
+                {selected.item.class ? ` · dla klasy: ${selected.item.class.name}` : " · uniwersalny"}
+                {selected.equippedSlot ? ` · założony (${selected.equippedSlot})` : ""}
+              </p>
+              {selected.item.description && <p className="mt-2 text-sm text-parchment-dim">{selected.item.description}</p>}
+
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[360px] text-left text-sm">
+                  <thead className="text-parchment-dim">
+                    <tr>
+                      <th className="py-1 pr-3">Staty</th>
+                      <th className="px-2 py-1 text-right">Teraz (+{selected.upgradeLevel})</th>
+                      <th className="py-1 pl-2 text-right">Po ulepszeniu (+{targetLevel})</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {statKeys.map((k) => {
+                      const statKey = k as keyof typeof STAT_LABELS;
+                      const before = currentStats[statKey as keyof typeof currentStats] as number | undefined;
+                      const after = afterStats[statKey as keyof typeof afterStats] as number | undefined;
+                      const changed = (before ?? 0) !== (after ?? 0);
+                      return (
+                        <tr key={k}>
+                          <td className="py-1 pr-3 text-parchment-dim">{STAT_LABELS[statKey] ?? k}</td>
+                          <td className="px-2 py-1 text-right text-parchment-dim">
+                            {formatStatValue(statKey, before ?? 0)}
+                          </td>
+                          <td className={`py-1 pl-2 text-right font-medium ${changed ? "text-gold-bright" : "text-parchment"}`}>
+                            {formatStatValue(statKey, after ?? 0)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {!hasPath ? (
+                <p className="mt-3 text-sm text-parchment-faint">
+                  Brak zdefiniowanej ścieżki ulepszenia dla tego poziomu.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-3 text-sm text-parchment-dim">
+                    Szansa powodzenia: <span className="font-medium text-gold-bright">{Math.round((chance ?? 0) * 100)}%</span>
+                  </p>
+                  <p className="mt-1 text-xs text-parchment-faint">
+                    Przy porażce materiały przepadają, a przedmiot pozostaje bez zmian.
+                  </p>
+
+                  <p className="mt-3 text-xs font-medium text-parchment-dim">Wymagane materiały</p>
+                  <ul className="mt-1 space-y-1 text-sm">
+                    {requirements.map((r) => {
+                      const owned = ownedQtyByItemId.get(r.requiredItemId) ?? 0;
+                      const ok = owned >= r.requiredQty;
+                      return (
+                        <li key={r.requiredItemId} className={ok ? "text-parchment-dim" : "text-red-400"}>
+                          {r.requiredItem.name}: {owned} / {r.requiredQty}
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <button
+                    onClick={() => upgradeMutation.mutate(selected.id)}
+                    disabled={upgradeMutation.isPending || !hasAllMaterials}
+                    className="mt-4 bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Ulepsz
+                  </button>
+                </>
+              )}
+
+              {resultMessage && <p className="mt-3 text-sm text-rarity-uncommon">{resultMessage}</p>}
+              {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+            </>
           )}
         </div>
       </div>
-
-      <div className="panel p-4">
-        {!selected ? (
-          <p className="text-sm text-parchment-faint">Wybierz przedmiot z listy po lewej.</p>
-        ) : (
-          <>
-            <h2 className="font-medium text-parchment">
-              {selected.item.name}
-              {selected.upgradeLevel > 0 && <span className="text-gold-bright"> +{selected.upgradeLevel}</span>}
-              <span className="ml-2 text-sm text-parchment-dim">→ +{targetLevel}</span>
-            </h2>
-
-            {!hasPath ? (
-              <p className="mt-3 text-sm text-parchment-faint">
-                Brak zdefiniowanej ścieżki ulepszenia dla tego poziomu.
-              </p>
-            ) : (
-              <>
-                <p className="mt-3 text-sm text-parchment-dim">
-                  Szansa powodzenia: <span className="font-medium text-gold-bright">{Math.round((chance ?? 0) * 100)}%</span>
-                </p>
-                <p className="mt-1 text-xs text-parchment-faint">
-                  Przy porażce materiały przepadają, a przedmiot pozostaje bez zmian.
-                </p>
-
-                <p className="mt-3 text-xs font-medium text-parchment-dim">Wymagane materiały</p>
-                <ul className="mt-1 space-y-1 text-sm">
-                  {requirements.map((r) => {
-                    const owned = ownedQtyByItemId.get(r.requiredItemId) ?? 0;
-                    const ok = owned >= r.requiredQty;
-                    return (
-                      <li key={r.requiredItemId} className={ok ? "text-parchment-dim" : "text-red-400"}>
-                        {r.requiredItem.name}: {owned} / {r.requiredQty}
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                <button
-                  onClick={() => upgradeMutation.mutate(selected.id)}
-                  disabled={upgradeMutation.isPending || !hasAllMaterials}
-                  className="mt-4 bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Ulepsz
-                </button>
-              </>
-            )}
-
-            {resultMessage && <p className="mt-3 text-sm text-rarity-uncommon">{resultMessage}</p>}
-            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-          </>
-        )}
-      </div>
-    </div>
+    </DndContext>
   );
 }
