@@ -39,7 +39,7 @@ export function StatsPanel({ character }: { character: Character }) {
               <button
                 onClick={() => mutation.mutate(stat)}
                 disabled={character.unspentStatPoints < 1 || mutation.isPending}
-                className="flex h-5 w-5 items-center justify-center  bg-gold text-xs text-ink hover:bg-gold-bright disabled:opacity-30"
+                className="flex h-5 w-5 items-center justify-center rounded bg-gold text-xs text-ink hover:bg-gold-bright disabled:opacity-30"
               >
                 +
               </button>

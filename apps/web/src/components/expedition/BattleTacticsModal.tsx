@@ -46,6 +46,7 @@ export function BattleTacticsModal({
               type="checkbox"
               checked={useThresholdOverride}
               onChange={(e) => setUseThresholdOverride(e.target.checked)}
+              className="accent-gold"
             />
             Nadpisz próg % HP, przy którym mikstury lecznicze się uruchamiają
           </label>
@@ -57,7 +58,7 @@ export function BattleTacticsModal({
                 max={100}
                 value={thresholdPct}
                 onChange={(e) => setThresholdPct(Number(e.target.value))}
-                className="flex-1"
+                className="flex-1 accent-gold"
               />
               <span className="w-12 text-right text-sm tabular-nums text-parchment">{thresholdPct}%</span>
             </div>
@@ -78,6 +79,7 @@ export function BattleTacticsModal({
                     type="checkbox"
                     checked={!disabledSkillIds.has(skill.id)}
                     onChange={() => toggleSkill(skill.id)}
+                    className="accent-gold"
                   />
                   {skill.name}
                   <span className="text-xs text-parchment-faint">(cd {skill.cooldownSeconds}s)</span>
@@ -90,13 +92,13 @@ export function BattleTacticsModal({
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onBack}
-            className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
+            className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
           >
             Wstecz
           </button>
           <button
             onClick={handleConfirm}
-            className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
+            className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
           >
             Rozpocznij walkę
           </button>

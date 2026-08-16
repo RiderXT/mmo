@@ -24,6 +24,46 @@ h3 {
   letter-spacing: 0.01em;
 }
 
+/* Browser-drawn surfaces get the same palette as everything we author by hand — otherwise
+   selection/scrollbar/focus fall back to the OS default blue and read as unfinished. */
+::selection {
+  background-color: theme("colors.gold.DEFAULT");
+  color: theme("colors.ink");
+}
+
+/* Text/email/password fields already show focus by shifting their border to gold (see
+   DESIGN.md's Inputs section) — this ring is for the controls that don't draw their own focus
+   state: buttons, links, checkboxes, radios, range sliders. */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="range"]:focus-visible {
+  outline: 2px solid theme("colors.gold.bright");
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-color: theme("colors.line-soft") theme("colors.panel");
+  scrollbar-width: thin;
+  accent-color: theme("colors.gold.DEFAULT");
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: theme("colors.panel");
+}
+::-webkit-scrollbar-thumb {
+  background-color: theme("colors.line-soft");
+  border: 2px solid theme("colors.panel");
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: theme("colors.gold.DEFAULT");
+}
+
 @keyframes pulseGlow {
   0%,
   100% {

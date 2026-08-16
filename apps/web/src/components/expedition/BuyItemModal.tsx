@@ -76,14 +76,14 @@ export function BuyItemModal({
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
+            className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
           >
             Anuluj
           </button>
           <button
             onClick={() => onConfirm(stackable ? quantity : 1)}
             disabled={overBudget}
-            className="bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
           >
             Kup
           </button>

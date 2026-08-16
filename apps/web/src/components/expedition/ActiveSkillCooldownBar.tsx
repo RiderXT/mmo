@@ -1,4 +1,5 @@
 import type { CombatEvent } from "@mmo/shared";
+import { CombatIcon } from "./CombatIcon";
 
 export interface SkillCooldownInfo {
   name: string;
@@ -46,7 +47,7 @@ export function ActiveSkillCooldownBar({
                 style={{ height: `${fillPct}%` }}
               />
               <div className="relative flex h-full w-full items-center justify-center text-xs font-medium text-parchment">
-                {ready ? "✓" : Math.ceil(remaining)}
+                {ready ? <CombatIcon kind="victory" className="h-4 w-4 text-gold-bright" /> : Math.ceil(remaining)}
               </div>
             </div>
             <span className="text-center text-[10px] leading-tight text-parchment-faint">{skill.name}</span>

@@ -59,7 +59,7 @@ export function SkillsPanel({ character }: { character: Character }) {
                 <button
                   onClick={() => mutation.mutate(skill.id)}
                   disabled={character.unspentSkillPoints < 1 || maxed || mutation.isPending}
-                  className="flex h-5 w-5 items-center justify-center  bg-gold text-xs text-ink hover:bg-gold-bright disabled:opacity-30"
+                  className="flex h-5 w-5 items-center justify-center rounded bg-gold text-xs text-ink hover:bg-gold-bright disabled:opacity-30"
                 >
                   +
                 </button>

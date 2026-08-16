@@ -1,15 +1,27 @@
 import { useEffect, useRef } from "react";
 import type { CombatEvent, ItemType } from "@mmo/shared";
+import { CombatIcon, type CombatIconKind } from "./CombatIcon";
 
 export interface LootItemLookup {
   name: string;
   type: ItemType;
 }
 
-function LogLine({ children, tone }: { children: React.ReactNode; tone: string }) {
+function LogLine({
+  children,
+  tone,
+  icon,
+}: {
+  children: React.ReactNode;
+  tone: string;
+  icon: CombatIconKind;
+}) {
   return (
     <div className="border-b border-line/60 px-3 py-2 last:border-b-0">
-      <p className={`text-[13px] font-medium leading-snug ${tone}`}>{children}</p>
+      <p className={`flex items-start gap-1.5 text-[13px] font-medium leading-snug ${tone}`}>
+        <CombatIcon kind={icon} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>{children}</span>
+      </p>
     </div>
   );
 }
@@ -18,7 +30,7 @@ function PlayerLine({ event, roundNo }: { event: CombatEvent; roundNo?: number }
   switch (event.type) {
     case "round":
       return (
-        <LogLine tone="text-parchment">
+        <LogLine tone="text-parchment" icon="attack">
           Runda {roundNo}{" "}
           <span className="font-normal text-emerald-300">
             zadano {event.playerDamage} obrażeń{event.playerCrit ? " (KRYTYK!)" : ""}
@@ -28,26 +40,34 @@ function PlayerLine({ event, roundNo }: { event: CombatEvent; roundNo?: number }
       );
     case "skill_activated":
       return (
-        <LogLine tone="text-violet-300">
-          ✨ {event.skillName}: +{event.power} {event.effectType === "damage" ? "obrażeń" : "leczenia"}
+        <LogLine tone="text-violet-300" icon="skill">
+          {event.skillName}: +{event.power} {event.effectType === "damage" ? "obrażeń" : "leczenia"}
         </LogLine>
       );
     case "potion_used":
       return (
-        <LogLine tone="text-cyan-300">
-          🧪 Użyto: {event.itemName} (+{event.amount})
+        <LogLine tone="text-cyan-300" icon="potion">
+          Użyto: {event.itemName} (+{event.amount})
         </LogLine>
       );
     case "encounter_result":
       return (
-        <LogLine tone="text-emerald-400">
-          ✅ Zwycięstwo nad {event.monsterName}! +{event.expGained} exp, +{event.goldGained} złota
+        <LogLine tone="text-emerald-400" icon="victory">
+          Zwycięstwo nad {event.monsterName}! +{event.expGained} exp, +{event.goldGained} złota
         </LogLine>
       );
     case "character_died":
-      return <LogLine tone="text-red-500">☠️ Postać zginęła.</LogLine>;
+      return (
+        <LogLine tone="text-red-500" icon="defeat">
+          Postać zginęła.
+        </LogLine>
+      );
     case "fight_time_limit_reached":
-      return <LogLine tone="text-gold-bright">⏱️ Osiągnięto maksymalny czas walki — postać przetrwała.</LogLine>;
+      return (
+        <LogLine tone="text-gold-bright" icon="time">
+          Osiągnięto maksymalny czas walki — postać przetrwała.
+        </LogLine>
+      );
     default:
       return null;
   }
@@ -57,15 +77,15 @@ function EnemyLine({ event, roundNo }: { event: CombatEvent; roundNo?: number })
   switch (event.type) {
     case "encounter_start":
       return (
-        <LogLine tone="text-parchment-dim">
-          ⚔️ Starcie: <span className="text-parchment">{event.monsterName}</span> (poziom {event.monsterLevel},{" "}
+        <LogLine tone="text-parchment-dim" icon="target">
+          Starcie: <span className="text-parchment">{event.monsterName}</span> (poziom {event.monsterLevel},{" "}
           {event.monsterMaxHp} HP)
         </LogLine>
       );
     case "round":
       return (
-        <LogLine tone={event.monsterEvaded ? "text-sky-300" : "text-red-300"}>
-          #{roundNo} {event.monsterEvaded ? "🛡️ Unik! Potwór nie trafił." : `💢 Otrzymano ${event.monsterDamage} obrażeń`}
+        <LogLine tone={event.monsterEvaded ? "text-sky-300" : "text-red-300"} icon={event.monsterEvaded ? "evade" : "impact"}>
+          #{roundNo} {event.monsterEvaded ? "Unik! Potwór nie trafił." : `Otrzymano ${event.monsterDamage} obrażeń`}
           <span className="mt-0.5 block text-[11px] font-normal text-parchment-faint">wróg HP {event.monsterHpAfter}</span>
         </LogLine>
       );

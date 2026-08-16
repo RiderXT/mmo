@@ -42,7 +42,7 @@ export function MonsterPickerModal({
               <button
                 key={zm.id}
                 onClick={() => toggle(zm.monster.id)}
-                className={`border px-3 py-2 text-left text-xs transition ${
+                className={`rounded-md border px-3 py-2 text-left text-xs transition ${
                   isSelected ? "border-gold bg-gold/10" : "border-line hover:border-line-soft"
                 }`}
               >
@@ -61,21 +61,21 @@ export function MonsterPickerModal({
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
           <button
             onClick={() => setSelected(allSelected ? new Set() : new Set(zone.monsters.map((zm) => zm.monster.id)))}
-            className=" border border-line-soft px-3 py-1.5 text-xs text-parchment-dim hover:bg-panel-raised"
+            className="rounded-md border border-line-soft px-3 py-1.5 text-xs text-parchment-dim hover:bg-panel-raised"
           >
             {allSelected ? "Odznacz wszystkie" : "Zaznacz wszystkie"}
           </button>
           <div className="flex gap-2">
             <button
               onClick={onCancel}
-              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
+              className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
             >
               Anuluj
             </button>
             <button
               onClick={() => onConfirm(Array.from(selected))}
               disabled={selected.size === 0}
-              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
+              className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
             >
               Rozpocznij walkę
             </button>

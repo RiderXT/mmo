@@ -1457,6 +1457,51 @@ komunikat i nie weszła do zaznaczenia, a sprzedaż jedynego zaznaczonego (sprze
 przedmiotu zwróciła pełny sukces ("Sprzedano za 25 złota", bez "nieudanych") i usunęła go z
 ekwipunku. `pnpm --filter web typecheck` czysto. Dane testowe usunięto po weryfikacji.
 
+## Polish pass po restylingu — całą ścieżkę gracza (post-fixes)
+
+### Kontekst
+
+Po serii poprawek funkcjonalnych zlecono `/impeccable polish` na całej ścieżce gracza (Login →
+Postacie → Postać/Ekspedycje/Kowadło/NPC + AppShell), poprzedzone `/impeccable init`
+(`apps/web/PRODUCT.md`) i `/impeccable document` (`apps/web/DESIGN.md` + sidecar
+`.impeccable/design.json` — wyekstrahowane wprost z tokenów i komponentów tej sesji). Przegląd
+skatalogował konkretny dryf między restylowanymi (Etap "Restyling…") a nieodwiedzonymi jeszcze
+ekranami/komponentami, zamiast zgadywać.
+
+### Znaleziska i poprawki
+
+- **Emoji jako pseudo-ikony w logu walki** — `CombatLog.tsx`/`ActiveSkillCooldownBar.tsx`
+  używały unicode-emoji (⚔️🗡️🛡️💢✨🧪☠️⏱️✅, "✓") tam, gdzie reszta gry (`ItemTypeIcon.tsx`,
+  `MonsterEncounterPanel.tsx`, `LootBar.tsx`) już rysuje własne, spójne ikony SVG (viewBox 24,
+  `strokeWidth 1.4`, zaokrąglone zakończenia). Nowy `components/expedition/CombatIcon.tsx` —
+  9 glifów w tej samej konwencji (dwa z nich dosłownie reużywają ścieżki `weapon`/`consumable`
+  z `ItemTypeIcon`), podłączone w miejsce emoji.
+- **RegisterPage.tsx zostało sprzed restylingu** — ekran bliźniaczy do `LoginPage.tsx` w tym
+  samym flow (logowanie ↔ rejestracja) nadal miał stary wygląd (zwykły `panel`, brak
+  ukośnego tła/Cinzel/gradientowego przycisku) — użytkownik odbijający się między tymi dwoma
+  ekranami trafiał na wizualny zgrzyt. Przepisane 1:1 na wzór `LoginPage.tsx`.
+- **Niedokończone zaokrąglenie przycisków** — dryf udokumentowany już w `DESIGN.md`
+  (`rounded-md` jako standard) domknięty w `CharactersPage.tsx`, `CharacterTab.tsx`,
+  `ExpeditionPanel.tsx`, `AnvilTab.tsx`, `MonsterPickerModal.tsx`, `BattleTacticsModal.tsx`,
+  `StatsPanel.tsx`/`SkillsPanel.tsx`, `UpdateBanner.tsx`, `BuyItemModal.tsx` (ten ostatni —
+  świeży plik z tej sesji, przeoczony przy pierwszym pisaniu).
+- **Przeglądarkowe elementy domyślne bez motywu** — zaznaczenie tekstu, scrollbar i pierścień
+  fokusu renderowały się w kolorach systemowych zamiast palety gry. `index.css`: `::selection`
+  (gold/ink), `::-webkit-scrollbar` + `scrollbar-color` (line-soft na panel, gold na hover),
+  `:focus-visible` na linkach/przyciskach/checkboxach/radio/range (gold-bright, 2px) — celowo
+  **nie** na polach tekstowych, które już mają własny fokus przez zmianę koloru obwódki
+  (`border-gold`), żeby nie dublować efektu. `accent-color: gold` globalnie plus jawne
+  `accent-gold` na checkboxach/range w `BattleTacticsModal.tsx`.
+
+Panele admina świadomie poza zakresem (jak w `DESIGN.md` — szkic i ten polish dotyczą tylko
+ekranów gracza).
+
+Zweryfikowane w przeglądarce na desktopie i mobile (375px): Login/Register (parytet wizualny),
+tworzenie postaci, pełna walka do śmierci z nowymi ikonami logu (bez błędów konsoli, 14 SVG na
+stronie), Kowadło i NPC w testowym mieście, chowany panel boczny na mobile (bez przepełnienia
+poziomego na żadnym sprawdzonym ekranie). `pnpm --filter web typecheck` czysto. Dane testowe
+usunięto po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

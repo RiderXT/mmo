@@ -83,7 +83,7 @@ export function CharactersPage() {
                 key={cls.id}
                 type="button"
                 onClick={() => setClassId(cls.id)}
-                className={` border px-3 py-2 text-left text-sm transition ${
+                className={`rounded-md border px-3 py-2 text-left text-sm transition ${
                   classId === cls.id
                     ? "border-gold bg-gold/10"
                     : "border-line hover:border-line-soft"
@@ -104,7 +104,7 @@ export function CharactersPage() {
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
+          className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
         >
           Utwórz postać
         </button>

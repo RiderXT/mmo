@@ -332,7 +332,7 @@ export function CharacterTab({ character }: { character: Character }) {
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`flex h-6 w-6 items-center justify-center  text-xs font-medium transition ${
+                    className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
                       activeTab === tab
                         ? "bg-gold text-ink"
                         : "bg-panel-raised text-parchment-dim hover:bg-line-soft"

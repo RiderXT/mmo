@@ -170,7 +170,7 @@ export function AnvilTab({ character }: { character: Character }) {
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`flex h-6 w-6 items-center justify-center text-xs font-medium transition ${
+                    className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
                       activeTab === tab ? "bg-gold text-ink" : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
                     } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
                     title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
@@ -272,7 +272,7 @@ export function AnvilTab({ character }: { character: Character }) {
                   <button
                     onClick={() => upgradeMutation.mutate(selected.id)}
                     disabled={upgradeMutation.isPending || !hasAllMaterials}
-                    className="mt-4 bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Ulepsz
                   </button>

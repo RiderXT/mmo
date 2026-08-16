@@ -185,7 +185,7 @@ export function ExpeditionPanel({
   const flaggedCount = flaggedCountQuery.data?.count ?? 0;
   const flaggedBanner =
     flaggedCount > 0 ? (
-      <p className="mb-3 border border-gold/40 bg-gold/5 px-3 py-2 text-sm text-gold-bright">
+      <p className="mb-3 rounded-md border border-gold/40 bg-gold/5 px-3 py-2 text-sm text-gold-bright">
         Masz {flaggedCount} {flaggedCount === 1 ? "ekspedycję oczekującą" : "ekspedycje oczekujące"} na
         sprawdzenie przez administrację — nagroda zostanie przyznana albo odrzucona po jej rozpatrzeniu.
       </p>
@@ -219,7 +219,7 @@ export function ExpeditionPanel({
         )}
         <button
           onClick={() => setClaimResult(null)}
-          className="mt-3  bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
+          className="mt-3 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
         >
           OK
         </button>
@@ -237,7 +237,7 @@ export function ExpeditionPanel({
           <button
             onClick={() => claimMutation.mutate(expedition.id)}
             disabled={claimMutation.isPending}
-            className="mt-3 border border-gold px-4 py-1.5 text-sm font-medium text-gold-bright hover:bg-gold/10 disabled:opacity-50"
+            className="mt-3 rounded-md border border-gold px-4 py-1.5 text-sm font-medium text-gold-bright hover:bg-gold/10 disabled:opacity-50"
           >
             Odbierz nagrody
           </button>
@@ -260,7 +260,7 @@ export function ExpeditionPanel({
                 }
               }}
               disabled={leaveMutation.isPending}
-              className="mt-2  border border-line-soft px-3 py-1.5 text-xs text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
+              className="mt-2 rounded-md border border-line-soft px-3 py-1.5 text-xs text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
             >
               Opuść walkę (odbierz zdobyte)
             </button>
@@ -322,14 +322,14 @@ export function ExpeditionPanel({
           {!isTown && (
             <button
               onClick={() => setPickerOpen(true)}
-              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
+              className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
             >
               Walcz
             </button>
           )}
           <button
             onClick={() => setOtherZonesOpen((v) => !v)}
-            className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
+            className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
           >
             Idź do innej krainy
           </button>
@@ -338,7 +338,7 @@ export function ExpeditionPanel({
               onClick={() => townZone && travelMutation.mutate(townZone.id)}
               disabled={travelMutation.isPending || !townZone}
               title={townZone ? undefined : "Brak skonfigurowanego miasta"}
-              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
             >
               Wróć do miasta
             </button>
@@ -354,7 +354,7 @@ export function ExpeditionPanel({
                   key={zone.id}
                   disabled={!eligible || travelMutation.isPending}
                   onClick={() => travelMutation.mutate(zone.id)}
-                  className={`block w-full border px-3 py-2 text-left text-sm transition border-line hover:border-line-soft ${
+                  className={`block w-full rounded-md border px-3 py-2 text-left text-sm transition border-line hover:border-line-soft ${
                     !eligible ? "cursor-not-allowed opacity-40" : ""
                   }`}
                 >
@@ -443,7 +443,7 @@ export function ExpeditionPanel({
               key={zone.id}
               disabled={!eligible}
               onClick={() => setSelectedZoneId(zone.id)}
-              className={`block w-full  border px-3 py-2 text-left text-sm transition ${
+              className={`block w-full rounded-md border px-3 py-2 text-left text-sm transition ${
                 selectedZoneId === zone.id
                   ? "border-gold bg-gold/10"
                   : "border-line hover:border-line-soft"
@@ -464,7 +464,7 @@ export function ExpeditionPanel({
       <button
         onClick={() => selectedZoneId && travelMutation.mutate(selectedZoneId)}
         disabled={!selectedZoneId || travelMutation.isPending}
-        className="mt-3  bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
+        className="mt-3 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
       >
         Wyrusz do krainy
       </button>
