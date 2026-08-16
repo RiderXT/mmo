@@ -43,8 +43,8 @@ export async function assertCharacterOwnership(characterId: string, userId: stri
   return character;
 }
 
-/** Gathers the character's full combat build (base stats, equipped item stats, passive/active skills, active-slot potions) — shared by the expedition simulation and the standalone combat-stats readout. */
-async function gatherCombatBuild(characterId: string) {
+/** Gathers the character's full combat build (base stats, equipped item stats, passive/active skills, active-slot potions) — shared by the expedition simulation, the standalone combat-stats readout, and the public profile page (modules/profile). */
+export async function gatherCombatBuild(characterId: string) {
   const [character, equipped, characterSkills, activePotionItems] = await Promise.all([
     prisma.character.findUniqueOrThrow({ where: { id: characterId } }),
     prisma.inventoryItem.findMany({
@@ -504,6 +504,7 @@ export async function applyExpeditionReward(
         gold: character.gold + result.goldGained,
         unspentStatPoints: character.unspentStatPoints + levelsGained * 4,
         unspentSkillPoints: character.unspentSkillPoints + levelsGained * 1,
+        monstersKilled: { increment: result.monstersDefeated },
         // currentZoneId intentionally left untouched (Etap 9) — the character stays in the
         // zone after combat ends/is left early, until they explicitly travel elsewhere.
         activeExpeditionId: null,

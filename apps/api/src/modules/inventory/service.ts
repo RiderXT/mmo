@@ -406,6 +406,7 @@ export async function openChest(
     for (const a of awarded) {
       await addLootToInventory(tx, input.characterId, a.itemId, a.quantity);
     }
+    await tx.character.update({ where: { id: input.characterId }, data: { chestsOpened: { increment: 1 } } });
   });
 
   await logAction({

@@ -23,6 +23,9 @@ import { publicItemsRoutes } from "./modules/items/routes.js";
 import { settingsRoutes, adminSettingsRoutes } from "./modules/settings/routes.js";
 import { expeditionsRoutes } from "./modules/expeditions/routes.js";
 import { travelRoutes } from "./modules/travel/routes.js";
+import { profileRoutes } from "./modules/profile/routes.js";
+import { friendsRoutes } from "./modules/friends/routes.js";
+import { rankingRoutes } from "./modules/ranking/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -67,6 +70,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(adminSettingsRoutes, { prefix: "/api/admin/settings" });
   await app.register(expeditionsRoutes, { prefix: "/api/expeditions" });
   await app.register(travelRoutes, { prefix: "/api/travel" });
+  await app.register(profileRoutes, { prefix: "/api/profile" });
+  await app.register(friendsRoutes, { prefix: "/api/friends" });
+  await app.register(rankingRoutes, { prefix: "/api/ranking" });
 
   return app;
 }

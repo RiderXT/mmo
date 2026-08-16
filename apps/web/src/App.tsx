@@ -4,6 +4,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { CharactersPage } from "./pages/CharactersPage";
 import { GamePage } from "./pages/GamePage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { FriendsPage } from "./pages/FriendsPage";
+import { RankingPage } from "./pages/RankingPage";
 import { AdminLogsPage } from "./pages/AdminLogsPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -35,6 +38,30 @@ export function App() {
         element={
           <ProtectedRoute>
             <GamePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile/:characterId"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/friends"
+        element={
+          <ProtectedRoute>
+            <FriendsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ranking"
+        element={
+          <ProtectedRoute>
+            <RankingPage />
           </ProtectedRoute>
         }
       />

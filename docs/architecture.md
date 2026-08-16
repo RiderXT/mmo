@@ -1650,6 +1650,68 @@ udane ulepszenie poprawnie potrąciło złoto i podniosło poziom; wymuszona (na
 `successChance=0`) próba na kolejnym poziomie potrąciła złoto, **usunęła przedmiot z ekwipunku**,
 i poprawnie pokazała komunikat porażki. `pnpm -r typecheck` czysto (shared/api/web).
 
+## Publiczny profil postaci + Znajomi + Ranking
+
+### Kontekst
+
+Użytkownik przesłał zrzut profilu postaci z innej gry (styl "Ninjago") jako inspirację i poprosił
+o: (1) publiczny profil każdej postaci, (2) Znajomych z zapraszaniem innych kont, (3) Ranking
+wszystkich postaci z podziałem na klasy. Zbadałem model danych i część mechanik ze zrzutu **nie
+istnieje w tej grze** — nie zostały dodane, żeby nie rozszerzać zakresu poza prośbę: atak
+magiczny/obrona magiczna/szybkość zaklęcia (wszystkie klasy dzielą jeden `attack`), bonusy
+"silny przeciwko [typ]" (Monster nie ma rasy/typu), "zabite rare"/"zabite bossy"/"zniszczone
+metiny" (Monster nie ma flagi rzadkości/bossa, "metin" to pojęcie z Metin2 którego tu nie ma).
+Profil pokazuje więc 8 realnie liczonych statystyk pochodnych, "X / 7 slotów założonych" (prawdziwa
+liczba slotów, nie 9 ze zrzutu), i liczniki ograniczone do zabitych potworów i otwartych skrzyń.
+
+### Zmiany
+
+- **Prisma (addytywnie)** — `User.lastSeenAt DateTime?`; `Character.monstersKilled`/
+  `chestsOpened Int @default(0)`; nowy `FriendRequest` (self-relacja na `User`, dwie nazwane
+  relacje `FriendRequestsSent`/`FriendRequestsReceived` — wzorem `Character.currentZone`/
+  `travelDestinationZone`), `status: pending|accepted|declined` — "znajomy" to wiersz
+  `accepted`, sprawdzany z dowolnej strony.
+- **Obecność online** (`lib/authGuard.ts`'s `requireAuth`) — fire-and-forget (bez `await`, błędy
+  ignorowane) `prisma.user.update({ lastSeenAt: new Date() })` przy każdym uwierzytelnionym
+  żądaniu. Nowy `lib/presence.ts`'s `isOnline(lastSeenAt)` — online = świeże w ciągu 5 minut,
+  reużywane przez profile/friends/ranking.
+- **Liczniki życiowe** — `monstersKilled` inkrementowany o `result.monstersDefeated` w
+  `expeditions/service.ts`'s `applyExpeditionReward` (wspólny punkt dla claim i leave_early);
+  `chestsOpened` inkrementowany w `inventory/service.ts`'s `openChest`.
+- **Nowy moduł `modules/profile`** — `GET /api/profile/:characterId`, dostępny dla każdego
+  zalogowanego (nie tylko właściciela, w przeciwieństwie do `getCharacter`) — Ranking/Znajomi
+  muszą linkować do cudzych profili. `gatherCombatBuild` w `expeditions/service.ts` zmienione z
+  prywatnej na eksportowaną funkcję i reużyte bezpośrednio (z `computeDerivedStats`) zamiast
+  duplikować logikę budowania staty. Bonusy z ekwipunku liczone przez zsumowanie
+  `equipmentStats: StatBlock[]` per klucz statystyki.
+- **Nowy moduł `modules/friends`** — `POST /request` (rozwiązanie nazwy postaci → właściciel;
+  jeśli druga strona już zaprosiła nas, automatyczna akceptacja zamiast duplikatu),
+  `POST /:id/accept|decline`, `DELETE /requests/:id` (anuluj wysłane), `DELETE /:userId` (usuń
+  znajomego), `GET /` (znajomi + przychodzące + wychodzące, każdy z reprezentatywną postacią —
+  najwyższy poziom danego konta). `packages/shared`'s `SendFriendRequestSchema`.
+- **Nowy moduł `modules/ranking`** — `GET /api/ranking?classId=`, dostępny dla każdego gracza
+  (nie tylko admina, w przeciwieństwie do `admin/characters`), bez pól prywatnych (bez
+  email/gold), sortowany po poziomie/exp.
+- **Frontend** — `lib/{profileApi,friendsApi,rankingApi}.ts` (wzorem `npcShopApi.ts`);
+  `pages/{ProfilePage,FriendsPage,RankingPage}.tsx`, każda owinięta w `AppShell`, poza systemem
+  zakładek `GamePage` (profil musi być oglądalny dla cudzej postaci); nowe trasy `/profile/
+  :characterId`, `/friends`, `/ranking` w `App.tsx`. `AppShell.tsx` — "Znajomi"/"Ranking" w
+  sekcji "Nawigacja" (poziom konta, zawsze widoczne), "Profil" w sekcji "Postać" (link do
+  własnego profilu, `/profile/${characterId}`, zwykły `NavLink` a nie `TabNavLink` — bo to inna
+  ścieżka, nie `?tab=`). Dwie nowe ikony nawigacji (`znajomi.png`, `PVP.png` → `ranking.png`)
+  przeskalowane tą samą metodą co poprzednie (`sharp-cli` do 96×96px). Żadne nowe tło bordowe —
+  wszystko w istniejącym ciemnym motywie `panel`/`ink`.
+
+Zweryfikowane: w przeglądarce — nowa postać widzi poprawny status Online, "0 / 7 slotów
+założonych", statystyki pochodne zgodne z tabelą rozbicia w zakładce Postać, sidebar pokazuje
+Znajomi/Ranking/Profil. Pełny cykl znajomych zweryfikowany przez curl na dwóch niezależnych
+kontach (przeglądarkowe zakładki współdzielą ten sam localStorage/sesję, więc do testu
+dwukontowego trzeba dwóch niezależnych tokenów): wysłanie zaproszenia, widoczność po obu stronach
+(incoming/outgoing), akceptacja, obecność na liście znajomych obu kont z poprawnym `online`,
+usunięcie znajomego. Ranking i profil zweryfikowane przez curl dla różnych kont (profil cudzej
+postaci wczytuje się bez błędu własności). `pnpm -r typecheck` czysto. Dane testowe (4 konta, 4
+postacie) usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

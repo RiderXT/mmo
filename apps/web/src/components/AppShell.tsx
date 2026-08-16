@@ -182,6 +182,14 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
           label="Ekspedycje"
           onNavigate={onNavigate}
         />
+        <NavLink to={`/profile/${characterId}`} className={navLinkClass} onClick={onNavigate}>
+          {({ isActive }) => (
+            <>
+              <NavIconImg src="/icons/nav/postac.png" alt="" active={isActive} />
+              Profil
+            </>
+          )}
+        </NavLink>
       </div>
 
       <SectionTitle>Miasto</SectionTitle>
@@ -251,6 +259,22 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <>
                 <NavIconImg src="/icons/nav/postacie.png" alt="" active={isActive} />
                 Postacie
+              </>
+            )}
+          </NavLink>
+          <NavLink to="/friends" className={navLinkClass} onClick={onNavigate}>
+            {({ isActive }) => (
+              <>
+                <NavIconImg src="/icons/nav/znajomi.png" alt="" active={isActive} />
+                Znajomi
+              </>
+            )}
+          </NavLink>
+          <NavLink to="/ranking" className={navLinkClass} onClick={onNavigate}>
+            {({ isActive }) => (
+              <>
+                <NavIconImg src="/icons/nav/ranking.png" alt="" active={isActive} />
+                Ranking
               </>
             )}
           </NavLink>
