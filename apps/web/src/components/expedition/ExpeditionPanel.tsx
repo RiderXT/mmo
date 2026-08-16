@@ -20,7 +20,6 @@ import { CombatLog } from "./CombatLog";
 import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
 import { BattleTacticsModal } from "./BattleTacticsModal";
-import { NpcShopPanel } from "./NpcShopPanel";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
 import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
 import { LootBar } from "./LootBar";
@@ -364,10 +363,14 @@ export function ExpeditionPanel({
 
     if (isTown && currentZone) {
       return (
-        <div>
+        <div className="panel p-4">
           {flaggedBanner}
-          <NpcShopPanel characterId={characterId} zone={currentZone} gold={character.gold} itemFor={itemFor} />
-          <div className="panel mt-3 p-4">{travelControls}</div>
+          <h2 className="font-medium text-parchment">{currentZone.name}</h2>
+          <p className="mt-1 text-xs text-parchment-faint">
+            To miasto — zakupy u NPC znajdziesz w zakładce NPC w menu.
+          </p>
+
+          {travelControls}
         </div>
       );
     }

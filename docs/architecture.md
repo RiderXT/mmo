@@ -1361,6 +1361,61 @@ gracza (rundy z zadanymi obrażeniami, HP) i przeciwnika (starcie, rundy z otrzy
 HP wroga), odbiór nagród po śmierci zadziałał. `pnpm --filter web typecheck` czysto. Dane testowe
 (krainę, NPC, postać) usunięto po weryfikacji.
 
+## Osobna zakładka NPC (handel) + popup zakupu + masowa sprzedaż (post-restyling)
+
+### Kontekst
+
+Handlarz NPC był wciśnięty w zakładkę Ekspedycje, wyświetlał się nad kontrolkami podróży gdy
+postać stała w mieście, a klik "Kup" kupował natychmiast 1 sztukę. Użytkownik poprosił o osobną
+zakładkę **NPC** w lewym menu (aktywną tylko w mieście, wzorem gatingu "Kowadło"), z układem
+dwukolumnowym — własny ekwipunek po lewej, towar NPC po prawej — i popupem zakupu: dla
+przedmiotów stackowalnych wybór ilości, dla niestackowalnych proste potwierdzenie. Dodatkowo
+(doprecyzowane w rozmowie) lewy panel ma zachować istniejące prawy-klik "Sprzedaj"
+(`ItemContextMenu`) oraz dostać nową możliwość zaznaczenia kilku przedmiotów i sprzedania ich
+naraz.
+
+Backend już w pełni wspierał to, czego było trzeba — `buyFromNpc`
+(`apps/api/src/modules/npcShop/service.ts`) przyjmował `quantity` od początku i poprawnie
+rozgałęział się w `addLootToInventory` (`apps/api/src/modules/inventory/service.ts`) na
+stackowalne (dopełnianie stosów) i niestackowalne (osobny wiersz + przetoczone staty na sztukę);
+`sellItem` już obsługiwał pojedynczą sprzedaż. **Zero zmian backendu/schematu.**
+
+### Zmiany
+
+- `AppShell.tsx` — nowy wpis "NPC" w `CharacterNavLinks`, gated na `inTown` dokładnie tym samym
+  wzorcem co "Kowadło" (real `NavLink` w mieście, wyszarzony `title="Dostępne tylko w mieście"`
+  poza nim).
+- `GamePage.tsx` — `TabKey` rozszerzony o `"npc"`, nowa gałąź renderująca `NpcTab`.
+- Nowy `pages/game/NpcTab.tsx` — blokada "tylko w mieście" na poziomie strony (wzorem
+  `AnvilTab.tsx`). W mieście: `DndContext` (bez realnej logiki przeciągania, wymagany tylko przez
+  `GridSlot`/`ItemBox`) + `grid lg:grid-cols-2`. Lewa kolumna — siatka ekwipunku 1:1 z
+  `CharacterTab.tsx` (4 zakładki, `ItemContextMenu` do Otwórz/Sprzedaj/Usuń bez zmian) plus nowy
+  toggle "Zaznacz do sprzedaży": włączony zamienia klik na przełącznik zaznaczenia
+  (`Set<string>`, wizualizowany reużytym propem `ItemBox`'s `selected`), pasek akcji liczy sumę
+  `sellPrice × quantity` zaznaczonych i sprzedaje sekwencyjną pętlą `sellItem` per przedmiot
+  (błędy pojedynczych pozycji — np. `sellPrice === 0` — zliczane osobno, reszta się sprzedaje).
+  Prawa kolumna — siatka kart towaru NPC (przeniesiona z usuniętego `NpcShopPanel.tsx`,
+  przełącznik pigułkowy między NPC gdy jest ich więcej niż jeden w mieście), klik na kartę
+  otwiera popup zamiast kupować od razu.
+- Nowy `components/expedition/BuyItemModal.tsx` — wzorem `MonsterPickerModal.tsx` (`fixed inset-0`
+  + backdrop + `panel`). Dla `stackable: true` — stepper ilości ograniczony do
+  `[1, stock ?? 999]` z przeliczaną sumą; dla `false` — sam tekst potwierdzenia. `onConfirm`
+  woła `buyFromNpc(characterId, npcShopItemId, quantity)` (istniejące API, `quantity` już
+  obsługiwane end-to-end).
+- `components/expedition/NpcShopPanel.tsx` — usunięty (przeniesiony do `NpcTab.tsx`).
+- `ExpeditionPanel.tsx` — gałąź `isTown` już nie renderuje handlarza, tylko krótki panel z nazwą
+  miasta + odnośnik do zakładki NPC + `travelControls` (bez zmian w logice podróży).
+
+Zweryfikowane w przeglądarce (testowa kraina-miasto z dwoma NPC — jeden ze stackowalnym towarem
+`consumable`, jeden z niestackowalnym `weapon`): zakup stackowalnego ×4 poprawnie przeliczał sumę
+w popupie i pomniejszył złoto/stan magazynowy o właściwą wielokrotność; zakup niestackowalnego
+pokazał sam tekst potwierdzenia i dodał dokładnie 1 sztukę; tryb "Zaznacz do sprzedaży" zaznaczył
+2 przedmioty (stackowalny + niesprzedawalny), poprawnie policzył sumę, sprzedaż zwróciła "Sprzedano
+za 50 złota (1 nieudanych)" — dokładnie oczekiwany częściowy sukces; zakładka Ekspedycje w mieście
+już nie pokazuje handlarza; poza miastem sidebar pokazuje "NPC" wyszarzone, a bezpośredni URL
+zakładki pokazuje blokadę. `pnpm --filter web typecheck` czysto. Dane testowe usunięto po
+weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

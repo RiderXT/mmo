@@ -138,6 +138,24 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
             Kowadło
           </div>
         )}
+        {inTown ? (
+          <NavLink to={`/game/${characterId}?tab=npc`} className={navLinkClass} onClick={onNavigate}>
+            {({ isActive }) => (
+              <>
+                <NavIcon color="oklch(68% 0.09 145)" active={isActive} />
+                NPC
+              </>
+            )}
+          </NavLink>
+        ) : (
+          <div
+            title="Dostępne tylko w mieście"
+            className="flex cursor-not-allowed items-center gap-2.5 px-3 py-2 text-sm text-parchment-faint/50"
+          >
+            <NavIcon color="oklch(40% 0.02 50)" active={false} />
+            NPC
+          </div>
+        )}
       </div>
     </>
   );

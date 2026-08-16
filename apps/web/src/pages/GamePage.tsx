@@ -5,8 +5,9 @@ import { getCharacter } from "../lib/charactersApi";
 import { CharacterTab } from "./game/CharacterTab";
 import { ExpeditionsTab } from "./game/ExpeditionsTab";
 import { AnvilTab } from "./game/AnvilTab";
+import { NpcTab } from "./game/NpcTab";
 
-type TabKey = "character" | "expeditions" | "anvil";
+type TabKey = "character" | "expeditions" | "anvil" | "npc";
 
 export function GamePage() {
   const { characterId } = useParams<{ characterId: string }>();
@@ -50,6 +51,7 @@ export function GamePage() {
             />
           )}
           {activeTab === "anvil" && <AnvilTab character={character} />}
+          {activeTab === "npc" && <NpcTab character={character} />}
         </div>
       )}
     </AppShell>
