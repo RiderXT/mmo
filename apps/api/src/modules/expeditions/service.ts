@@ -35,7 +35,7 @@ export function computeLevel(totalExp: number): number {
 
 const ACTIVE_SKILL_MANA_COST = (level: number) => 10 + 5 * level;
 
-async function assertCharacterOwnership(characterId: string, userId: string) {
+export async function assertCharacterOwnership(characterId: string, userId: string) {
   const character = await prisma.character.findUnique({ where: { id: characterId } });
   if (!character || character.userId !== userId) {
     throw new ExpeditionError("Nie znaleziono postaci", 404);
@@ -339,19 +339,20 @@ export async function startExpedition(
   };
 }
 
-/** Character.activeExpeditionId should always point at an "in_progress" (or, while under
- * anti-cheat review, "flagged") expedition — but a few older code paths predate the "flagged"
- * status and a couple of admin tools have historically only cleared it in some branches, so a
- * stale pointer to an already-claimed/discarded expedition can theoretically linger and wrongly
- * block travel/new expeditions forever ("Postać walczy") while every UI that reads the
- * expedition itself (which correctly stops matching) shows the character as idle. Self-heals by
- * clearing the pointer whenever it doesn't resolve to a still-open expedition. */
+/** Character.activeExpeditionId should always point at an "in_progress" expedition — a flagged
+ * expedition frees the slot immediately (see flagSuspiciousExpedition) rather than holding it
+ * until an admin reacts, so a reward under anti-cheat review never stops the character from
+ * playing on. This is a defensive backstop for any other, unforeseen way the pointer could go
+ * stale (already-claimed/discarded expedition it wasn't cleared for) — without it, the character
+ * would wrongly block travel/new expeditions forever ("Postać walczy") while every UI that reads
+ * the expedition itself (which correctly stops matching) shows the character as idle. Self-heals
+ * by clearing the pointer whenever it doesn't resolve to a still-open expedition. */
 export async function clearStaleActiveExpeditionPointer(characterId: string): Promise<void> {
   const character = await prisma.character.findUnique({ where: { id: characterId } });
   if (!character?.activeExpeditionId) return;
 
   const expedition = await prisma.expedition.findUnique({ where: { id: character.activeExpeditionId } });
-  if (expedition && (expedition.status === "in_progress" || expedition.status === "flagged")) return;
+  if (expedition && expedition.status === "in_progress") return;
 
   await prisma.character.updateMany({
     where: { id: characterId, activeExpeditionId: character.activeExpeditionId },
@@ -359,12 +360,18 @@ export async function clearStaleActiveExpeditionPointer(characterId: string): Pr
   });
 }
 
+/** Flagged expeditions awaiting admin review for a character — surfaced as a non-blocking notice
+ * (the character can otherwise play normally, see flagSuspiciousExpedition). */
+export async function listFlaggedExpeditionsForCharacter(characterId: string) {
+  return prisma.expedition.findMany({ where: { characterId, status: "flagged" } });
+}
+
 export async function getActiveExpedition(characterId: string, userId: string) {
   await assertCharacterOwnership(characterId, userId);
   await clearStaleActiveExpeditionPointer(characterId);
 
   const expedition = await prisma.expedition.findFirst({
-    where: { characterId, status: { in: ["in_progress", "flagged"] } },
+    where: { characterId, status: "in_progress" },
   });
   if (!expedition) return null;
 
@@ -436,7 +443,12 @@ function checkRewardPlausibility(
 
 /** Flips the expedition to "flagged" (instead of "claimed") so neither claim nor leave can be
  * retried, and records why — an admin resolves it via modules/admin/expeditions (grant anyway or
- * discard). Uses the same atomic updateMany guard as the claim/leave idempotency check. */
+ * discard). Uses the same atomic updateMany guard as the claim/leave idempotency check.
+ *
+ * Immediately frees the character's expedition slot too — a flagged reward is withheld, but the
+ * character isn't: they keep playing normally (travel, new expeditions) while the flagged
+ * expedition sits queued for admin review in the background, resolved whenever an admin gets to
+ * it (see docs/architecture.md). */
 async function flagSuspiciousExpedition(
   expeditionId: string,
   characterId: string,
@@ -450,6 +462,12 @@ async function flagSuspiciousExpedition(
     data: { status: "flagged" },
   });
   if (flagged.count !== 1) return; // already resolved/flagged by a concurrent request
+
+  await prisma.character.updateMany({
+    where: { id: characterId, activeExpeditionId: expeditionId },
+    data: { activeExpeditionId: null },
+  });
+
   await logAction({
     module: "expeditions",
     level: "error",

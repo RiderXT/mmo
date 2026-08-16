@@ -12,6 +12,7 @@ import {
   listClasses,
   revertExpedition,
   resolveFlaggedExpedition,
+  listFlaggedExpeditions,
   type RevertExpeditionResult,
 } from "../../lib/adminApi";
 
@@ -24,6 +25,7 @@ export function GrantAdminPage() {
   const charactersQuery = useQuery({ queryKey: ["admin-characters"], queryFn: listAllCharacters });
   const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
   const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const flaggedQuery = useQuery({ queryKey: ["flagged-expeditions"], queryFn: listFlaggedExpeditions });
 
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export function GrantAdminPage() {
     mutationFn: ({ id, grant }: { id: string; grant: boolean }) => resolveFlaggedExpedition(id, grant),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["admin-characters"] });
+      queryClient.invalidateQueries({ queryKey: ["flagged-expeditions"] });
       setResolveError(null);
       setResolveResult(res.granted ? "Przyznano nagrodę mimo blokady." : "Odrzucono — nagroda nie została przyznana, slot ekspedycji zwolniony.");
     },
@@ -334,37 +337,99 @@ export function GrantAdminPage() {
         <h2 className="font-medium text-parchment">Zablokowane ekspedycje (kod SUSPICIOUS_LEVEL_JUMP)</h2>
         <p className="mt-1 text-sm text-parchment-dim">
           Gdy jedna ekspedycja przyznałaby więcej niż 10 poziomów naraz, system automatycznie
-          wstrzymuje wypłatę zamiast ją przyznać — ekspedycja dostaje status "flagged" i wpis w
-          Logach (moduł "expeditions", akcja "reward_blocked"). Tutaj admin decyduje: przyznać mimo
-          blokady (jeśli to jednak uzasadnione), albo odrzucić bez nagrody i zwolnić slot ekspedycji
-          postaci.
+          wstrzymuje wypłatę zamiast ją przyznać — ekspedycja dostaje status "flagged". Postać nie
+          jest przez to blokowana (gra dalej normalnie), tylko ta jedna nagroda czeka tutaj na
+          decyzję: przyznać mimo blokady (jeśli to jednak uzasadnione), albo odrzucić bez nagrody.
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            className={`${inputClass} w-72`}
-            placeholder="ID zablokowanej ekspedycji"
-            value={resolveId}
-            onChange={(e) => setResolveId(e.target.value)}
-          />
-          <button
-            onClick={() => resolveId.trim() && resolveMutation.mutate({ id: resolveId.trim(), grant: true })}
-            disabled={resolveMutation.isPending || !resolveId.trim()}
-            className=" border border-gold px-3 py-1.5 text-sm font-medium text-gold-bright hover:bg-gold/10 disabled:opacity-50"
-          >
-            Przyznaj mimo to
-          </button>
-          <button
-            onClick={() =>
-              resolveId.trim() &&
-              confirm("Odrzucić nagrodę z tej ekspedycji bez przyznawania?") &&
-              resolveMutation.mutate({ id: resolveId.trim(), grant: false })
-            }
-            disabled={resolveMutation.isPending || !resolveId.trim()}
-            className=" border border-line-soft px-3 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
-          >
-            Odrzuć (bez nagrody)
-          </button>
+
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="bg-panel text-parchment-dim">
+              <tr>
+                <th className="px-3 py-2">Postać</th>
+                <th className="px-3 py-2">Kraina</th>
+                <th className="px-3 py-2">Kiedy</th>
+                <th className="px-3 py-2">Nagroda (wstrzymana)</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line bg-ink">
+              {flaggedQuery.data?.map((exp) => (
+                <tr key={exp.id}>
+                  <td className="px-3 py-2 text-parchment">{exp.characterName}</td>
+                  <td className="px-3 py-2 text-parchment-dim">{exp.zoneName}</td>
+                  <td className="px-3 py-2 text-parchment-dim">{new Date(exp.startedAt).toLocaleString("pl-PL")}</td>
+                  <td className="px-3 py-2 text-parchment-dim">
+                    +{exp.result.expGained} exp · +{exp.result.goldGained} złota ·{" "}
+                    {exp.result.loot.length === 0
+                      ? "brak przedmiotów"
+                      : exp.result.loot
+                          .map((l) => `${itemsQuery.data?.find((i) => i.id === l.itemId)?.name ?? l.itemId} ×${l.quantity}`)
+                          .join(", ")}
+                  </td>
+                  <td className="space-x-2 px-3 py-2 text-right">
+                    <button
+                      onClick={() => resolveMutation.mutate({ id: exp.id, grant: true })}
+                      disabled={resolveMutation.isPending}
+                      className="border border-gold px-3 py-1 text-xs font-medium text-gold-bright hover:bg-gold/10 disabled:opacity-50"
+                    >
+                      Przyznaj mimo to
+                    </button>
+                    <button
+                      onClick={() =>
+                        confirm("Odrzucić nagrodę z tej ekspedycji bez przyznawania?") &&
+                        resolveMutation.mutate({ id: exp.id, grant: false })
+                      }
+                      disabled={resolveMutation.isPending}
+                      className="border border-line-soft px-3 py-1 text-xs text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
+                    >
+                      Odrzuć
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {flaggedQuery.data?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center text-parchment-faint">
+                    Brak zablokowanych ekspedycji.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
+
+        <details className="mt-4">
+          <summary className="cursor-pointer text-xs text-parchment-faint">
+            Rozwiąż ręcznie po ID (np. gdy masz ID z innego źródła)
+          </summary>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              className={`${inputClass} w-72`}
+              placeholder="ID zablokowanej ekspedycji"
+              value={resolveId}
+              onChange={(e) => setResolveId(e.target.value)}
+            />
+            <button
+              onClick={() => resolveId.trim() && resolveMutation.mutate({ id: resolveId.trim(), grant: true })}
+              disabled={resolveMutation.isPending || !resolveId.trim()}
+              className=" border border-gold px-3 py-1.5 text-sm font-medium text-gold-bright hover:bg-gold/10 disabled:opacity-50"
+            >
+              Przyznaj mimo to
+            </button>
+            <button
+              onClick={() =>
+                resolveId.trim() &&
+                confirm("Odrzucić nagrodę z tej ekspedycji bez przyznawania?") &&
+                resolveMutation.mutate({ id: resolveId.trim(), grant: false })
+              }
+              disabled={resolveMutation.isPending || !resolveId.trim()}
+              className=" border border-line-soft px-3 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
+            >
+              Odrzuć (bez nagrody)
+            </button>
+          </div>
+        </details>
         {resolveError && <p className="mt-2 text-sm text-red-400">{resolveError}</p>}
         {resolveResult && <p className="mt-2 text-sm text-rarity-uncommon">{resolveResult}</p>}
       </div>

@@ -3,6 +3,27 @@ import { logAction } from "../../../lib/gameLog.js";
 import { computeLevel, applyExpeditionReward } from "../../expeditions/service.js";
 import type { ExpeditionResult } from "@mmo/shared";
 
+/** Expeditions currently withheld by the automatic plausibility check (checkRewardPlausibility
+ * in expeditions/service.ts), awaiting an admin's "grant anyway"/"discard" decision via
+ * resolveFlaggedExpedition. Includes the character's name and the precomputed (potential) result
+ * so the admin can judge each one without leaving this list to dig through Logs. */
+export async function listFlaggedExpeditions() {
+  const flagged = await prisma.expedition.findMany({
+    where: { status: "flagged" },
+    include: { character: { select: { id: true, name: true } }, zone: { select: { id: true, name: true } } },
+    orderBy: { startedAt: "desc" },
+  });
+  return flagged.map((e) => ({
+    id: e.id,
+    characterId: e.characterId,
+    characterName: e.character.name,
+    zoneId: e.zoneId,
+    zoneName: e.zone.name,
+    startedAt: e.startedAt.toISOString(),
+    result: JSON.parse(e.result!) as ExpeditionResult,
+  }));
+}
+
 export class AdminExpeditionError extends Error {
   constructor(
     message: string,

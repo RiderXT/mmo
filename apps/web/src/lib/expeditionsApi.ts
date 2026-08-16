@@ -52,3 +52,6 @@ export const leaveExpedition = (expeditionId: string) =>
 
 export const getExpeditionDuration = () =>
   apiFetch<{ minutes: number }>("/api/settings/expedition-duration");
+
+export const getFlaggedCount = (characterId: string) =>
+  apiFetch<{ count: number }>(`/api/expeditions/${characterId}/flagged-count`);

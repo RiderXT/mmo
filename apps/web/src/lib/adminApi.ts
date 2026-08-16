@@ -181,6 +181,17 @@ export const resolveFlaggedExpedition = (expeditionId: string, grant: boolean) =
     { method: "POST", body: JSON.stringify({ grant }) },
   );
 
+export interface FlaggedExpeditionDto {
+  id: string;
+  characterId: string;
+  characterName: string;
+  zoneId: string;
+  zoneName: string;
+  startedAt: string;
+  result: { expGained: number; goldGained: number; monstersDefeated: number; loot: { itemId: string; quantity: number }[] };
+}
+export const listFlaggedExpeditions = () => apiFetch<FlaggedExpeditionDto[]>("/api/admin/expeditions");
+
 // Balance stats
 export interface BalanceMonsterStat {
   monsterName: string;

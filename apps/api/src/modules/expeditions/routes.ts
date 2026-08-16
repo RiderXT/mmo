@@ -6,6 +6,8 @@ import {
   getActiveExpedition,
   claimExpedition,
   leaveExpedition,
+  listFlaggedExpeditionsForCharacter,
+  assertCharacterOwnership,
   ExpeditionError,
 } from "./service.js";
 
@@ -26,6 +28,18 @@ export async function expeditionsRoutes(app: FastifyInstance): Promise<void> {
     try {
       const expedition = await getActiveExpedition(characterId, request.user!.sub);
       return reply.send(expedition);
+    } catch (err) {
+      if (err instanceof ExpeditionError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.get("/:characterId/flagged-count", { preHandler: requireAuth }, async (request, reply) => {
+    const { characterId } = request.params as { characterId: string };
+    try {
+      await assertCharacterOwnership(characterId, request.user!.sub);
+      const flagged = await listFlaggedExpeditionsForCharacter(characterId);
+      return reply.send({ count: flagged.length });
     } catch (err) {
       if (err instanceof ExpeditionError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;

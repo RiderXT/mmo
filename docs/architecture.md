@@ -1187,6 +1187,53 @@ popup taktyki → suwak progu + odznaczenie umiejętności → walka w toku poka
 cały czas na "✓" (nigdy nie użyta) i log walki bez ani jednego wpisu tej umiejętności — zgodnie z
 wyłączeniem.
 
+## Flagged ekspedycja nie blokuje postaci + lista w panelu admina (Etap A post-24)
+
+### Kontekst
+
+Użytkownik zgłosił błąd na żywo: postać stojąca w krainie (UI w stanie bezczynnym) dostawała
+"Postać walczy — najpierw zakończ lub opuść ekspedycję" przy próbie podróży. Przyczyna:
+`character.activeExpeditionId` wskazywał na starą ekspedycję **wstrzymaną (`status: "flagged"`)**
+przez anti-cheat (Etap 13), a `flagSuspiciousExpedition` nigdy nie czyściło tego wskaźnika — slot
+ekspedycji postaci zostawał zajęty na zawsze, dopóki admin ręcznie nie rozwiązał **tej jednej**
+ekspedycji. Po doprecyzowaniu przez użytkownika: flagowanie **nie może** zatrzymywać postaci —
+gracz gra dalej normalnie, tylko ta jedna nagroda czeka na decyzję administracji.
+
+### Backend
+
+`expeditions/service.ts`:
+- `flagSuspiciousExpedition` — po ustawieniu `status:"flagged"` **od razu** czyści
+  `character.activeExpeditionId` atomowym `updateMany` (guard: tylko jeśli nadal wskazuje na tę
+  właśnie ekspedycję). Postać jest wolna natychmiast, nie dopiero gdy admin zareaguje.
+- `clearStaleActiveExpeditionPointer` (dodane wcześniej jako pierwsza warstwa naprawy) — zostaje
+  jako ogólny mechanizm zabezpieczający na wypadek innych, nieprzewidzianych rozjazdów wskaźnika;
+  traktuje teraz tylko `"in_progress"` jako ważny powód trzymania wskaźnika (flagged już nie).
+- `getActiveExpedition` — wraca do zapytania tylko o `status:"in_progress"` (flagged nie zajmuje
+  już slotu, więc przestaje być "aktywną ekspedycją" blokującą UI).
+- Nowa `listFlaggedExpeditionsForCharacter` + `GET /api/expeditions/:characterId/flagged-count` —
+  lekki, nieblokujący licznik dla gracza.
+- `admin/expeditions/service.ts`'s nowa `listFlaggedExpeditions()` + `GET /api/admin/expeditions`
+  — pełna lista wstrzymanych ekspedycji z nazwą postaci/krainy i podglądem nagrody, zamiast
+  wymagania ręcznego wklejenia ID znalezionego w Logach.
+
+### Frontend
+
+`ExpeditionPanel.tsx` — usunięty branch pełnoekranowo blokujący UI dla `status==="flagged"`
+(skoro taka ekspedycja już nie zajmuje slotu, `getActiveExpedition` zwraca `null` jak dla
+zwykłej bezczynnej postaci). Zamiast tego osobne zapytanie o `flagged-count` renderuje mały,
+**nieblokujący** baner nad normalnym UI (widoczny we wszystkich stanach panelu — bezczynność,
+podróż, miasto, walka), informujący, że nagroda czeka na sprawdzenie.
+
+`GrantAdminPage.tsx`'s sekcja "Zablokowane ekspedycje" — tabela (postać, kraina, kiedy, podgląd
+nagrody exp/gold/loot, przyciski "Przyznaj mimo to"/"Odrzuć" per wiersz) zamiast wymagania
+ręcznego ID; pole ręcznego ID zostaje jako zwinięty (`<details>`) fallback.
+
+Zweryfikowane: curl — sztucznie oflagowana ekspedycja: `GET .../flagged-count` → `{count:1}`,
+`GET .../active` → `null` (nie blokuje), `POST /api/travel/start` **przechodzi natychmiast**
+(wcześniej 409 "Postać walczy"); `GET /api/admin/expeditions` listuje ją z nazwą postaci/krainy i
+podglądem nagrody; po `resolve` znika z listy. Przeglądarka: panel Testowanie pokazuje tabelę z
+poprawnymi danymi i działającymi przyciskami akcji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

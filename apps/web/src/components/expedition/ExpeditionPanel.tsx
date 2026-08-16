@@ -13,6 +13,7 @@ import {
   claimExpedition,
   leaveExpedition,
   getExpeditionDuration,
+  getFlaggedCount,
   type ExpeditionClaimResult,
 } from "../../lib/expeditionsApi";
 import { CombatLog } from "./CombatLog";
@@ -65,6 +66,10 @@ export function ExpeditionPanel({
   const characterSkillsQuery = useQuery({
     queryKey: ["character-skills", characterId],
     queryFn: () => getCharacterSkills(characterId),
+  });
+  const flaggedCountQuery = useQuery({
+    queryKey: ["flagged-count", characterId],
+    queryFn: () => getFlaggedCount(characterId),
   });
 
   const expedition = character.activeExpeditionId ? (activeQuery.data ?? null) : null;
@@ -171,9 +176,21 @@ export function ExpeditionPanel({
     .filter((s) => s.kind === "active" && s.cooldownSeconds && (levelByClassSkillId.get(s.id) ?? 0) > 0)
     .map((s) => ({ name: s.name, cooldownSeconds: s.cooldownSeconds! }));
 
+  // Non-blocking — a flagged expedition withholds only its own reward, it never stops the
+  // character from playing on (see docs/architecture.md).
+  const flaggedCount = flaggedCountQuery.data?.count ?? 0;
+  const flaggedBanner =
+    flaggedCount > 0 ? (
+      <p className="mb-3 border border-gold/40 bg-gold/5 px-3 py-2 text-sm text-gold-bright">
+        Masz {flaggedCount} {flaggedCount === 1 ? "ekspedycję oczekującą" : "ekspedycje oczekujące"} na
+        sprawdzenie przez administrację — nagroda zostanie przyznana albo odrzucona po jej rozpatrzeniu.
+      </p>
+    ) : null;
+
   if (claimResult) {
     return (
       <div className="panel p-4">
+        {flaggedBanner}
         <h2 className="font-medium text-parchment">Ekspedycja zakończona</h2>
         <p className="mt-1 text-sm text-parchment-dim">
           Pokonano {claimResult.result.monstersDefeated} potworów · +{claimResult.result.expGained} exp ·
@@ -206,23 +223,10 @@ export function ExpeditionPanel({
     );
   }
 
-  if (expedition && expedition.status === "flagged") {
-    return (
-      <div className="panel p-4">
-        <h2 className="font-medium text-parchment">Ekspedycja wstrzymana</h2>
-        <p className="mt-1 text-sm text-parchment-dim">Kraina: {zoneNameFor(expedition.zoneId)}</p>
-        <p className="mt-2 text-sm text-red-400">
-          Wynik tej ekspedycji wygląda na błąd balansu i został wstrzymany do sprawdzenia przez
-          administrację. Postać nie może wyruszyć w drogę ani rozpocząć nowej walki, dopóki
-          administracja nie rozwiąże tej ekspedycji.
-        </p>
-      </div>
-    );
-  }
-
   if (expedition) {
     return (
       <div className="panel p-4">
+        {flaggedBanner}
         <h2 className="font-medium text-parchment">Ekspedycja w toku</h2>
         <p className="mt-1 text-sm text-parchment-dim">Kraina: {zoneNameFor(expedition.zoneId)}</p>
         {isReadyToClaim ? (
@@ -289,6 +293,7 @@ export function ExpeditionPanel({
   if (isTraveling) {
     return (
       <div className="panel p-4">
+        {flaggedBanner}
         <h2 className="font-medium text-parchment">W drodze</h2>
         <p className="mt-1 text-sm text-parchment-dim">Cel: {zoneNameFor(character.travelDestinationZoneId)}</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums text-parchment">
@@ -360,6 +365,7 @@ export function ExpeditionPanel({
     if (isTown && currentZone) {
       return (
         <div>
+          {flaggedBanner}
           <NpcShopPanel characterId={characterId} zone={currentZone} gold={character.gold} itemFor={itemFor} />
           <div className="panel mt-3 p-4">{travelControls}</div>
         </div>
@@ -368,6 +374,7 @@ export function ExpeditionPanel({
 
     return (
       <div className="panel p-4">
+        {flaggedBanner}
         <h2 className="font-medium text-parchment">{currentZone?.name ?? "Kraina"}</h2>
         <p className="mt-1 text-xs text-parchment-faint">Postać stoi w tej krainie — wybierz co robić dalej.</p>
 
@@ -405,6 +412,7 @@ export function ExpeditionPanel({
 
   return (
     <div className="panel p-4">
+      {flaggedBanner}
       <h2 className="font-medium text-parchment">Wyrusz do krainy</h2>
       {durationQuery.data && (
         <p className="mt-1 text-xs text-parchment-faint">

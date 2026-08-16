@@ -1,8 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { requireRole } from "../../../lib/authGuard.js";
-import { revertExpedition, resolveFlaggedExpedition, AdminExpeditionError } from "./service.js";
+import {
+  revertExpedition,
+  resolveFlaggedExpedition,
+  listFlaggedExpeditions,
+  AdminExpeditionError,
+} from "./service.js";
 
 export async function adminExpeditionsRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/", { preHandler: requireRole("admin") }, async (_request, reply) => {
+    return reply.send(await listFlaggedExpeditions());
+  });
+
   app.post("/:id/revert", { preHandler: requireRole("admin") }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
