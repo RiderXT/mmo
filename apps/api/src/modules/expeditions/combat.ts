@@ -275,6 +275,13 @@ export function simulateExpedition(
   let attackBuffPct = 0;
   let defenseBuffUntil = 0;
   let defenseBuffPct = 0;
+  // Heal-over-time state for restore_hp/restore_mana potions configured with durationSeconds —
+  // same "buff until timestamp" pattern as the buffs above, but adding a per-second amount
+  // instead of a percentage multiplier.
+  let hpHotUntil = 0;
+  let hpHotPerSecond = 0;
+  let manaHotUntil = 0;
+  let manaHotPerSecond = 0;
 
   function tryConsumePotion(p: PotionSlot, t: number): boolean {
     const remaining = potionRemaining.get(p.inventoryItemId) ?? 0;
@@ -286,15 +293,29 @@ export function simulateExpedition(
     let amount = 0;
     switch (p.effect) {
       case "restore_hp": {
-        const before = hp;
-        hp = Math.min(stats.maxHp, hp + stats.maxHp * p.magnitudePct);
-        amount = Math.round(hp - before);
+        const totalAmount = stats.maxHp * p.magnitudePct;
+        if (p.durationSeconds) {
+          hpHotUntil = t + p.durationSeconds;
+          hpHotPerSecond = totalAmount / p.durationSeconds;
+          amount = Math.round(totalAmount);
+        } else {
+          const before = hp;
+          hp = Math.min(stats.maxHp, hp + totalAmount);
+          amount = Math.round(hp - before);
+        }
         break;
       }
       case "restore_mana": {
-        const before = mana;
-        mana = Math.min(stats.maxMana, mana + stats.maxMana * p.magnitudePct);
-        amount = Math.round(mana - before);
+        const totalAmount = stats.maxMana * p.magnitudePct;
+        if (p.durationSeconds) {
+          manaHotUntil = t + p.durationSeconds;
+          manaHotPerSecond = totalAmount / p.durationSeconds;
+          amount = Math.round(totalAmount);
+        } else {
+          const before = mana;
+          mana = Math.min(stats.maxMana, mana + totalAmount);
+          amount = Math.round(mana - before);
+        }
         break;
       }
       case "buff_attack_speed":
@@ -362,6 +383,8 @@ export function simulateExpedition(
     }
 
     mana = Math.min(stats.maxMana, mana + stats.maxMana * MANA_REGEN_PER_SECOND_PCT * ROUND_SECONDS);
+    if (t <= hpHotUntil) hp = Math.min(stats.maxHp, hp + hpHotPerSecond * ROUND_SECONDS);
+    if (t <= manaHotUntil) mana = Math.min(stats.maxMana, mana + manaHotPerSecond * ROUND_SECONDS);
 
     if (!currentMonster) {
       currentMonster = pickWeighted(zone.monsters, (m) => m.spawnWeight);

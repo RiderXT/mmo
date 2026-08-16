@@ -1097,6 +1097,51 @@ poziomu +2, zgodny z ręcznym przeliczeniem krzywej), przycisk wyłączony przy 
 materiałach (klik bez efektu), po uzupełnieniu materiałów klik kończy się komunikatem "Sukces!
 Przedmiot ulepszony do +2." i panel automatycznie pokazuje kolejny poziom (+2→+3, 89%, 0/6).
 
+## Wizualny cooldown umiejętności + mikstury lecznicze w czasie (Etap 23)
+
+### Kontekst
+
+Aktywne umiejętności miały tylko tekstowy wpis w logu walki, bez żadnego wskaźnika, kiedy znów
+będą dostępne. Mikstury HP/MP leczyły całą wartość naraz w jednym evencie. Użytkownik poprosił o
+graficzny wskaźnik cooldownu oraz o rozłożenie leczenia mikstur w czasie (np. "400hp w 5s") —
+zaznaczając, że istniejący mały cooldown zapobiegający spamowi mikstur (`THRESHOLD_POTION_
+COOLDOWN_SECONDS = 5`) już działa i nie wymaga zmian.
+
+### Backend — leczenie rozłożone w czasie
+
+`combat.ts`'s `tryConsumePotion` — dla `restore_hp`/`restore_mana`, jeśli item ma skonfigurowane
+`potionDurationSec`, licząca wartość (`stats.maxHp * magnitudePct`) nie jest dodawana od razu:
+zamiast tego ustawiany jest nowy stan rundowy `hpHotUntil`/`hpHotPerSecond` (analogicznie
+`manaHotUntil`/`manaHotPerSecond`) — dokładnie ten sam wzorzec "do znacznika czasu", co istniejące
+bufory `attackSpeedBuffUntil`/`attackSpeedBuffPct`. Każda runda (`ROUND_SECONDS`) dolicza
+`hpHotPerSecond * ROUND_SECONDS` do HP, dopóki `t <= hpHotUntil`. Brak `potionDurationSec` (pole
+opcjonalne) = stare zachowanie, natychmiastowe — pełna wsteczna kompatybilność, zero zmian dla
+istniejących skonfigurowanych mikstur. `potionDurationSec` (pole `durationSeconds` w
+`PotionConfigSchema`) było wcześniej opisane jako "tylko dla efektów buff_*" — teraz służy
+podwójnie: dla `buff_*` to czas trwania buffa, dla `restore_hp`/`restore_mana` to czas rozłożenia
+leczenia. `ItemsAdminPage.tsx` pokazuje to pole (z odpowiednią etykietą) dla obu grup efektów.
+
+### Frontend — pasek cooldownu
+
+Nowy `components/expedition/ActiveSkillCooldownBar.tsx` — dla każdej aktywnej, wykupionej
+umiejętności klasy (`kind==="active"`, poziom > 0, ta sama definicja co
+`gatherCombatBuild`'s filtr w `expeditions/service.ts`) przeszukuje już odsłonięte eventy wstecz
+w poszukiwaniu ostatniego `skill_activated` o tej nazwie, liczy pozostały czas względem
+`elapsedSeconds` (ten sam zegar symulacji, którego już używa reszta `ExpeditionPanel.tsx` do
+odsłaniania eventów) i renderuje kwadrat z wypełnieniem rosnącym wraz z upływem cooldownu oraz
+odliczaniem w sekundach (✓ gdy gotowa). Wpięty w `ExpeditionPanel.tsx` obok `PlayerVitalsBar`,
+widoczny tylko w trakcie aktywnej walki.
+
+Zweryfikowane: skrypt testowy wywołujący `simulateExpedition` bezpośrednio (poza HTTP) porównał
+miksturę bez `durationSeconds` (natychmiastowy skok HP w tym samym evencie `potion_used`) z
+identyczną miksturą z `durationSeconds: 9` — event `potion_used` zgłasza tę samą łączną wartość
+`amount`, ale `playerHpAfter` w chwili zużycia pozostaje NIEZMIENIONE (bez natychmiastowego
+skoku), a kolejne rundy pokazują HP utrzymujące się blisko poprzedniego poziomu zamiast dalej
+spadać — potwierdza, że leczenie faktycznie rozkłada się w czasie zamiast być jednorazowym
+skokiem. Przeglądarka: postać z wykupioną umiejętnością aktywną (cd 20s) w trakcie ekspedycji —
+pasek cooldownu pokazuje odliczanie malejące w czasie rzeczywistym i poprawnie "odświeża się" do
+nowego pełnego cooldownu, gdy w logu walki odsłoni się kolejne użycie tej samej umiejętności.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

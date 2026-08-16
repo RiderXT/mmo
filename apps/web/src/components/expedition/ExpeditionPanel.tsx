@@ -5,7 +5,8 @@ import { ApiError } from "../../lib/apiClient";
 import { listPlayerZones } from "../../lib/zonesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
 import { startTravel } from "../../lib/travelApi";
-import { getCombatStats } from "../../lib/charactersApi";
+import { getCombatStats, getCharacterSkills } from "../../lib/charactersApi";
+import { getPlayerClass } from "../../lib/classesApi";
 import {
   getActiveExpedition,
   startExpedition,
@@ -19,6 +20,7 @@ import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
 import { NpcShopPanel } from "./NpcShopPanel";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
+import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
 import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 
@@ -53,6 +55,15 @@ export function ExpeditionPanel({
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
   const durationQuery = useQuery({ queryKey: ["expedition-duration"], queryFn: getExpeditionDuration });
   const combatStatsQuery = useQuery({ queryKey: ["combat-stats", characterId], queryFn: () => getCombatStats(characterId) });
+  const classQuery = useQuery({
+    queryKey: ["class", character.classId],
+    queryFn: () => getPlayerClass(character.classId!),
+    enabled: !!character.classId,
+  });
+  const characterSkillsQuery = useQuery({
+    queryKey: ["character-skills", characterId],
+    queryFn: () => getCharacterSkills(characterId),
+  });
 
   const expedition = character.activeExpeditionId ? (activeQuery.data ?? null) : null;
   const arrivedAtMs = expedition ? new Date(expedition.arrivedAt).getTime() : null;
@@ -145,6 +156,11 @@ export function ExpeditionPanel({
   const itemNameFor = (itemId: string) => itemFor(itemId)?.name ?? itemId;
   const zoneNameFor = (zoneId: string | null) => (zoneId ? zones.find((z) => z.id === zoneId)?.name ?? zoneId : "wioski");
 
+  const levelByClassSkillId = new Map(characterSkillsQuery.data?.map((s) => [s.classSkillId, s.level]) ?? []);
+  const activeSkillsForCooldown = (classQuery.data?.skills ?? [])
+    .filter((s) => s.kind === "active" && s.cooldownSeconds && (levelByClassSkillId.get(s.id) ?? 0) > 0)
+    .map((s) => ({ name: s.name, cooldownSeconds: s.cooldownSeconds! }));
+
   if (claimResult) {
     return (
       <div className="panel p-4">
@@ -225,6 +241,15 @@ export function ExpeditionPanel({
               events={revealedEvents}
               maxHp={combatStatsQuery.data.maxHp}
               maxMana={combatStatsQuery.data.maxMana}
+            />
+          </div>
+        )}
+        {activeSkillsForCooldown.length > 0 && (
+          <div className="mt-3">
+            <ActiveSkillCooldownBar
+              skills={activeSkillsForCooldown}
+              events={revealedEvents}
+              elapsedSeconds={elapsedSeconds}
             />
           </div>
         )}

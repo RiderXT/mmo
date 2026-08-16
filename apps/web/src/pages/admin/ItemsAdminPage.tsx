@@ -515,15 +515,26 @@ export function ItemsAdminPage() {
                   />
                 </label>
 
-                {form.potion.effect.startsWith("buff_") && (
+                {(form.potion.effect.startsWith("buff_") ||
+                  form.potion.effect === "restore_hp" ||
+                  form.potion.effect === "restore_mana") && (
                   <label className="flex items-center gap-2 text-xs text-parchment-dim">
-                    czas trwania (s)
+                    {form.potion.effect.startsWith("buff_")
+                      ? "czas trwania (s)"
+                      : "leczenie rozłożone w czasie (s, puste = od razu)"}
                     <input
                       type="number"
                       className={inputClass}
-                      value={form.potion.durationSeconds ?? 60}
+                      value={form.potion.durationSeconds ?? ""}
+                      placeholder={form.potion.effect.startsWith("buff_") ? "60" : "od razu"}
                       onChange={(e) =>
-                        setForm({ ...form, potion: { ...form.potion!, durationSeconds: Number(e.target.value) } })
+                        setForm({
+                          ...form,
+                          potion: {
+                            ...form.potion!,
+                            durationSeconds: e.target.value === "" ? undefined : Number(e.target.value),
+                          },
+                        })
                       }
                     />
                   </label>

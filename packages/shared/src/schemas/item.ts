@@ -40,7 +40,10 @@ export const PotionConfigSchema = z.object({
   intervalSeconds: z.number().int().min(1).max(3600).optional(), // for interval
   effect: PotionEffectSchema,
   magnitudePct: z.number().min(0).max(5).default(0.3),
-  durationSeconds: z.number().int().min(0).max(3600).optional(), // for buff_* effects
+  // For buff_* effects: how long the buff lasts. For restore_hp/restore_mana: if set, the
+  // amount heals gradually over this many seconds instead of instantly (omitted = instant, the
+  // original behavior).
+  durationSeconds: z.number().int().min(0).max(3600).optional(),
 });
 export type PotionConfig = z.infer<typeof PotionConfigSchema>;
 
