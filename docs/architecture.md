@@ -1312,6 +1312,55 @@ przyczyn środowiskowych (podgląd przeglądarki nie kompozytował klatek do zrz
 `onDragEnd` woła identyczną funkcję `selectItem` co klik, a wzorzec `DndContext`/
 `useDraggable`/`useDroppable` jest 1:1 tym już działającym w `CharacterTab.tsx`.
 
+## Restyling wg szkicu "Fight Club" z Claude Design (post-C)
+
+### Kontekst
+
+Użytkownik przesłał wstępny szkic wizualny stworzony w Claude Design (projekt "Strona gry w
+ciemnym stylu") i poprosił o wdrożenie jego stylu na ekranach gracza. Po pytaniu doprecyzowującym
+zakres wybrano: nowa paleta/typografia + dopasowanie struktury kluczowych ekranów do szkicu
+(nagłówek z awatarem/paskiem XP/walutą, sekcje w sidebarze, log walki w dwóch kolumnach, siatka
+sklepu z filtrami), bez zmiany nawigacji/funkcji ani nowych podstron — wszystkie etapy 17-24/A-C
+zostają funkcjonalnie identyczne.
+
+### Zmiany
+
+- **Design tokens** (`tailwind.config.js`, `index.css`, `index.html`): paleta przepisana na
+  `oklch()` wprost ze szkicu (Tailwind przyjmuje dowolny poprawny string CSS jako wartość koloru,
+  bez konwersji na hex), fonty Cinzel (nagłówki) + Inter (treść) doładowane z Google Fonts,
+  `.panel` zaokrąglone (`border-radius`), dodane `@keyframes pulseGlow`/`flicker` (zarezerwowane
+  pod przyszłe użycie, np. aktywne wyzwania).
+- **`AppShell.tsx`**: nowy `CharacterHeaderBar` (avatar-inicjał, odznaka poziomu, pasek XP liczony
+  czysto po stronie frontendu z `character.exp % 100` — krzywa poziomów jest płaska,
+  `computeLevel()` w `apps/api/src/modules/expeditions/service.ts:32`, więc nie potrzeba nowego
+  endpointu — i licznik złota) widoczny w sticky headerze nad całą stroną, nie tylko na mobile.
+  Sidebar pogrupowany w sekcje z tytułami (linia + romb + uppercase label) i każdy `NavLink` z
+  okrągłą odznaką-ikoną.
+- **`LoginPage.tsx`**: karta 400px, ukośne tło w paski + radialny blask, nagłówek "FIGHT CLUB" w
+  Cinzel — czysto kosmetyczne, logika formularza bez zmian.
+- **`CharacterTab.tsx`**: sekcja założonego ekwipunku podzielona na trójkolumnowy układ (lewa
+  kolumna slotów `helmet/armor/necklace/boots`, środkowy portret-placeholder z
+  imieniem+klasą+poziomem — nowe `classQuery` przez `getPlayerClass`, prawa kolumna
+  `weapon/ring/earrings`). Cała logika DnD/mutacji bez zmian.
+- **`CombatLog.tsx`**: rozbity na dwie równoległe kolumny ("Aktywność gracza"/"Aktywność
+  przeciwnika") z tego samego `events: CombatEvent[]` — bez zmian backendu. Numery rund liczone
+  raz z pełnej listy zdarzeń (`Map<CombatEvent, number>`), współdzielone między kolumnami.
+- **`NpcShopPanel.tsx`**: lista NPC-ów przełożona na siatkę kart przedmiotów (ikona w boksie z
+  przekątnym wzorem tła, nazwa, cena ze złotą kropką, przycisk "Kup"/"Wyprzedane") zamiast
+  pionowej listy tekstowej. Logika zakupu bez zmian.
+
+Panele admina (`/admin/*`) świadomie poza zakresem — szkic dotyczy tylko ekranów gracza, panele
+admina nie mają `AppShell` od Etapu 8.4.
+
+Zweryfikowane w przeglądarce (curl do przygotowania testowej krainy-miasta z NPC + Prisma-script
+do przenoszenia postaci): logowanie z nowym stylem karty; header z avatarem/poziomem/paskiem
+XP/złotem po wejściu na postać; sidebar z sekcjami "Nawigacja"/"Postać"/"Admin"; zakładka Postać —
+trójkolumnowy układ slotów wokół portretu; sklep NPC — siatka kart, zakup działający (złoto
+5000→4950, zapas 10→9); pełna walka do śmierci — dwukolumnowy log poprawnie rozdzielił zdarzenia
+gracza (rundy z zadanymi obrażeniami, HP) i przeciwnika (starcie, rundy z otrzymanymi obrażeniami,
+HP wroga), odbiór nagród po śmierci zadziałał. `pnpm --filter web typecheck` czysto. Dane testowe
+(krainę, NPC, postać) usunięto po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

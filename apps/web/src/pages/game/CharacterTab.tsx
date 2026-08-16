@@ -12,6 +12,7 @@ import { SkillsPanel } from "../../components/character/SkillsPanel";
 import { VitalsPanel } from "../../components/character/VitalsPanel";
 import { ApiError } from "../../lib/apiClient";
 import { getCombatStatsBreakdown } from "../../lib/charactersApi";
+import { getPlayerClass } from "../../lib/classesApi";
 import { interpolateUpgrade } from "../../lib/statMath";
 import { STAT_LABELS, TYPE_LABELS, formatStatValue, COMBAT_STAT_TO_STAT_KEY, formatBreakdownValue } from "../../lib/statFormat";
 import { listPlayerItems } from "../../lib/itemsApi";
@@ -30,7 +31,8 @@ import {
 
 const GRID_SLOTS = 24;
 const ACTIVE_SLOTS = 6;
-const EQUIP_SLOTS: EquipSlot[] = ["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"];
+const LEFT_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "necklace", "boots"];
+const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "ring", "earrings"];
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
 
@@ -48,6 +50,12 @@ export function CharacterTab({ character }: { character: Character }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
+
+  const classQuery = useQuery({
+    queryKey: ["class", character.classId],
+    queryFn: () => getPlayerClass(character.classId!),
+    enabled: !!character.classId,
+  });
 
   const inventoryQuery = useQuery({
     queryKey: ["inventory", characterId],
@@ -243,10 +251,9 @@ export function CharacterTab({ character }: { character: Character }) {
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="mt-6 flex flex-wrap gap-8">
-          <div>
-            <p className="mb-2 text-xs font-medium text-parchment-dim">Założony ekwipunek</p>
-            <div className="flex flex-wrap gap-3">
-              {EQUIP_SLOTS.map((slot) => {
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_auto_auto] sm:items-center">
+            <div className="flex flex-col items-center gap-3">
+              {LEFT_EQUIP_SLOTS.map((slot) => {
                 const item = byEquipSlot.get(slot);
                 return (
                   <EquipSlotBox key={slot} slot={slot}>
@@ -263,7 +270,39 @@ export function CharacterTab({ character }: { character: Character }) {
               })}
             </div>
 
-            <p className="mb-2 mt-4 text-xs font-medium text-parchment-dim">
+            <div className="flex flex-col items-center justify-self-center">
+              <div className="flex h-40 w-32 items-center justify-center rounded-xl border border-gold/40 text-center text-[11px] text-parchment-faint shadow-[inset_0_0_40px_rgba(230,180,90,0.1)]" style={{ background: "repeating-linear-gradient(45deg, oklch(20% 0.02 45), oklch(20% 0.02 45) 10px, oklch(17% 0.02 45) 10px, oklch(17% 0.02 45) 20px)" }}>
+                postać gracza
+                <br />
+                (grafika)
+              </div>
+              <div className="mt-3 font-display text-base font-bold text-parchment">{character.name}</div>
+              <div className="text-xs text-gold">
+                {classQuery.data?.name ?? "…"} · lvl. {character.level}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-3">
+              {RIGHT_EQUIP_SLOTS.map((slot) => {
+                const item = byEquipSlot.get(slot);
+                return (
+                  <EquipSlotBox key={slot} slot={slot}>
+                    {item && (
+                      <ItemBox
+                        inventoryItem={item}
+                        selected={item.id === selectedId}
+                        onSelect={() => setSelectedId(item.id)}
+                        onContextMenu={handleItemContextMenu}
+                      />
+                    )}
+                  </EquipSlotBox>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
               Aktywne itemy (potiony — zużywane automatycznie na ekspedycji)
             </p>
             <div className="flex flex-wrap gap-3">
