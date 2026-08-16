@@ -164,6 +164,11 @@ const MAX_ROUNDS = 3000;
  * (`fight_time_limit_reached`, terminal) — whichever comes first. `durationMinutes` is a safety
  * cap, not a guaranteed length: most fights end in death well before it.
  */
+export interface EventBonusDrop {
+  itemId: string;
+  dropChance: number;
+}
+
 export function simulateExpedition(
   zone: SimZone,
   stats: DerivedStats,
@@ -172,6 +177,7 @@ export function simulateExpedition(
   durationMinutes: number,
   expMultiplier = 1,
   goldMultiplier = 1,
+  eventBonusDrop: EventBonusDrop | null = null,
 ): SimulationOutcome {
   let hp = stats.maxHp;
   let mana = stats.maxMana;
@@ -383,6 +389,13 @@ export function simulateExpedition(
           addLoot(zoneDrop.itemId, 1);
           events.push({ t, type: "loot", itemId: zoneDrop.itemId, quantity: 1 });
         }
+      }
+      // Event bonus drop (see docs/architecture.md "Etap 19") — same chance, same item, on
+      // every kill in every zone while an event configures one, independent of that zone's own
+      // drop table.
+      if (eventBonusDrop && Math.random() < eventBonusDrop.dropChance) {
+        addLoot(eventBonusDrop.itemId, 1);
+        events.push({ t, type: "loot", itemId: eventBonusDrop.itemId, quantity: 1 });
       }
       events.push({
         t,

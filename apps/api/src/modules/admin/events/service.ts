@@ -22,10 +22,19 @@ function eventData(input: CreateGameEventInput) {
     goldMultiplier: input.goldMultiplier,
     startsAt: new Date(input.startsAt),
     endsAt: new Date(input.endsAt),
+    bonusDropItemId: input.bonusDropItemId || null,
+    bonusDropChance: input.bonusDropChance,
   };
 }
 
+async function assertBonusDropItemExists(input: CreateGameEventInput) {
+  if (!input.bonusDropItemId) return;
+  const count = await prisma.item.count({ where: { id: input.bonusDropItemId } });
+  if (count === 0) throw new GameEventError("Wskazany bonusowy przedmiot nie istnieje", 400);
+}
+
 export async function createGameEvent(input: CreateGameEventInput, actorUserId: string, requestId?: string) {
+  await assertBonusDropItemExists(input);
   const event = await prisma.gameEvent.create({ data: eventData(input) });
   await logAction({
     module: "admin:events",
@@ -45,6 +54,7 @@ export async function updateGameEvent(
 ) {
   const existing = await prisma.gameEvent.findUnique({ where: { id } });
   if (!existing) throw new GameEventError("Nie znaleziono eventu", 404);
+  await assertBonusDropItemExists(input);
 
   const event = await prisma.gameEvent.update({ where: { id }, data: eventData(input) });
   await logAction({

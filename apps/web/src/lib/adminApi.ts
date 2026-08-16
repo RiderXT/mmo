@@ -206,6 +206,8 @@ export interface GameEventDto {
   goldMultiplier: number;
   startsAt: string;
   endsAt: string;
+  bonusDropItemId: string | null;
+  bonusDropChance: number | null;
 }
 export const listEvents = () => apiFetch<GameEventDto[]>("/api/admin/events");
 export const createEvent = (input: CreateGameEventInput) =>

@@ -215,6 +215,7 @@ model Item {
   chestLootEntries    ChestLoot[] @relation("ChestLootChest")
   chestLootRewards    ChestLoot[] @relation("ChestLootReward")
   starterForClasses   ClassStarterItem[]
+  gameEventBonusDrops GameEvent[]
 
   @@index([classId])
   @@index([type])
@@ -351,8 +352,15 @@ model GameEvent {
   goldMultiplier Float    @default(1)
   startsAt       DateTime
   endsAt         DateTime
+  // Optional: one item that drops from EVERY zone (independently of that zone's own drop
+  // table) while this event is active — e.g. a limited-time "event chest" without having to
+  // add it to every zone by hand. null itemId / 0 chance = no bonus drop configured.
+  bonusDropItemId String?
+  bonusDropChance Float?  @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  bonusDropItem  Item?    @relation(fields: [bonusDropItemId], references: [id])
 
   @@index([startsAt, endsAt])
 }

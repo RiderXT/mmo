@@ -185,8 +185,17 @@ async function buildAndSimulate(
     );
   }
 
-  const { expMultiplier, goldMultiplier } = await getActiveEventMultipliers();
-  const outcome = simulateExpedition(simZone, stats, activeSkills, potions, durationMinutes, expMultiplier, goldMultiplier);
+  const { expMultiplier, goldMultiplier, bonusDrop } = await getActiveEventMultipliers();
+  const outcome = simulateExpedition(
+    simZone,
+    stats,
+    activeSkills,
+    potions,
+    durationMinutes,
+    expMultiplier,
+    goldMultiplier,
+    bonusDrop,
+  );
   return { character, zone, stats, outcome, expMultiplier, goldMultiplier };
 }
 

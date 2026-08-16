@@ -2,8 +2,18 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateGameEventSchema, type CreateGameEventInput } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
+import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
+import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
-import { listEvents, createEvent, updateEvent, deleteEvent, type GameEventDto } from "../../lib/adminApi";
+import {
+  listEvents,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  listItems,
+  listClasses,
+  type GameEventDto,
+} from "../../lib/adminApi";
 
 /** datetime-local inputs need "yyyy-MM-ddTHH:mm" in local time, not an ISO string with seconds/Z. */
 function toLocalInputValue(iso: string): string {
@@ -21,6 +31,8 @@ function emptyForm(): CreateGameEventInput {
     goldMultiplier: 2,
     startsAt: toLocalInputValue(now.toISOString()),
     endsAt: toLocalInputValue(in72h.toISOString()),
+    bonusDropItemId: null,
+    bonusDropChance: 0,
   };
 }
 
@@ -31,6 +43,8 @@ function fromDto(event: GameEventDto): CreateGameEventInput {
     goldMultiplier: event.goldMultiplier,
     startsAt: toLocalInputValue(event.startsAt),
     endsAt: toLocalInputValue(event.endsAt),
+    bonusDropItemId: event.bonusDropItemId,
+    bonusDropChance: event.bonusDropChance ?? 0,
   };
 }
 
@@ -41,6 +55,9 @@ function isActive(event: GameEventDto, now: number): boolean {
 export function EventsAdminPage() {
   const queryClient = useQueryClient();
   const eventsQuery = useQuery({ queryKey: ["admin-events"], queryFn: listEvents });
+  const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
+  const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const bonusDropPicker = useItemPickerFilter(itemsQuery.data);
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateGameEventInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
@@ -205,6 +222,49 @@ export function EventsAdminPage() {
                 onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
               />
             </Field>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">
+              Bonusowy drop eventowy (opcjonalnie) — na czas eventu dropi z KAŻDEJ krainy, obok
+              jej własnych dropów, bez konieczności dodawania go osobno do każdej z nich
+            </p>
+            <ItemPickerFilterBar
+              search={bonusDropPicker.search}
+              onSearchChange={bonusDropPicker.setSearch}
+              typeFilter={bonusDropPicker.typeFilter}
+              onTypeFilterChange={bonusDropPicker.setTypeFilter}
+              classFilter={bonusDropPicker.classFilter}
+              onClassFilterChange={bonusDropPicker.setClassFilter}
+              classes={classesQuery.data}
+              filteredCount={bonusDropPicker.filtered.length}
+              total={bonusDropPicker.total}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className={`${inputClass} w-56`}
+                value={form.bonusDropItemId ?? ""}
+                onChange={(e) => setForm({ ...form, bonusDropItemId: e.target.value || null })}
+              >
+                <option value="">brak (nie dropi)</option>
+                {bonusDropPicker.filtered.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                max={1}
+                placeholder="szansa (0-1)"
+                className={`${inputClass} w-32`}
+                value={form.bonusDropChance}
+                onChange={(e) => setForm({ ...form, bonusDropChance: Number(e.target.value) })}
+                disabled={!form.bonusDropItemId}
+              />
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}

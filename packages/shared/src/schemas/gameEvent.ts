@@ -14,6 +14,10 @@ export const CreateGameEventSchema = z
     goldMultiplier: z.number().min(1).max(20),
     startsAt: dateTimeString,
     endsAt: dateTimeString,
+    // Optional: one item that drops from EVERY zone while this event is active, independently
+    // of each zone's own drop table (e.g. a limited-time "event chest").
+    bonusDropItemId: z.string().nullable().optional(),
+    bonusDropChance: z.number().min(0).max(1).default(0),
   })
   .refine((val) => new Date(val.endsAt).getTime() > new Date(val.startsAt).getTime(), {
     message: "Koniec eventu musi być po jego starcie",
