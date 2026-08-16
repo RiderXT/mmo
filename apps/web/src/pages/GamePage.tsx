@@ -3,11 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { getCharacter } from "../lib/charactersApi";
 import { CharacterTab } from "./game/CharacterTab";
+import { EquipmentTab } from "./game/EquipmentTab";
 import { ExpeditionsTab } from "./game/ExpeditionsTab";
 import { AnvilTab } from "./game/AnvilTab";
 import { NpcTab } from "./game/NpcTab";
 
-type TabKey = "character" | "expeditions" | "anvil" | "npc";
+type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc";
 
 export function GamePage() {
   const { characterId } = useParams<{ characterId: string }>();
@@ -44,6 +45,7 @@ export function GamePage() {
       {character && (
         <div className="mt-4">
           {activeTab === "character" && <CharacterTab character={character} />}
+          {activeTab === "equipment" && <EquipmentTab character={character} />}
           {activeTab === "expeditions" && (
             <ExpeditionsTab
               character={character}

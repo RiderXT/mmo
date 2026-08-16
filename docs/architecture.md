@@ -1502,6 +1502,60 @@ stronie), Kowadło i NPC w testowym mieście, chowany panel boczny na mobile (be
 poziomego na żadnym sprawdzonym ekranie). `pnpm --filter web typecheck` czysto. Dane testowe
 usunięto po weryfikacji.
 
+## Ikony nawigacji + osobna zakładka Ekwipunek + kategoria "Miasto" + restyling kowalstwa
+
+### Kontekst
+
+Użytkownik dostarczył w `Tymczasowe/rpg_menu_design/` zestaw okrągłych, złotych ikon-medalionów i
+mockup HTML docelowego wyglądu paska nawigacyjnego, plus zrzut ekranu ornamentowego UI kowalstwa
+(lista receptur / szczegóły / materiały) jako wzór stylu dla ekwipunku i Kowadła. Chciał trzech
+powiązanych zmian: prawdziwe ikony zamiast kolorowych kropek w `NavIcon`, wydzielenie ekwipunku z
+zakładki "Postać" do własnej zakładki, oraz nową kategorię "Miasto" grupującą Kowadło i NPC
+(zamiast płaskich pozycji pod "Postać"). Z dostarczonych 22 plików ikon 6 (itemshop/poczta/
+przyjaciele/pulpit/targ/wyzwania, wszystkie 64×64px/669B) okazały się uszkodzonymi placeholderami —
+i tak nie odpowiadały żadnej funkcji istniejącej w grze (generyczny szablon mockupu). Pozostałe
+(204–600px, prawdziwa grafika) pokryły dokładnie potrzebne pozycje.
+
+### Zmiany
+
+- Ikony przeskalowane do jednolitego rozmiaru (96×96px, ~22–24KB/szt., wcześniej do 500KB przy
+  600×600px) i skopiowane do `apps/web/public/icons/nav/{postacie,postac,ekwipunek,ekspedycje,
+  kowadlo,npc}.png` (przez `sharp-cli` via `npx`, jednorazowo — nie dodano jako zależność).
+- `AppShell.tsx` — nowy `NavIconImg` (obrazek 32px w okrągłej ramce, `border-gold`+poświata gdy
+  aktywny, `opacity-50 grayscale` gdy niedostępny poza miastem) obok istniejącego `NavIcon`
+  (kropka, zostawiony tylko dla Ustawienia/Logi — bez dedykowanej grafiki). `CharacterNavLinks`
+  przebudowany na dwie sekcje: "Postać" (Postać → **Ekwipunek** nowy → Ekspedycje) i nowa
+  "Miasto" (Kowadło, NPC — dokładnie ten sam wzorzec `inTown` gate co wcześniej, tylko pod nowym
+  nagłówkiem sekcji).
+- `GamePage.tsx` — `TabKey` rozszerzony o `"equipment"`, nowa gałąź renderująca `EquipmentTab`.
+- Nowy `pages/game/EquipmentTab.tsx` — 1:1 wydzielony z `CharacterTab.tsx`: cały blok ekwipunku
+  (sloty equip, portret postaci, aktywne sloty potionów, siatka 4×24, panel szczegółów,
+  `ItemContextMenu`), wraz z `invalidateInventoryAndCombatStats` (equip/unequip nadal unieważnia
+  `combat-stats`/`combat-stats-breakdown`, które czyta teraz osobna zakładka "Postać" — sprzężenie
+  działa automatycznie przez współdzielony klucz cache react-query, bez propsów).
+- `CharacterTab.tsx` okrojony do `VitalsPanel`/`StatsPanel`/`SkillsPanel` + tabeli rozbicia statów
+  bojowych — bez ekwipunku.
+- Restyling socketów (`ItemBox.tsx`, `GridSlot.tsx`, `EquipSlotBox.tsx`, `ActiveItemSlotBox.tsx`,
+  `AnvilSlotBox.tsx`) — wzmocniona wewnętrzna poświata (`shadow-[inset_...]`) na spoczynku i
+  jaśniejsza złota poświata + obwódka przy przeciąganiu/zaznaczeniu; kwadratowy, bez zaokrąglenia
+  kształt sockera (Socket-vs-Surface Rule z `DESIGN.md`) pozostał bez zmian — to jedna zmiana
+  współdzielona przez zakładki Ekwipunek/Kowadło/NPC naraz.
+- `AnvilTab.tsx` — panel szczegółów wybranego przedmiotu dostał dużą ikonę w okrągłej złotej
+  ramce (jedyne miejsce poza nawigacją z okrągłą ramką — pojedynczy "bohaterski" podgląd, nie
+  siatka), nazwę w Cinzel/uppercase, listę materiałów z ikoną + ułamkiem posiadane/wymagane
+  (czerwone tło/tekst przy braku), i przycisk "Ulepsz przedmiot" jako pełnej szerokości wypełniony
+  przycisk.
+- `NpcTab.tsx` — karty towaru NPC dostały spójną złotą ramkę wokół ikony (ten sam język co
+  `ItemBox`) i delikatną poświatę na hover; bez zmian strukturalnych.
+
+Zweryfikowane w przeglądarce (nowa postać + tymczasowa testowa kraina-miasto z NPC, dane usunięte
+po weryfikacji): sidebar pokazuje prawdziwe ikony (nie kropki) i sekcję "Miasto" z Kowadło/NPC
+wyszarzonymi poza miastem i aktywnymi w mieście; zakładka "Postać" nie pokazuje już ekwipunku;
+nowa zakładka "Ekwipunek" renderuje pełny ekwipunek+inwentarz (sloty, aktywne itemy, siatka,
+panel szczegółów); Kowadło pokazuje nowy panel z dużą ikoną w złotej ramce i czytelną listą
+materiałów; NPC pokazuje odświeżone karty towaru i otwiera `BuyItemModal` poprawnie. `pnpm
+--filter web typecheck` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

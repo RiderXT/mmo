@@ -316,10 +316,10 @@ export function NpcTab({ character }: { character: Character }) {
                         key={entry.id}
                         onClick={() => !outOfStock && setBuyTarget(entry)}
                         disabled={outOfStock}
-                        className="flex flex-col items-center gap-2 rounded-xl border border-line-soft bg-panel-raised p-3.5 text-left transition hover:border-gold/50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex flex-col items-center gap-2 rounded-xl border border-line-soft bg-panel-raised p-3.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-gold/50 hover:shadow-[0_0_10px_oklch(76%_0.09_85_/_0.2)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <div
-                          className="flex h-16 w-16 items-center justify-center rounded-lg border border-line-soft"
+                          className="flex h-16 w-16 items-center justify-center border border-gold/30 shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)]"
                           style={{
                             backgroundImage: `repeating-linear-gradient(45deg, ${iconBg} 0, ${iconBg} 6px, oklch(18% 0.02 45) 6px, oklch(18% 0.02 45) 12px)`,
                           }}

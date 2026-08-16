@@ -59,9 +59,13 @@ export function ItemBox({
           onContextMenu(inventoryItem, e.clientX, e.clientY);
         }}
         style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
-        className={`relative flex h-14 w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-[10px] font-medium text-parchment active:cursor-grabbing ${
+        className={`relative flex h-14 w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-[10px] font-medium text-parchment transition active:cursor-grabbing hover:brightness-110 ${
           TYPE_COLORS[inventoryItem.item.type] ?? "border-line-soft bg-panel-raised"
-        } ${selected ? "ring-2 ring-gold-bright" : ""} ${isDragging ? "opacity-40" : ""}`}
+        } ${
+          selected
+            ? "ring-2 ring-gold-bright ring-offset-2 ring-offset-ink shadow-[0_0_10px_oklch(76%_0.09_85_/_0.5)]"
+            : ""
+        } ${isDragging ? "opacity-40" : ""}`}
       >
         <ItemTypeIcon type={inventoryItem.item.type} className="h-6 w-6 text-parchment-dim" />
         <span className="line-clamp-1 px-1 text-center leading-tight">{inventoryItem.item.name}</span>

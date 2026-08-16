@@ -26,6 +26,30 @@ function NavIcon({ color, active }: { color: string; active: boolean }) {
   );
 }
 
+/** Nav icon backed by real medallion artwork (apps/web/public/icons/nav/*.png) instead of the
+ * plain colored dot — used for the character-scoped links that have dedicated icon art. */
+function NavIconImg({
+  src,
+  alt,
+  active,
+  dim = false,
+}: {
+  src: string;
+  alt: string;
+  active: boolean;
+  dim?: boolean;
+}) {
+  return (
+    <span
+      className={`flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-panel transition ${
+        active ? "border-gold shadow-[0_0_8px_oklch(76%_0.09_85_/_0.4)]" : "border-line-soft"
+      } ${dim ? "opacity-50 grayscale" : ""}`}
+    >
+      <img src={src} alt={alt} className="h-full w-full object-cover" />
+    </span>
+  );
+}
+
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-2 mt-5 flex items-center gap-2 border-b border-gold/15 px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-parchment-faint">
@@ -107,24 +131,36 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink to={`/game/${characterId}?tab=character`} className={navLinkClass} onClick={onNavigate}>
           {({ isActive }) => (
             <>
-              <NavIcon color="oklch(62% 0.09 250)" active={isActive} />
+              <NavIconImg src="/icons/nav/postac.png" alt="" active={isActive} />
               Postać
+            </>
+          )}
+        </NavLink>
+        <NavLink to={`/game/${characterId}?tab=equipment`} className={navLinkClass} onClick={onNavigate}>
+          {({ isActive }) => (
+            <>
+              <NavIconImg src="/icons/nav/ekwipunek.png" alt="" active={isActive} />
+              Ekwipunek
             </>
           )}
         </NavLink>
         <NavLink to={`/game/${characterId}?tab=expeditions`} className={navLinkClass} onClick={onNavigate}>
           {({ isActive }) => (
             <>
-              <NavIcon color="oklch(58% 0.16 25)" active={isActive} />
+              <NavIconImg src="/icons/nav/ekspedycje.png" alt="" active={isActive} />
               Ekspedycje
             </>
           )}
         </NavLink>
+      </div>
+
+      <SectionTitle>Miasto</SectionTitle>
+      <div className="space-y-1 px-2">
         {inTown ? (
           <NavLink to={`/game/${characterId}?tab=anvil`} className={navLinkClass} onClick={onNavigate}>
             {({ isActive }) => (
               <>
-                <NavIcon color="oklch(76% 0.09 85)" active={isActive} />
+                <NavIconImg src="/icons/nav/kowadlo.png" alt="" active={isActive} />
                 Kowadło
               </>
             )}
@@ -134,7 +170,7 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
             title="Dostępne tylko w mieście"
             className="flex cursor-not-allowed items-center gap-2.5 px-3 py-2 text-sm text-parchment-faint/50"
           >
-            <NavIcon color="oklch(40% 0.02 50)" active={false} />
+            <NavIconImg src="/icons/nav/kowadlo.png" alt="" active={false} dim />
             Kowadło
           </div>
         )}
@@ -142,7 +178,7 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
           <NavLink to={`/game/${characterId}?tab=npc`} className={navLinkClass} onClick={onNavigate}>
             {({ isActive }) => (
               <>
-                <NavIcon color="oklch(68% 0.09 145)" active={isActive} />
+                <NavIconImg src="/icons/nav/npc.png" alt="" active={isActive} />
                 NPC
               </>
             )}
@@ -152,7 +188,7 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
             title="Dostępne tylko w mieście"
             className="flex cursor-not-allowed items-center gap-2.5 px-3 py-2 text-sm text-parchment-faint/50"
           >
-            <NavIcon color="oklch(40% 0.02 50)" active={false} />
+            <NavIconImg src="/icons/nav/npc.png" alt="" active={false} dim />
             NPC
           </div>
         )}
@@ -183,7 +219,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <NavLink to="/characters" className={navLinkClass} onClick={onNavigate}>
             {({ isActive }) => (
               <>
-                <NavIcon color="oklch(76% 0.09 85)" active={isActive} />
+                <NavIconImg src="/icons/nav/postacie.png" alt="" active={isActive} />
                 Postacie
               </>
             )}

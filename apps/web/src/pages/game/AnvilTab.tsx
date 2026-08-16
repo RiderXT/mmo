@@ -7,6 +7,7 @@ import { GridSlot } from "../../components/inventory/GridSlot";
 import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { AnvilSlotBox } from "../../components/inventory/AnvilSlotBox";
 import { ItemBox } from "../../components/inventory/ItemBox";
+import { ItemTypeIcon } from "../../components/inventory/ItemTypeIcon";
 import { interpolateUpgrade } from "../../lib/statMath";
 import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
 import { ApiError } from "../../lib/apiClient";
@@ -201,16 +202,23 @@ export function AnvilTab({ character }: { character: Character }) {
             <p className="text-sm text-parchment-faint">Wybierz przedmiot z ekwipunku po lewej.</p>
           ) : (
             <>
-              <h2 className="font-medium text-parchment">
-                {selected.item.name}
-                {selected.upgradeLevel > 0 && <span className="text-gold-bright"> +{selected.upgradeLevel}</span>}
-              </h2>
-              <p className="mt-1 text-xs text-parchment-faint">
-                {TYPE_LABELS[selected.item.type] ?? selected.item.type} · od poziomu {selected.item.minLevel}
-                {selected.item.class ? ` · dla klasy: ${selected.item.class.name}` : " · uniwersalny"}
-                {selected.equippedSlot ? ` · założony (${selected.equippedSlot})` : ""}
-              </p>
-              {selected.item.description && <p className="mt-2 text-sm text-parchment-dim">{selected.item.description}</p>}
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-gold/60 bg-gradient-to-br from-panel-raised to-panel shadow-[0_0_14px_oklch(76%_0.09_85_/_0.25)]">
+                  <ItemTypeIcon type={selected.item.type} className="h-9 w-9 text-gold-bright" />
+                </div>
+                <div>
+                  <h2 className="font-display text-lg font-bold uppercase tracking-wide text-parchment">
+                    {selected.item.name}
+                    {selected.upgradeLevel > 0 && <span className="text-gold-bright"> +{selected.upgradeLevel}</span>}
+                  </h2>
+                  <p className="mt-1 text-xs text-parchment-faint">
+                    {TYPE_LABELS[selected.item.type] ?? selected.item.type} · od poziomu {selected.item.minLevel}
+                    {selected.item.class ? ` · dla klasy: ${selected.item.class.name}` : " · uniwersalny"}
+                    {selected.equippedSlot ? ` · założony (${selected.equippedSlot})` : ""}
+                  </p>
+                </div>
+              </div>
+              {selected.item.description && <p className="mt-3 text-sm text-parchment-dim">{selected.item.description}</p>}
 
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[360px] text-left text-sm">
@@ -256,14 +264,28 @@ export function AnvilTab({ character }: { character: Character }) {
                     Przy porażce materiały przepadają, a przedmiot pozostaje bez zmian.
                   </p>
 
-                  <p className="mt-3 text-xs font-medium text-parchment-dim">Wymagane materiały</p>
-                  <ul className="mt-1 space-y-1 text-sm">
+                  <p className="mt-4 text-[10px] font-bold uppercase tracking-wide text-parchment-faint">
+                    Wymagane materiały
+                  </p>
+                  <ul className="mt-1.5 space-y-1.5 text-sm">
                     {requirements.map((r) => {
                       const owned = ownedQtyByItemId.get(r.requiredItemId) ?? 0;
                       const ok = owned >= r.requiredQty;
                       return (
-                        <li key={r.requiredItemId} className={ok ? "text-parchment-dim" : "text-red-400"}>
-                          {r.requiredItem.name}: {owned} / {r.requiredQty}
+                        <li
+                          key={r.requiredItemId}
+                          className={`flex items-center gap-2 border px-2 py-1.5 ${
+                            ok ? "border-line-soft bg-panel-raised" : "border-red-500/50 bg-red-500/10"
+                          }`}
+                        >
+                          <ItemTypeIcon
+                            type="material"
+                            className={`h-5 w-5 shrink-0 ${ok ? "text-parchment-dim" : "text-red-400"}`}
+                          />
+                          <span className={ok ? "text-parchment-dim" : "text-red-400"}>{r.requiredItem.name}</span>
+                          <span className={`ml-auto font-medium tabular-nums ${ok ? "text-parchment" : "text-red-400"}`}>
+                            {owned} / {r.requiredQty}
+                          </span>
                         </li>
                       );
                     })}
@@ -272,9 +294,9 @@ export function AnvilTab({ character }: { character: Character }) {
                   <button
                     onClick={() => upgradeMutation.mutate(selected.id)}
                     disabled={upgradeMutation.isPending || !hasAllMaterials}
-                    className="mt-4 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4 w-full rounded-md bg-gold px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Ulepsz
+                    Ulepsz przedmiot
                   </button>
                 </>
               )}
