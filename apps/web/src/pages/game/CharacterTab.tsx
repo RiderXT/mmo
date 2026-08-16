@@ -1,0 +1,356 @@
+import { useState } from "react";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Character, EquipSlot } from "@mmo/shared";
+import { GridSlot } from "../../components/inventory/GridSlot";
+import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
+import { ActiveItemSlotBox } from "../../components/inventory/ActiveItemSlotBox";
+import { ItemBox } from "../../components/inventory/ItemBox";
+import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
+import { StatsPanel } from "../../components/character/StatsPanel";
+import { SkillsPanel } from "../../components/character/SkillsPanel";
+import { VitalsPanel } from "../../components/character/VitalsPanel";
+import { ApiError } from "../../lib/apiClient";
+import { interpolateUpgrade } from "../../lib/statMath";
+import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
+import { listPlayerItems } from "../../lib/itemsApi";
+import {
+  listInventory,
+  moveItem,
+  equipItem,
+  unequipItem,
+  upgradeItem,
+  setActiveSlot,
+  clearActiveSlot,
+  openChest,
+  sellItem,
+  discardItem,
+  type InventoryItemDto,
+} from "../../lib/inventoryApi";
+
+const GRID_SLOTS = 24;
+const ACTIVE_SLOTS = 6;
+const EQUIP_SLOTS: EquipSlot[] = ["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"];
+const INVENTORY_TABS = 4;
+const TAB_LABELS = ["I", "II", "III", "IV"];
+
+export function CharacterTab({ character }: { character: Character }) {
+  const characterId = character.id;
+  const queryClient = useQueryClient();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [chestResult, setChestResult] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [contextMenu, setContextMenu] = useState<ItemContextMenuTarget | null>(null);
+  // Require a small pointer movement before a drag starts, so a plain click/tap
+  // (to select an item and show its details) still fires instead of being
+  // swallowed by the drag sensor.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
+
+  const inventoryQuery = useQuery({
+    queryKey: ["inventory", characterId],
+    queryFn: () => listInventory(characterId),
+  });
+
+  function invalidateInventory() {
+    queryClient.invalidateQueries({ queryKey: ["inventory", characterId] });
+  }
+
+  function invalidateInventoryAndCombatStats() {
+    invalidateInventory();
+    queryClient.invalidateQueries({ queryKey: ["combat-stats", characterId] });
+  }
+
+  const moveMutation = useMutation({
+    mutationFn: (vars: { inventoryItemId: string; toSlotIndex: number }) =>
+      moveItem(characterId, vars.inventoryItemId, vars.toSlotIndex),
+    onSuccess: invalidateInventory,
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się przenieść"),
+  });
+
+  const equipMutation = useMutation({
+    mutationFn: (vars: { inventoryItemId: string; equipSlot: EquipSlot }) =>
+      equipItem(characterId, vars.inventoryItemId, vars.equipSlot),
+    onSuccess: invalidateInventoryAndCombatStats,
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie można założyć przedmiotu"),
+  });
+
+  const unequipMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => unequipItem(characterId, inventoryItemId),
+    onSuccess: invalidateInventoryAndCombatStats,
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się zdjąć przedmiotu"),
+  });
+
+  const upgradeMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => upgradeItem(characterId, inventoryItemId),
+    onSuccess: () => {
+      invalidateInventory();
+      setActionError(null);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się ulepszyć"),
+  });
+
+  const openChestMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => openChest(characterId, inventoryItemId),
+    onSuccess: (data) => {
+      invalidateInventory();
+      setActionError(null);
+      setChestResult(
+        data.awarded.length === 0
+          ? "Skrzynia była pusta."
+          : `Zdobyto: ${data.awarded
+              .map((a) => `${itemsQuery.data?.find((i) => i.id === a.itemId)?.name ?? a.itemId} ×${a.quantity}`)
+              .join(", ")}`,
+      );
+      setTimeout(() => setChestResult(null), 5000);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się otworzyć skrzyni"),
+  });
+
+  const sellMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => sellItem(characterId, inventoryItemId),
+    onSuccess: (data) => {
+      invalidateInventory();
+      queryClient.invalidateQueries({ queryKey: ["character", characterId] });
+      setActionError(null);
+      setChestResult(`Sprzedano za ${data.goldEarned} złota.`);
+      setTimeout(() => setChestResult(null), 4000);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się sprzedać przedmiotu"),
+  });
+
+  const discardMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => discardItem(characterId, inventoryItemId),
+    onSuccess: () => {
+      invalidateInventory();
+      setActionError(null);
+      if (selectedId) setSelectedId(null);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się usunąć przedmiotu"),
+  });
+
+  function handleItemContextMenu(item: InventoryItemDto, x: number, y: number) {
+    setContextMenu({
+      inventoryItemId: item.id,
+      name: item.item.name,
+      canOpen: item.item.type === "chest",
+      canSell: item.item.sellPrice > 0 && !item.equippedSlot,
+      x,
+      y,
+    });
+  }
+
+  const setActiveSlotMutation = useMutation({
+    mutationFn: (vars: { inventoryItemId: string; slotIndex: number }) =>
+      setActiveSlot(characterId, vars.inventoryItemId, vars.slotIndex),
+    onSuccess: invalidateInventory,
+    onError: (err) =>
+      setActionError(err instanceof ApiError ? err.message : "Nie można umieścić przedmiotu w tym slocie"),
+  });
+
+  const clearActiveSlotMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => clearActiveSlot(characterId, inventoryItemId),
+    onSuccess: invalidateInventory,
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się usunąć ze slotu"),
+  });
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActionError(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const inventoryItem = active.data.current?.inventoryItem as InventoryItemDto | undefined;
+    if (!inventoryItem) return;
+
+    const overType = over.data.current?.type as "grid" | "equip" | "active" | undefined;
+
+    if (overType === "grid") {
+      const toSlotIndex = over.data.current?.slotIndex as number;
+      if (inventoryItem.equippedSlot) {
+        unequipMutation.mutate(inventoryItem.id);
+      } else if (inventoryItem.activeSlotIndex !== null) {
+        clearActiveSlotMutation.mutate(inventoryItem.id);
+      } else if (toSlotIndex !== inventoryItem.slotIndex) {
+        moveMutation.mutate({ inventoryItemId: inventoryItem.id, toSlotIndex });
+      }
+    } else if (overType === "equip") {
+      const equipSlot = over.data.current?.equipSlot as EquipSlot;
+      equipMutation.mutate({ inventoryItemId: inventoryItem.id, equipSlot });
+    } else if (overType === "active") {
+      const slotIndex = over.data.current?.slotIndex as number;
+      setActiveSlotMutation.mutate({ inventoryItemId: inventoryItem.id, slotIndex });
+    }
+  }
+
+  const items = inventoryQuery.data ?? [];
+  const byGridSlot = new Map<number, InventoryItemDto>();
+  const byEquipSlot = new Map<EquipSlot, InventoryItemDto>();
+  const byActiveSlot = new Map<number, InventoryItemDto>();
+  for (const item of items) {
+    if (item.equippedSlot) byEquipSlot.set(item.equippedSlot, item);
+    else if (item.activeSlotIndex !== null) byActiveSlot.set(item.activeSlotIndex, item);
+    else byGridSlot.set(item.slotIndex, item);
+  }
+  const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
+    let count = 0;
+    for (const slotIndex of byGridSlot.keys()) {
+      if (Math.floor(slotIndex / GRID_SLOTS) === tab) count += 1;
+    }
+    return count;
+  });
+
+  const selected = items.find((i) => i.id === selectedId) ?? null;
+
+  return (
+    <div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <VitalsPanel characterId={character.id} />
+        <StatsPanel character={character} />
+        <SkillsPanel character={character} />
+      </div>
+
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <div className="mt-6 flex flex-wrap gap-8">
+          <div>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">Założony ekwipunek</p>
+            <div className="flex flex-wrap gap-3">
+              {EQUIP_SLOTS.map((slot) => {
+                const item = byEquipSlot.get(slot);
+                return (
+                  <EquipSlotBox key={slot} slot={slot}>
+                    {item && (
+                      <ItemBox
+                        inventoryItem={item}
+                        selected={item.id === selectedId}
+                        onSelect={() => setSelectedId(item.id)}
+                        onContextMenu={handleItemContextMenu}
+                      />
+                    )}
+                  </EquipSlotBox>
+                );
+              })}
+            </div>
+
+            <p className="mb-2 mt-4 text-xs font-medium text-parchment-dim">
+              Aktywne itemy (potiony — zużywane automatycznie na ekspedycji)
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {Array.from({ length: ACTIVE_SLOTS }, (_, slotIndex) => {
+                const item = byActiveSlot.get(slotIndex);
+                return (
+                  <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
+                    {item && (
+                      <ItemBox
+                        inventoryItem={item}
+                        selected={item.id === selectedId}
+                        onSelect={() => setSelectedId(item.id)}
+                        onContextMenu={handleItemContextMenu}
+                      />
+                    )}
+                  </ActiveItemSlotBox>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-parchment-dim">Ekwipunek (przeciągnij, by przenieść)</p>
+              <div className="flex gap-1">
+                {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex h-6 w-6 items-center justify-center  text-xs font-medium transition ${
+                      activeTab === tab
+                        ? "bg-gold text-ink"
+                        : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
+                    } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
+                    title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
+                  >
+                    {TAB_LABELS[tab]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-6 gap-2">
+              {Array.from({ length: GRID_SLOTS }, (_, slotInTab) => {
+                const slotIndex = activeTab * GRID_SLOTS + slotInTab;
+                const item = byGridSlot.get(slotIndex);
+                return (
+                  <GridSlot key={slotIndex} slotIndex={slotIndex}>
+                    {item && (
+                      <ItemBox
+                        inventoryItem={item}
+                        selected={item.id === selectedId}
+                        onSelect={() => setSelectedId(item.id)}
+                        onContextMenu={handleItemContextMenu}
+                      />
+                    )}
+                  </GridSlot>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </DndContext>
+
+      {actionError && <p className="mt-3 text-sm text-red-400">{actionError}</p>}
+      {chestResult && <p className="mt-3 text-sm text-rarity-uncommon">{chestResult}</p>}
+
+      {selected && (
+        <div className="mt-6 max-w-sm space-y-2 panel p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium text-parchment">
+              {selected.item.name}
+              {selected.upgradeLevel > 0 && <span className="text-gold-bright"> +{selected.upgradeLevel}</span>}
+            </h2>
+            <button onClick={() => setSelectedId(null)} className="text-xs text-parchment-faint hover:text-parchment-dim">
+              zamknij
+            </button>
+          </div>
+          <p className="text-xs text-parchment-faint">
+            {TYPE_LABELS[selected.item.type] ?? selected.item.type} · od poziomu {selected.item.minLevel}
+            {selected.item.class ? ` · dla klasy: ${selected.item.class.name}` : " · uniwersalny"}
+            {selected.equippedSlot ? ` · założony (${selected.equippedSlot})` : ""}
+            {selected.activeSlotIndex !== null ? ` · aktywny slot ${selected.activeSlotIndex + 1}` : ""}
+          </p>
+          {selected.item.description && <p className="text-sm text-parchment-dim">{selected.item.description}</p>}
+          <div className="text-sm text-parchment-dim">
+            {Object.entries({
+              ...interpolateUpgrade(selected.item.baseStats, selected.item.maxUpgradeStats, selected.upgradeLevel),
+              ...selected.rolledStats,
+            })
+              .filter(([, v]) => v)
+              .map(([k, v]) => (
+                <span key={k} className="mr-3 inline-block">
+                  {STAT_LABELS[k as keyof typeof STAT_LABELS] ?? k}: {formatStatValue(k as keyof typeof STAT_LABELS, v as number)}
+                </span>
+              ))}
+          </div>
+          {selected.item.type !== "consumable" && (
+            <button
+              onClick={() => upgradeMutation.mutate(selected.id)}
+              disabled={upgradeMutation.isPending}
+              className=" bg-gold px-3 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
+            >
+              Ulepsz
+            </button>
+          )}
+        </div>
+      )}
+
+      {contextMenu && (
+        <ItemContextMenu
+          target={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onOpen={(id) => openChestMutation.mutate(id)}
+          onSell={(id) => sellMutation.mutate(id)}
+          onDiscard={(id) => discardMutation.mutate(id)}
+        />
+      )}
+    </div>
+  );
+}
