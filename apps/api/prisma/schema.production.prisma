@@ -21,14 +21,38 @@ model User {
   email             String   @unique
   passwordHash      String
   role              String   @default("player")
+  // Bumped fire-and-forget on every authenticated request (see lib/authGuard.ts) — "online" on
+  // the profile page is derived from this being within the last few minutes, not a stored flag.
+  lastSeenAt        DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   characters        Character[]
   refreshTokens     RefreshToken[]
   gameLogs          GameLog[]
+  friendRequestsSent     FriendRequest[] @relation("FriendRequestsSent")
+  friendRequestsReceived FriendRequest[] @relation("FriendRequestsReceived")
 
   @@index([role])
+}
+
+// Both a pending invite and an accepted friendship are rows here — "friend" = status "accepted",
+// checked from either side (requester or addressee). Unfriend = delete the row.
+// Valid values: pending | accepted | declined
+model FriendRequest {
+  id            String   @id @default(cuid())
+  requesterId   String
+  addresseeId   String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requester User @relation("FriendRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendRequestsReceived", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId])
+  @@index([addresseeId])
 }
 
 model RefreshToken {
@@ -67,6 +91,10 @@ model Character {
   // "heading to the village".
   travelDestinationZoneId String?
   travelArrivesAt         DateTime?
+  // Lifetime counters for the public profile page — incremented in applyExpeditionReward
+  // (expeditions/service.ts) and openChest (inventory/service.ts) respectively.
+  monstersKilled     Int      @default(0)
+  chestsOpened       Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -237,6 +265,9 @@ model Item {
   potionDurationSec   Int?
   // Gold received for selling one unit via the inventory context menu. 0 = not sellable.
   sellPrice           Int      @default(0)
+  // How many horizontal grid cells this item occupies when placed unequipped (see
+  // apps/web/src/lib/inventoryGrid.ts). weapon/armor are seeded at 2; everything else is 1.
+  gridWidth           Int      @default(1)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -278,6 +309,10 @@ model ItemUpgradeLevelConfig {
   itemId         String
   targetLevel    Int
   successChance  Float
+  // Gold cost to attempt this upgrade. null = use the shared default increasing curve
+  // (packages/shared/src/lib/upgradeSuccess.ts's defaultUpgradeGoldCost), same override pattern
+  // as successChance.
+  goldCost       Int?
 
   item           Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
