@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminGrantInput, AdminCharacterDto } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
+import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
+import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
 import {
   listAllCharacters,
@@ -12,7 +14,6 @@ import {
   resolveFlaggedExpedition,
   type RevertExpeditionResult,
 } from "../../lib/adminApi";
-import { TYPE_LABELS } from "../../lib/statFormat";
 
 function emptyGrant(): AdminGrantInput {
   return { exp: 0, gold: 0, items: [] };
@@ -29,9 +30,7 @@ export function GrantAdminPage() {
   const [form, setForm] = useState<AdminGrantInput>(emptyGrant());
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [itemSearch, setItemSearch] = useState("");
-  const [itemTypeFilter, setItemTypeFilter] = useState<string>("all");
-  const [itemClassFilter, setItemClassFilter] = useState<string>("all");
+  const itemPicker = useItemPickerFilter(itemsQuery.data);
   const [revertId, setRevertId] = useState("");
   const [revertError, setRevertError] = useState<string | null>(null);
   const [revertResult, setRevertResult] = useState<RevertExpeditionResult | null>(null);
@@ -47,16 +46,6 @@ export function GrantAdminPage() {
       (c) => c.name.toLowerCase().includes(q) || c.ownerEmail.toLowerCase().includes(q),
     );
   }, [characters, search]);
-
-  const filteredItemOptions = useMemo(() => {
-    const q = itemSearch.trim().toLowerCase();
-    return (itemsQuery.data ?? []).filter(
-      (i) =>
-        (itemTypeFilter === "all" || i.type === itemTypeFilter) &&
-        (itemClassFilter === "all" || i.classId === itemClassFilter) &&
-        (!q || i.name.toLowerCase().includes(q)),
-    );
-  }, [itemsQuery.data, itemSearch, itemTypeFilter, itemClassFilter]);
 
   const selected: AdminCharacterDto | undefined = characters.find((c) => c.id === selectedId);
 
@@ -202,42 +191,17 @@ export function GrantAdminPage() {
 
               <div>
                 <p className="mb-2 text-xs font-medium text-parchment-dim">Dodaj itemy do ekwipunku</p>
-                <div className="mb-2 flex flex-wrap gap-2">
-                  <input
-                    className={`${inputClass} w-40`}
-                    placeholder="Szukaj itemu..."
-                    value={itemSearch}
-                    onChange={(e) => setItemSearch(e.target.value)}
-                  />
-                  <select
-                    className={`${inputClass} w-36`}
-                    value={itemTypeFilter}
-                    onChange={(e) => setItemTypeFilter(e.target.value)}
-                  >
-                    <option value="all">Wszystkie typy</option>
-                    {Object.entries(TYPE_LABELS).map(([type, label]) => (
-                      <option key={type} value={type}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className={`${inputClass} w-36`}
-                    value={itemClassFilter}
-                    onChange={(e) => setItemClassFilter(e.target.value)}
-                  >
-                    <option value="all">Wszystkie klasy</option>
-                    <option value="">Uniwersalne</option>
-                    {classesQuery.data?.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="self-center text-xs text-parchment-faint">
-                    {filteredItemOptions.length} / {itemsQuery.data?.length ?? 0}
-                  </span>
-                </div>
+                <ItemPickerFilterBar
+                  search={itemPicker.search}
+                  onSearchChange={itemPicker.setSearch}
+                  typeFilter={itemPicker.typeFilter}
+                  onTypeFilterChange={itemPicker.setTypeFilter}
+                  classFilter={itemPicker.classFilter}
+                  onClassFilterChange={itemPicker.setClassFilter}
+                  classes={classesQuery.data}
+                  filteredCount={itemPicker.filtered.length}
+                  total={itemPicker.total}
+                />
                 <div className="space-y-2">
                   {form.items.map((entry, idx) => (
                     <div key={idx} className="flex flex-wrap items-center gap-2">
@@ -251,7 +215,7 @@ export function GrantAdminPage() {
                         }}
                       >
                         <option value="">wybierz item</option>
-                        {filteredItemOptions.map((i) => (
+                        {itemPicker.filtered.map((i) => (
                           <option key={i.id} value={i.id}>
                             {i.name}
                           </option>

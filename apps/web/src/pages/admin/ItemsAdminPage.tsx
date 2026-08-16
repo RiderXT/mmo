@@ -9,6 +9,8 @@ import {
   type CreateItemInput,
 } from "@mmo/shared";
 import { Field, MiniField, inputClass } from "../../components/admin/Field";
+import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
+import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
 import { listItems, createItem, updateItem, deleteItem, listClasses, type ItemDto } from "../../lib/adminApi";
 import { TYPE_LABELS, STAT_LABELS, statHint } from "../../lib/statFormat";
@@ -212,6 +214,8 @@ export function ItemsAdminPage() {
   }
 
   const otherItems = (itemsQuery.data ?? []).filter((i) => i.id !== editingId);
+  const upgradeMaterialPicker = useItemPickerFilter(otherItems);
+  const chestLootPicker = useItemPickerFilter(otherItems);
 
   return (
     <div>
@@ -632,6 +636,17 @@ export function ItemsAdminPage() {
             <p className="mb-2 text-xs font-medium text-parchment-dim">
               Wymagane materiały do ulepszenia
             </p>
+            <ItemPickerFilterBar
+              search={upgradeMaterialPicker.search}
+              onSearchChange={upgradeMaterialPicker.setSearch}
+              typeFilter={upgradeMaterialPicker.typeFilter}
+              onTypeFilterChange={upgradeMaterialPicker.setTypeFilter}
+              classFilter={upgradeMaterialPicker.classFilter}
+              onClassFilterChange={upgradeMaterialPicker.setClassFilter}
+              classes={classesQuery.data}
+              filteredCount={upgradeMaterialPicker.filtered.length}
+              total={upgradeMaterialPicker.total}
+            />
             <div className="space-y-2">
               {form.upgradeRequirements.map((req, idx) => (
                 <div key={idx} className="flex flex-wrap items-center gap-2">
@@ -656,7 +671,7 @@ export function ItemsAdminPage() {
                     }}
                   >
                     <option value="">wybierz item</option>
-                    {otherItems.map((i) => (
+                    {upgradeMaterialPicker.filtered.map((i) => (
                       <option key={i.id} value={i.id}>
                         {i.name}
                       </option>
@@ -708,6 +723,17 @@ export function ItemsAdminPage() {
               <p className="mb-2 text-xs font-medium text-parchment-dim">
                 Zawartość skrzyni (każdy wiersz losowany niezależnie — szansa 1 = gwarantowane)
               </p>
+              <ItemPickerFilterBar
+                search={chestLootPicker.search}
+                onSearchChange={chestLootPicker.setSearch}
+                typeFilter={chestLootPicker.typeFilter}
+                onTypeFilterChange={chestLootPicker.setTypeFilter}
+                classFilter={chestLootPicker.classFilter}
+                onClassFilterChange={chestLootPicker.setClassFilter}
+                classes={classesQuery.data}
+                filteredCount={chestLootPicker.filtered.length}
+                total={chestLootPicker.total}
+              />
               <div className="space-y-2">
                 {form.chestLoot.map((entry, idx) => (
                   <div key={idx} className="flex flex-wrap items-end gap-2">
@@ -722,7 +748,7 @@ export function ItemsAdminPage() {
                         }}
                       >
                         <option value="">wybierz item</option>
-                        {otherItems.map((i) => (
+                        {chestLootPicker.filtered.map((i) => (
                           <option key={i.id} value={i.id}>
                             {i.name}
                           </option>

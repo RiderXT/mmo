@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateMonsterSchema, StatKeySchema, type CreateMonsterInput } from "@mmo/shared";
 import { Field, MiniField, inputClass } from "../../components/admin/Field";
+import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
+import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
 import { STAT_LABELS, statHint } from "../../lib/statFormat";
 import {
@@ -10,6 +12,7 @@ import {
   updateMonster,
   deleteMonster,
   listItems,
+  listClasses,
   type MonsterDto,
 } from "../../lib/adminApi";
 
@@ -41,6 +44,8 @@ export function MonstersAdminPage() {
   const queryClient = useQueryClient();
   const monstersQuery = useQuery({ queryKey: ["admin-monsters"], queryFn: listMonsters });
   const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
+  const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const dropItemPicker = useItemPickerFilter(itemsQuery.data);
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateMonsterInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
@@ -82,8 +87,6 @@ export function MonstersAdminPage() {
     }
     saveMutation.mutate(parsed.data);
   }
-
-  const items = itemsQuery.data ?? [];
 
   return (
     <div>
@@ -274,6 +277,17 @@ export function MonstersAdminPage() {
             <p className="mb-2 text-xs font-medium text-parchment-dim">
               Drop (co i z jaką szansą wypada z tego potwora)
             </p>
+            <ItemPickerFilterBar
+              search={dropItemPicker.search}
+              onSearchChange={dropItemPicker.setSearch}
+              typeFilter={dropItemPicker.typeFilter}
+              onTypeFilterChange={dropItemPicker.setTypeFilter}
+              classFilter={dropItemPicker.classFilter}
+              onClassFilterChange={dropItemPicker.setClassFilter}
+              classes={classesQuery.data}
+              filteredCount={dropItemPicker.filtered.length}
+              total={dropItemPicker.total}
+            />
             <div className="space-y-2">
               {form.drops.map((drop, idx) => (
                 <div key={idx} className="flex flex-wrap items-end gap-2">
@@ -288,7 +302,7 @@ export function MonstersAdminPage() {
                       }}
                     >
                       <option value="">wybierz item</option>
-                      {items.map((i) => (
+                      {dropItemPicker.filtered.map((i) => (
                         <option key={i.id} value={i.id}>
                           {i.name}
                         </option>

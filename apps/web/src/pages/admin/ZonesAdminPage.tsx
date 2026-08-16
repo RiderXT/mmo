@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateZoneSchema, type CreateZoneInput } from "@mmo/shared";
 import { Field, MiniField, inputClass } from "../../components/admin/Field";
+import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
+import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
 import {
   listZones,
@@ -10,6 +12,7 @@ import {
   deleteZone,
   listMonsters,
   listItems,
+  listClasses,
   type ZoneDto,
 } from "../../lib/adminApi";
 
@@ -38,6 +41,8 @@ export function ZonesAdminPage() {
   const zonesQuery = useQuery({ queryKey: ["admin-zones"], queryFn: listZones });
   const monstersQuery = useQuery({ queryKey: ["admin-monsters"], queryFn: listMonsters });
   const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
+  const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const dropItemPicker = useItemPickerFilter(itemsQuery.data);
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateZoneInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +86,6 @@ export function ZonesAdminPage() {
   }
 
   const monsters = monstersQuery.data ?? [];
-  const items = itemsQuery.data ?? [];
 
   return (
     <div>
@@ -265,6 +269,17 @@ export function ZonesAdminPage() {
             <p className="mb-2 text-xs font-medium text-parchment-dim">
               Dodatkowe dropy krainy (niezależne od konkretnego potwora)
             </p>
+            <ItemPickerFilterBar
+              search={dropItemPicker.search}
+              onSearchChange={dropItemPicker.setSearch}
+              typeFilter={dropItemPicker.typeFilter}
+              onTypeFilterChange={dropItemPicker.setTypeFilter}
+              classFilter={dropItemPicker.classFilter}
+              onClassFilterChange={dropItemPicker.setClassFilter}
+              classes={classesQuery.data}
+              filteredCount={dropItemPicker.filtered.length}
+              total={dropItemPicker.total}
+            />
             <div className="space-y-2">
               {form.drops.map((drop, idx) => (
                 <div key={idx} className="flex flex-wrap items-end gap-2">
@@ -279,7 +294,7 @@ export function ZonesAdminPage() {
                       }}
                     >
                       <option value="">wybierz item</option>
-                      {items.map((i) => (
+                      {dropItemPicker.filtered.map((i) => (
                         <option key={i.id} value={i.id}>
                           {i.name}
                         </option>
