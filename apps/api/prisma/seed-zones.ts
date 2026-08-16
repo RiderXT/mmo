@@ -25,6 +25,7 @@
  * by name) are deleted and recreated rather than skipped, so tuning numbers is "edit and re-run".
  */
 import { PrismaClient } from "@prisma/client";
+import { expRewardForLevel } from "@mmo/shared";
 
 const prisma = new PrismaClient();
 
@@ -118,7 +119,10 @@ function monsterStatsForLevel(level: number) {
   const damagePerRound = geared.attack - monsterDefense;
   const hp = Math.round(damagePerRound * targetRoundsToKill);
   const attack = geared.defense + Math.round(geared.hp / 12 / (targetRoundsToKill - 1));
-  const expReward = Math.round(hp * 0.21);
+  // Derived from the shared exp curve (packages/shared/lib/leveling.ts), not from monster hp —
+  // keeps ~KILLS_PER_LEVEL kills-to-clear-a-level consistent at every level, and stays in
+  // lockstep automatically if that curve is ever rebalanced.
+  const expReward = expRewardForLevel(level);
   const goldReward = Math.round(hp * 0.045);
 
   return { hp, attack, defense: monsterDefense, expReward, goldReward };
@@ -168,6 +172,11 @@ async function clearTier(tier: Tier) {
     await prisma.itemUpgradeRequirement.deleteMany({
       where: { OR: [{ itemId: item.id }, { requiredItemId: item.id }] },
     });
+    // Features added after this function was written (starter items, chest rewards) reference
+    // Item without an onDelete: Cascade — clean those up too or the delete below throws P2003.
+    await prisma.classStarterItem.deleteMany({ where: { itemId: item.id } });
+    await prisma.chestLoot.deleteMany({ where: { OR: [{ chestItemId: item.id }, { rewardItemId: item.id }] } });
+    await prisma.gameEvent.updateMany({ where: { bonusDropItemId: item.id }, data: { bonusDropItemId: null } });
     await prisma.item.delete({ where: { id: item.id } });
   }
 }

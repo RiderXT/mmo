@@ -17,6 +17,7 @@ import {
   type DerivedStats,
   type DerivedStatsBreakdown,
 } from "./combat.js";
+import { computeLevel, expRewardForLevel } from "@mmo/shared";
 import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey, CombatEvent, BattleTacticsInput } from "@mmo/shared";
 
 export class ExpeditionError extends Error {
@@ -28,10 +29,7 @@ export class ExpeditionError extends Error {
   }
 }
 
-/** Exp needed cumulatively is level*100 to reach the next level — a flat placeholder curve, easy to rebalance later without touching the claim flow. */
-export function computeLevel(totalExp: number): number {
-  return Math.max(1, Math.floor(totalExp / 100) + 1);
-}
+export { computeLevel };
 
 const ACTIVE_SKILL_MANA_COST = (level: number) => 10 + 5 * level;
 
@@ -418,24 +416,32 @@ function deriveResultFromEvents(events: CombatEvent[]): ExpeditionResult {
   };
 }
 
-// Hard safety net, independent of any admin setting (same philosophy as combat.ts's MAX_ROUNDS):
-// a single expedition granting more than this many levels at once is almost certainly a balance
-// bug or exploit, not a legitimately strong character — block the grant instead of paying it out
-// silently, and let an admin review/resolve it via the "Ekspedycje" admin tool.
-const MAX_LEVELS_PER_EXPEDITION = 10;
+// Hard safety net, independent of any admin setting (same philosophy as combat.ts's MAX_ROUNDS).
+// Originally compared "levels gained in one expedition" against a flat cap, which worked under
+// the old flat exp curve (every level cost the same 100 exp) but stopped meaning anything once
+// computeLevel became a steep cubic curve: near level 1 a normal expedition can legitimately
+// jump several levels from very little exp, while near level 90 even a wildly inflated reward
+// might not clear a single level. The check now looks at exp PER MONSTER KILLED instead, which
+// stays meaningful at any point on the curve — it's flagged only when the average kill paid out
+// far more than the toughest monster a character at this level could plausibly have fought.
+//
+// LEVEL_HEADROOM covers legitimately fighting at the top of a zone tier (tiers are 10 levels
+// wide, see seed-zones.ts) while sitting near the bottom of it; SAFETY_MARGIN adds slack on top
+// for general variance. appliedExpMultiplier scales the ceiling too, so a legitimate x3 exp
+// event doesn't get flagged for paying out ~3x per kill.
+const LEVEL_HEADROOM = 15;
+const SAFETY_MARGIN = 1.5;
 
-/** appliedExpMultiplier scales the threshold too — a legitimate x3 exp event naturally grants
- * ~3x the levels for the same kills, and must not get flagged for that alone. Real balance
- * exploits (hundreds of kills in one expedition) still blow past even the scaled limit. */
 function checkRewardPlausibility(
   character: { exp: number; level: number },
   result: ExpeditionResult,
   appliedExpMultiplier: number,
 ): { ok: true } | { ok: false; code: string } {
-  const newLevel = computeLevel(character.exp + result.expGained);
-  const levelsGained = Math.max(0, newLevel - character.level);
-  const maxAllowed = MAX_LEVELS_PER_EXPEDITION * Math.max(1, appliedExpMultiplier);
-  if (levelsGained > maxAllowed) {
+  if (result.monstersDefeated <= 0) return { ok: true };
+  const avgExpPerMonster = result.expGained / result.monstersDefeated;
+  const maxPlausibleExpPerMonster =
+    expRewardForLevel(character.level + LEVEL_HEADROOM) * Math.max(1, appliedExpMultiplier) * SAFETY_MARGIN;
+  if (avgExpPerMonster > maxPlausibleExpPerMonster) {
     return { ok: false, code: "SUSPICIOUS_LEVEL_JUMP" };
   }
   return { ok: true };

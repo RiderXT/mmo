@@ -1712,6 +1712,62 @@ usunięcie znajomego. Ranking i profil zweryfikowane przez curl dla różnych ko
 postaci wczytuje się bez błędu własności). `pnpm -r typecheck` czysto. Dane testowe (4 konta, 4
 postacie) usunięte po weryfikacji.
 
+## Nowa krzywa poziomów — exp w milionach (post-profil)
+
+`computeLevel()` używał płaskiej krzywej placeholder (`floor(exp/100)+1` — każdy poziom kosztował
+dokładnie 100 exp, level 40 = 3900 exp). Użytkownik zgłosił, że to zbyt mało — level 40 powinien
+wymagać milionów exp. Zastąpiono sześcienną krzywą w nowym `packages/shared/src/lib/leveling.ts`:
+
+- `expForLevel(level) = round(100 * (level-1)^3)` — level 1 = 0 exp (jak dotychczas), level 10 ≈
+  72,9k, level 40 ≈ 5,93 mln, level 70 ≈ 32,85 mln, level 99 ≈ 94,1 mln (wybrane wśród trzech
+  wariantów zaproponowanych użytkownikowi, jako środkowa opcja "100 × poziom³").
+- `computeLevel(totalExp)` odwraca powyższe (cbrt + korekta zaokrągleń) — jedyne miejsce liczące
+  poziom z exp, reużywane przez `expeditions/service.ts` (re-eksportowane stamtąd, więc
+  `admin/expeditions` i `admin/characters` nie zmieniły importów) i front (`AppShell.tsx`).
+- `expRewardForLevel(level)` — ile exp powinien dawać pojedynczy "on-level" potwór, wyliczane
+  wprost z krzywej: `(expForLevel(level+1) - expForLevel(level)) / KILLS_PER_LEVEL` (stała
+  `KILLS_PER_LEVEL = 25`), zamiast osobno dobieranej liczby. Zastąpiło to
+  `expReward = round(hp * 0.21)` w `seed-zones.ts` — rebalans krzywej automatycznie rebalansuje
+  też nagrody z potworów, bez ręcznego przeliczania.
+
+**Anti-cheat (`checkRewardPlausibility`, dawniej próg `MAX_LEVELS_PER_EXPEDITION`)**: stary próg
+"ile poziomów zdobyto w jednej ekspedycji" miał sens tylko przy płaskiej krzywej (każdy poziom = ta
+sama porcja exp). Przy krzywej sześciennej całkowicie traci sens — blisko poziomu 1 zdobycie kilku
+poziomów z niewielkiego exp jest normalne, blisko poziomu 90 nawet mocno zawyżona nagroda może nie
+dobić do jednego poziomu, czyli próg nigdy by tam nie zadziałał. Nowa logika patrzy na **exp na
+zabitego potwora** (curve-independent): flaguje, gdy średnie exp/potwór przekracza
+`expRewardForLevel(character.level + 15) * mnożnik eventu * 1.5` — czyli więcej niż realnie mógłby
+dać najmocniejszy potwór ze szczytu strefy (strefy mają szerokość 10 poziomów), z zapasem. To też
+wyjaśnia zgłoszony wcześniej fałszywy alarm (1051 exp / 8 potworów ≈ 131 exp/potwór, pasujące do
+zawartości poziomu ~30-35) — pod starym progiem "10 poziomów/ekspedycję" tak duży skok exp blisko
+niskiego poziomu bywał niesłusznie łapany; nowy próg patrzy tylko na samo exp/potwór, nie na to, ile
+poziomów to akurat dało.
+
+**Przeliczenie istniejących postaci**: `Character.level` to pole zapisane w bazie, nie liczone na
+żywo — jednorazowy skrypt `apps/api/prisma/scripts/recompute-character-levels.ts` przelicza
+`level = computeLevel(exp)` dla każdej postaci (exp, złoto, wydane/niewydane punkty statów
+NIETKNIĘTE — nie da się sensownie "cofnąć" już wydanych punktów, więc pozostają jak były). Levele
+spadły drastycznie (np. 3957 exp: level 40 → level 4) — to świadomy wybór użytkownika ("przelicz
+uczciwie") spośród dwóch opcji zaproponowanych w pytaniu doprecyzowującym.
+
+Przy okazji naprawiono preexistujący bug w `seed-zones.ts`'s `clearTier()` (blokował ponowny
+reseed krain FK-em na `ClassStarterItem`/`ChestLoot`/`GameEvent.bonusDropItemId` — te relacje
+zostały dodane już po napisaniu tej funkcji i nie były czyszczone przed usunięciem itemu).
+
+Zweryfikowane: `pnpm -r typecheck` czysto (wymaga zbudowania `packages/shared` — `tsc -p
+tsconfig.json` — bo `apps/api`/`apps/web` konsumują `dist/`, nie źródła). `seed-zones.ts`
+uruchomiony ponownie na czysto (10 krain, poprawne `expReward` per poziom, np. level 1 = 4 exp,
+level 99 = 116,4k exp). Skrypt przeliczenia poziomów uruchomiony na `dev.db` (3 z 5 postaci
+zmieniły poziom, reszta już była poziom 1 / 0 exp). W przeglądarce: nowa testowa postać (poziom 1,
+pasek exp 0%) → nadanie 10 000 exp przez panel admina → poprawnie "awansowała o 4 poz. (teraz poz.
+5)", pasek exp w `AppShell` pokazuje ~59% (zgodnie z wyliczeniem: (10000-6400)/(12500-6400)).
+Postać testowa usunięta po weryfikacji.
+
+**Świadomie poza zakresem tej zmiany**: pełny system łowisk/kopalni (nowe typy przedmiotów wędka/
+kilof/przynęta, mechanika połowu/wydobycia z dwoma niezależnymi oknami czasowymi, przełącznik
+"można wrócić do krainy powyżej poziomu") — to osobna, duża funkcja omówiona z użytkownikiem, ale
+jeszcze nie zaplanowana ani zaimplementowana.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

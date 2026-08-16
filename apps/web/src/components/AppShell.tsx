@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { expForLevel } from "@mmo/shared";
 import { logoutRequest } from "../lib/authApi";
 import { useAuthStore } from "../store/authStore";
 import { getCharacter } from "../lib/charactersApi";
@@ -72,9 +73,12 @@ function CharacterHeaderBar() {
 
   if (!characterId || !characterQuery.data) return null;
   const character = characterQuery.data;
-  // computeLevel() in apps/api/.../expeditions/service.ts uses a flat "level*100 exp" curve,
-  // so progress within the current level is simply exp mod 100 — no extra endpoint needed.
-  const expIntoLevel = character.exp % 100;
+  // computeLevel() in apps/api/.../expeditions/service.ts uses a cubic exp curve (packages/shared
+  // lib/leveling.ts) — progress within the current level is how far exp sits between this
+  // level's floor and the next level's floor, as a percentage.
+  const levelFloor = expForLevel(character.level);
+  const levelSpan = Math.max(1, expForLevel(character.level + 1) - levelFloor);
+  const expIntoLevel = Math.min(100, Math.max(0, ((character.exp - levelFloor) / levelSpan) * 100));
 
   return (
     <div className="flex flex-1 items-center justify-between gap-4 overflow-hidden">
