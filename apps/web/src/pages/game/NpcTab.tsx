@@ -130,11 +130,16 @@ export function NpcTab({ character }: { character: Character }) {
     });
   }
 
-  function toggleSelected(itemId: string) {
+  function toggleSelected(item: InventoryItemDto) {
+    if (item.item.sellPrice <= 0) {
+      setActionError(`"${item.item.name}" nie ma ustalonej wartości sprzedaży — nie można go zaznaczyć.`);
+      return;
+    }
+    setActionError(null);
     setSelection((prev) => {
       const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
       return next;
     });
   }
@@ -213,7 +218,9 @@ export function NpcTab({ character }: { character: Character }) {
 
           <div className="mt-3 flex items-center justify-between">
             <p className="text-xs text-parchment-faint">
-              {selectMode ? "Klikaj przedmioty, żeby je zaznaczyć." : "Prawy klik: sprzedaj / usuń / otwórz."}
+              {selectMode
+                ? "Klikaj przedmioty z wartością sprzedaży, żeby je zaznaczyć."
+                : "Prawy klik: sprzedaj / usuń / otwórz."}
             </p>
             <div className="flex gap-1">
               {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
@@ -241,7 +248,7 @@ export function NpcTab({ character }: { character: Character }) {
                     <ItemBox
                       inventoryItem={item}
                       selected={selectMode && selection.has(item.id)}
-                      onSelect={() => (selectMode ? toggleSelected(item.id) : undefined)}
+                      onSelect={() => (selectMode ? toggleSelected(item) : undefined)}
                       onContextMenu={handleItemContextMenu}
                     />
                   )}

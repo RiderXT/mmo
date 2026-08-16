@@ -1416,6 +1416,47 @@ już nie pokazuje handlarza; poza miastem sidebar pokazuje "NPC" wyszarzone, a b
 zakładki pokazuje blokadę. `pnpm --filter web typecheck` czysto. Dane testowe usunięto po
 weryfikacji.
 
+## Powrót z ekspedycji "donikąd" + zawieszony licznik + masowa sprzedaż 0 złota (post-NPC-tab)
+
+### Kontekst
+
+Użytkownik zgłosił, że stojąc w dzikiej krainie i klikając "Wróć do wioski", po odliczeniu czasu
+trzeba było kliknąć jeszcze raz, żeby faktycznie znaleźć się w mieście — bo przycisk celował w
+`destinationZoneId: null`, czyli w **wirtualną "wioskę"** sprzed Etapu 21 (`currentZoneId ===
+null`), a nie w żadną realną krainę typu miasto. Skoro `isTown` sprawdzane jest wszędzie przez
+`zones.find(z => z.id === character.currentZoneId)`, wylądowanie na `null` nigdy nie liczyło się
+jako bycie w mieście — NPC/Kowadło były i tak niedostępne, trzeba było ręcznie wybrać prawdziwe
+miasto z listy krain. Osobno zgłoszono, że po samym odliczeniu ("W drodze… 0:00") panel nie
+odświeżał się automatycznie — wymagał ręcznej nawigacji. Dodatkowo w nowej zakładce NPC masowa
+sprzedaż zwracała "Sprzedano za 0 złota (N nieudanych)" i przedmioty nie znikały — bo tryb
+zaznaczania pozwalał zaznaczyć też przedmioty z `sellPrice === 0`, które `sellItem` odrzuca.
+
+### Zmiany
+
+- `ExpeditionPanel.tsx` — przycisk (przemianowany z "Wróć do wioski" na "Wróć do miasta") celuje
+  teraz w `zones.find(z => z.isTown)?.id` zamiast w `null`; ukryty gdy postać już stoi w mieście,
+  wyszarzony z tooltipem "Brak skonfigurowanego miasta" gdy żadna kraina nie ma `isTown: true`.
+  Zero zmian backendu — `startTravel` już przyjmował dowolny `destinationZoneId` i poprawnie liczy
+  czas jako sumę `travelTimeSeconds` obu krain (Etap 9), więc to czysto frontendowa zmiana celu.
+- `ExpeditionPanel.tsx` — jednorazowy `invalidateQueries` przy przekroczeniu `travelArrivesAt`
+  mógł przegrać wyścig z zegarem serwera (`resolveTravelArrival` porównuje `travelArrivesAt` z
+  serwerowym `Date.now()` — przy niewielkim rozjeździe zegara klient/serwer na produkcyjnym VPS
+  jeden refetch mógł nic nie zmienić, a że efekt odpalał się tylko raz, nic już nie ponawiało
+  próby). Naprawione przez utrzymanie tickowania `now` przez cały czas `isTraveling` (nie tylko
+  do `travelReady`) i dopisanie `now` do zależności efektu invalidującego — odpytuje serwer co
+  sekundę, aż ten faktycznie potwierdzi przybycie, zamiast próbować raz.
+- `NpcTab.tsx` — `toggleSelected` odrzuca teraz przedmioty z `item.item.sellPrice <= 0` (ten sam
+  warunek co `canSell` w `ItemContextMenu`), pokazując komunikat zamiast dodawać je po cichu do
+  zaznaczenia; podpowiedź nad siatką doprecyzowana ("…przedmioty z wartością sprzedaży").
+
+Zweryfikowane w przeglądarce (testowa kraina-miasto): stojąc w dzikiej krainie, klik "Wróć do
+miasta" pokazał poprawną nazwę celu (nie "wioski"), a po odliczeniu panel **bez żadnego
+dodatkowego kliknięcia** przełączył się na widok miasta (NPC-hint) i sidebar odblokował
+Kowadło/NPC; próba zaznaczenia niesprzedawalnego przedmiotu w trybie masowej sprzedaży pokazała
+komunikat i nie weszła do zaznaczenia, a sprzedaż jedynego zaznaczonego (sprzedawalnego)
+przedmiotu zwróciła pełny sukces ("Sprzedano za 25 złota", bez "nieudanych") i usunęła go z
+ekwipunku. `pnpm --filter web typecheck` czysto. Dane testowe usunięto po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

@@ -101,17 +101,22 @@ export function ExpeditionPanel({
   const isTraveling = travelArrivesAtMs !== null;
   const travelReady = isTraveling && now >= travelArrivesAtMs!;
 
+  // Keep ticking past travelReady (not just up to it) so the invalidate below can retry every
+  // second — a single one-shot invalidate right at travelReady can lose a race against the
+  // server's own clock (e.g. client/server clock skew on the deployed VPS) and silently leave
+  // the character stuck showing "W drodze" forever. Polling stops naturally once the server
+  // actually resolves the arrival (isTraveling flips false) or the expedition is claimable.
   useEffect(() => {
-    if (!travelReady) return;
-    queryClient.invalidateQueries({ queryKey: ["character", characterId] });
-  }, [travelReady, queryClient, characterId]);
-
-  useEffect(() => {
-    const needsTicking = (expedition && !isReadyToClaim) || (isTraveling && !travelReady);
+    const needsTicking = (expedition && !isReadyToClaim) || isTraveling;
     if (!needsTicking) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [expedition, isReadyToClaim, isTraveling, travelReady]);
+  }, [expedition, isReadyToClaim, isTraveling]);
+
+  useEffect(() => {
+    if (!travelReady) return;
+    queryClient.invalidateQueries({ queryKey: ["character", characterId] });
+  }, [travelReady, now, queryClient, characterId]);
 
   const travelMutation = useMutation({
     mutationFn: (destinationZoneId: string | null) => startTravel(characterId, destinationZoneId),
@@ -306,6 +311,10 @@ export function ExpeditionPanel({
     const currentZone = zones.find((z) => z.id === character.currentZoneId);
     const otherZones = zones.filter((z) => z.id !== character.currentZoneId);
     const isTown = currentZone?.isTown ?? false;
+    // "Return to town" must land on a real isTown zone (NPC-handel/Kowadło only work there) —
+    // targeting null used to drop the character into a legacy "no zone" limbo that isn't
+    // recognized as a town anywhere else in the UI, forcing a second manual trip.
+    const townZone = zones.find((z) => z.isTown) ?? null;
 
     const travelControls = (
       <>
@@ -324,13 +333,16 @@ export function ExpeditionPanel({
           >
             Idź do innej krainy
           </button>
-          <button
-            onClick={() => travelMutation.mutate(null)}
-            disabled={travelMutation.isPending}
-            className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
-          >
-            Wróć do wioski
-          </button>
+          {!isTown && (
+            <button
+              onClick={() => townZone && travelMutation.mutate(townZone.id)}
+              disabled={travelMutation.isPending || !townZone}
+              title={townZone ? undefined : "Brak skonfigurowanego miasta"}
+              className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Wróć do miasta
+            </button>
+          )}
         </div>
 
         {otherZonesOpen && (
