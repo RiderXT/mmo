@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Character } from "@mmo/shared";
+import type { Character, BattleTacticsInput } from "@mmo/shared";
 import { ApiError } from "../../lib/apiClient";
 import { listPlayerZones } from "../../lib/zonesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
@@ -18,6 +18,7 @@ import {
 import { CombatLog } from "./CombatLog";
 import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
+import { BattleTacticsModal } from "./BattleTacticsModal";
 import { NpcShopPanel } from "./NpcShopPanel";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
 import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
@@ -45,6 +46,7 @@ export function ExpeditionPanel({
   const [claimResult, setClaimResult] = useState<ExpeditionClaimResult | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [tacticsMonsterIds, setTacticsMonsterIds] = useState<string[] | null>(null);
   const [otherZonesOpen, setOtherZonesOpen] = useState(false);
 
   const activeQuery = useQuery({
@@ -119,11 +121,19 @@ export function ExpeditionPanel({
   });
 
   const startMutation = useMutation({
-    mutationFn: ({ zoneId, selectedMonsterIds }: { zoneId: string; selectedMonsterIds: string[] }) =>
-      startExpedition(characterId, zoneId, selectedMonsterIds),
+    mutationFn: ({
+      zoneId,
+      selectedMonsterIds,
+      tactics,
+    }: {
+      zoneId: string;
+      selectedMonsterIds: string[];
+      tactics?: BattleTacticsInput;
+    }) => startExpedition(characterId, zoneId, selectedMonsterIds, tactics),
     onSuccess: () => {
       setError(null);
       setPickerOpen(false);
+      setTacticsMonsterIds(null);
       queryClient.invalidateQueries({ queryKey: ["active-expedition", characterId] });
       queryClient.invalidateQueries({ queryKey: ["character", characterId] });
     },
@@ -354,8 +364,24 @@ export function ExpeditionPanel({
             zone={currentZone}
             durationMinutes={durationQuery.data?.minutes ?? null}
             onCancel={() => setPickerOpen(false)}
-            onConfirm={(selectedMonsterIds) =>
-              startMutation.mutate({ zoneId: currentZone.id, selectedMonsterIds })
+            onConfirm={(selectedMonsterIds) => {
+              setPickerOpen(false);
+              setTacticsMonsterIds(selectedMonsterIds);
+            }}
+          />
+        )}
+
+        {tacticsMonsterIds && currentZone && (
+          <BattleTacticsModal
+            activeSkills={(classQuery.data?.skills ?? []).filter(
+              (s) => s.kind === "active" && (levelByClassSkillId.get(s.id) ?? 0) > 0,
+            )}
+            onBack={() => {
+              setTacticsMonsterIds(null);
+              setPickerOpen(true);
+            }}
+            onConfirm={(tactics: BattleTacticsInput) =>
+              startMutation.mutate({ zoneId: currentZone.id, selectedMonsterIds: tacticsMonsterIds, tactics })
             }
           />
         )}

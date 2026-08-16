@@ -1142,6 +1142,51 @@ skokiem. Przeglądarka: postać z wykupioną umiejętnością aktywną (cd 20s) 
 pasek cooldownu pokazuje odliczanie malejące w czasie rzeczywistym i poprawnie "odświeża się" do
 nowego pełnego cooldownu, gdy w logu walki odsłoni się kolejne użycie tej samej umiejętności.
 
+## Popup taktyki walki przed rozpoczęciem (Etap 24)
+
+### Kontekst
+
+Ostatni z pakietu funkcji z tej serii — obok wyboru potworów przed walką (Etap 9) użytkownik
+poprosił o drugi krok: możliwość ustawienia **na tę jedną walkę**, od jakiego % HP ma się
+uruchamiać mikstura lecznicza, oraz które aktywne umiejętności mają być użyte. Zastrzeżenie
+użytkownika: to dodatkowa warstwa NA CZAS TEJ WALKI, nie zamiana bazowej konfiguracji potionu w
+Itemach — admin nadal ustawia domyślny trigger/próg/efekt, gracz tylko podnosi próg i wyłącza
+wybrane umiejętności dla jednego starcia.
+
+### Shared
+
+`BattleTacticsSchema {hpThresholdOverridePct?: number (0-1), disabledSkillIds: string[]}`,
+dołączony jako opcjonalne pole `tactics` do `StartExpeditionSchema`. Backendowy
+`modules/expeditions/routes.ts` przeszedł z lokalnie duplikowanego schematu na bezpośredni
+import `StartExpeditionSchema` z `@mmo/shared`.
+
+### Backend
+
+`buildAndSimulate` (`expeditions/service.ts`) — po `gatherCombatBuild` (bez zmian, dalej
+współdzielony z `/combat-stats`), lokalnie filtruje `activeSkills` (odrzuca id z
+`disabledSkillIds`) i mapuje `potions` (nadpisuje `thresholdPct` tylko dla wpisów z
+`trigger === "hp_below"`, gdy podano `hpThresholdOverridePct`) — **zanim** wywoła
+`simulateExpedition`, która sama w sobie nie wie nic o "taktyce" i dostaje już przefiltrowane
+tablice, dokładnie jak w planie. `startExpedition` przyjmuje `tactics` i przekazuje dalej.
+
+### Frontend
+
+Nowy `BattleTacticsModal.tsx` (wzorem `MonsterPickerModal.tsx`) — suwak 0-100% (aktywowany
+checkboxem, domyślnie wyłączony = brak nadpisania) + lista checkboxów aktywnych, wykupionych
+umiejętności (odznaczona = wyłączona na tę walkę). `ExpeditionPanel.tsx` — potwierdzenie
+`MonsterPickerModal`'a nie startuje już ekspedycji od razu, tylko zapamiętuje wybrane potwory i
+otwiera ten popup jako drugi krok; dopiero jego potwierdzenie wywołuje `startExpedition` z
+pełnym payloadem (`selectedMonsterIds` + `tactics`). "Wstecz" wraca do wyboru potworów.
+
+Zweryfikowane: curl — ta sama postać i kraina, dwa przebiegi: bez taktyki (bazowy próg mikstury
+0.3, umiejętność aktywna) → mikstura uruchomiona pierwszy raz przy t=36, umiejętność użyta 3
+razy; z taktyką (`hpThresholdOverridePct:0.95, disabledSkillIds:[<id umiejętności>]`) → **0**
+użyć umiejętności (poprawnie wyłączona) i mikstura uruchomiona już przy **t=6** (próg podniesiony
+działa poprawnie — wcześniejszy trigger). Przeglądarka: pełny flow Walcz → wybór potworów →
+popup taktyki → suwak progu + odznaczenie umiejętności → walka w toku pokazuje pasek cooldownu
+cały czas na "✓" (nigdy nie użyta) i log walki bez ani jednego wpisu tej umiejętności — zgodnie z
+wyłączeniem.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

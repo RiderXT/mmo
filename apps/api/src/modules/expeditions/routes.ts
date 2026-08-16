@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { StartExpeditionSchema } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
 import {
   startExpedition,
@@ -9,15 +9,9 @@ import {
   ExpeditionError,
 } from "./service.js";
 
-const StartExpeditionBodySchema = z.object({
-  characterId: z.string(),
-  zoneId: z.string(),
-  selectedMonsterIds: z.array(z.string()).default([]), // empty = whole zone pool
-});
-
 export async function expeditionsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/start", { preHandler: requireAuth }, async (request, reply) => {
-    const input = StartExpeditionBodySchema.parse(request.body);
+    const input = StartExpeditionSchema.parse(request.body);
     try {
       const expedition = await startExpedition(input, request.user!.sub, request.id);
       return reply.code(201).send(expedition);

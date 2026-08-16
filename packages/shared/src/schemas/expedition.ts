@@ -1,11 +1,21 @@
 import { z } from "zod";
 import { ExpeditionStatusSchema } from "./enums.js";
 
+// Player-chosen overrides for THIS fight only, layered on top of the admin's base per-item
+// potion config — the admin still controls the potion's own trigger/threshold/effect, this
+// only lets the player raise the hp_below threshold and/or sit out specific active skills.
+export const BattleTacticsSchema = z.object({
+  hpThresholdOverridePct: z.number().min(0).max(1).optional(),
+  disabledSkillIds: z.array(z.string()).default([]),
+});
+export type BattleTacticsInput = z.infer<typeof BattleTacticsSchema>;
+
 export const StartExpeditionSchema = z.object({
   characterId: z.string(),
   zoneId: z.string(),
   durationMinutes: z.number().int().min(1).max(720).optional(),
   selectedMonsterIds: z.array(z.string()).default([]), // empty = whole zone pool
+  tactics: BattleTacticsSchema.optional(),
 });
 export type StartExpeditionInput = z.infer<typeof StartExpeditionSchema>;
 

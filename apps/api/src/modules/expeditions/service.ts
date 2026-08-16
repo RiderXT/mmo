@@ -17,7 +17,7 @@ import {
   type DerivedStats,
   type DerivedStatsBreakdown,
 } from "./combat.js";
-import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey, CombatEvent } from "@mmo/shared";
+import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey, CombatEvent, BattleTacticsInput } from "@mmo/shared";
 
 export class ExpeditionError extends Error {
   constructor(
@@ -144,16 +144,32 @@ async function buildAndSimulate(
   zoneId: string,
   durationMinutes: number,
   selectedMonsterIds: string[] = [],
+  tactics?: BattleTacticsInput,
 ) {
-  const [{ character, core, equipmentStats, passiveSkills, activeSkills, potions }, zone] = await Promise.all([
-    gatherCombatBuild(characterId),
-    prisma.zone.findUnique({
-      where: { id: zoneId },
-      include: { monsters: { include: { monster: { include: { drops: true } } } }, drops: true },
-    }),
-  ]);
+  const [{ character, core, equipmentStats, passiveSkills, activeSkills: allActiveSkills, potions: basePotions }, zone] =
+    await Promise.all([
+      gatherCombatBuild(characterId),
+      prisma.zone.findUnique({
+        where: { id: zoneId },
+        include: { monsters: { include: { monster: { include: { drops: true } } } }, drops: true },
+      }),
+    ]);
 
   if (!zone) throw new ExpeditionError("Nie znaleziono krainy", 404);
+
+  // Etap 24: per-fight tactics layer on top of the admin's base potion config — the player can
+  // only raise the hp_below threshold and/or sit out specific active skills for this one fight,
+  // nothing else about the underlying config changes. Applied locally here so simulateExpedition
+  // itself stays unaware of "tactics" and just receives already-filtered arrays.
+  const activeSkills = tactics?.disabledSkillIds?.length
+    ? allActiveSkills.filter((s) => !tactics.disabledSkillIds.includes(s.id))
+    : allActiveSkills;
+  const potions =
+    tactics?.hpThresholdOverridePct != null
+      ? basePotions.map((p) =>
+          p.trigger === "hp_below" ? { ...p, thresholdPct: tactics.hpThresholdOverridePct! } : p,
+        )
+      : basePotions;
 
   const stats = computeDerivedStats(core, equipmentStats, passiveSkills);
 
@@ -213,7 +229,7 @@ async function buildAndSimulate(
 }
 
 export async function startExpedition(
-  input: { characterId: string; zoneId: string; selectedMonsterIds: string[] },
+  input: { characterId: string; zoneId: string; selectedMonsterIds: string[]; tactics?: BattleTacticsInput },
   userId: string,
   requestId?: string,
 ) {
@@ -235,6 +251,7 @@ export async function startExpedition(
     input.zoneId,
     durationMinutes,
     input.selectedMonsterIds,
+    input.tactics,
   );
 
   // Etap 9: travel is a fully separate step (modules/travel) that already happened before the

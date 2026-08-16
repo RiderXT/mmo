@@ -1,4 +1,4 @@
-import type { CombatEvent } from "@mmo/shared";
+import type { CombatEvent, BattleTacticsInput } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
 export interface ExpeditionDto {
@@ -33,10 +33,15 @@ export interface ExpeditionClaimResult {
 export const getActiveExpedition = (characterId: string) =>
   apiFetch<ExpeditionDto | null>(`/api/expeditions/${characterId}/active`);
 
-export const startExpedition = (characterId: string, zoneId: string, selectedMonsterIds: string[] = []) =>
+export const startExpedition = (
+  characterId: string,
+  zoneId: string,
+  selectedMonsterIds: string[] = [],
+  tactics?: BattleTacticsInput,
+) =>
   apiFetch<ExpeditionDto>("/api/expeditions/start", {
     method: "POST",
-    body: JSON.stringify({ characterId, zoneId, selectedMonsterIds }),
+    body: JSON.stringify({ characterId, zoneId, selectedMonsterIds, tactics }),
   });
 
 export const claimExpedition = (expeditionId: string) =>
