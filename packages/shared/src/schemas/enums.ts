@@ -33,7 +33,7 @@ export const EquipSlotSchema = z.enum([
 ]);
 export type EquipSlot = z.infer<typeof EquipSlotSchema>;
 
-export const ExpeditionStatusSchema = z.enum(["in_progress", "completed", "claimed"]);
+export const ExpeditionStatusSchema = z.enum(["in_progress", "completed", "claimed", "flagged"]);
 export type ExpeditionStatus = z.infer<typeof ExpeditionStatusSchema>;
 
 // Combat/equipment stats — base stats, item bonuses, and passive skill bonuses all add into these.

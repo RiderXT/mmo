@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
 import { resolveTravelArrival } from "../../lib/travelResolution.js";
-import { getCharacterMovementSpeedPct } from "../expeditions/service.js";
+import { getCharacterMovementSpeedPct, clearStaleActiveExpeditionPointer } from "../expeditions/service.js";
 import type { StartTravelInput } from "@mmo/shared";
 
 export class TravelError extends Error {
@@ -31,6 +31,7 @@ export async function startTravel(
   requestId?: string,
 ) {
   await resolveTravelArrival(input.characterId);
+  await clearStaleActiveExpeditionPointer(input.characterId);
   const owner = await assertCharacterOwnership(input.characterId, userId);
 
   if (owner.activeExpeditionId) {

@@ -234,6 +234,7 @@ export async function startExpedition(
   requestId?: string,
 ) {
   await resolveTravelArrival(input.characterId);
+  await clearStaleActiveExpeditionPointer(input.characterId);
   const owner = await assertCharacterOwnership(input.characterId, userId);
   if (owner.activeExpeditionId) {
     throw new ExpeditionError("Postać jest już na ekspedycji", 409);
@@ -338,11 +339,32 @@ export async function startExpedition(
   };
 }
 
+/** Character.activeExpeditionId should always point at an "in_progress" (or, while under
+ * anti-cheat review, "flagged") expedition — but a few older code paths predate the "flagged"
+ * status and a couple of admin tools have historically only cleared it in some branches, so a
+ * stale pointer to an already-claimed/discarded expedition can theoretically linger and wrongly
+ * block travel/new expeditions forever ("Postać walczy") while every UI that reads the
+ * expedition itself (which correctly stops matching) shows the character as idle. Self-heals by
+ * clearing the pointer whenever it doesn't resolve to a still-open expedition. */
+export async function clearStaleActiveExpeditionPointer(characterId: string): Promise<void> {
+  const character = await prisma.character.findUnique({ where: { id: characterId } });
+  if (!character?.activeExpeditionId) return;
+
+  const expedition = await prisma.expedition.findUnique({ where: { id: character.activeExpeditionId } });
+  if (expedition && (expedition.status === "in_progress" || expedition.status === "flagged")) return;
+
+  await prisma.character.updateMany({
+    where: { id: characterId, activeExpeditionId: character.activeExpeditionId },
+    data: { activeExpeditionId: null },
+  });
+}
+
 export async function getActiveExpedition(characterId: string, userId: string) {
   await assertCharacterOwnership(characterId, userId);
+  await clearStaleActiveExpeditionPointer(characterId);
 
   const expedition = await prisma.expedition.findFirst({
-    where: { characterId, status: "in_progress" },
+    where: { characterId, status: { in: ["in_progress", "flagged"] } },
   });
   if (!expedition) return null;
 

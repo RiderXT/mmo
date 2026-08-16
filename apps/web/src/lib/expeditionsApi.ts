@@ -5,7 +5,7 @@ export interface ExpeditionDto {
   id: string;
   characterId: string;
   zoneId: string;
-  status: "in_progress" | "completed" | "claimed";
+  status: "in_progress" | "completed" | "claimed" | "flagged";
   startedAt: string;
   arrivedAt: string;
   fightEndsAt: string;

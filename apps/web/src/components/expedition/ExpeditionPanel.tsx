@@ -206,6 +206,20 @@ export function ExpeditionPanel({
     );
   }
 
+  if (expedition && expedition.status === "flagged") {
+    return (
+      <div className="panel p-4">
+        <h2 className="font-medium text-parchment">Ekspedycja wstrzymana</h2>
+        <p className="mt-1 text-sm text-parchment-dim">Kraina: {zoneNameFor(expedition.zoneId)}</p>
+        <p className="mt-2 text-sm text-red-400">
+          Wynik tej ekspedycji wygląda na błąd balansu i został wstrzymany do sprawdzenia przez
+          administrację. Postać nie może wyruszyć w drogę ani rozpocząć nowej walki, dopóki
+          administracja nie rozwiąże tej ekspedycji.
+        </p>
+      </div>
+    );
+  }
+
   if (expedition) {
     return (
       <div className="panel p-4">
