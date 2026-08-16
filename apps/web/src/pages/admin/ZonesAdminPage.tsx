@@ -17,7 +17,16 @@ import {
 } from "../../lib/adminApi";
 
 function emptyForm(): CreateZoneInput {
-  return { name: "", description: "", minLevel: 1, maxLevel: 10, travelTimeSeconds: 30, monsters: [], drops: [] };
+  return {
+    name: "",
+    description: "",
+    minLevel: 1,
+    maxLevel: 10,
+    travelTimeSeconds: 30,
+    isTown: false,
+    monsters: [],
+    drops: [],
+  };
 }
 
 function fromDto(zone: ZoneDto): CreateZoneInput {
@@ -27,6 +36,7 @@ function fromDto(zone: ZoneDto): CreateZoneInput {
     minLevel: zone.minLevel,
     maxLevel: zone.maxLevel,
     travelTimeSeconds: zone.travelTimeSeconds,
+    isTown: zone.isTown,
     monsters: zone.monsters.map((m) => ({
       monsterId: m.monsterId,
       spawnWeight: m.spawnWeight,
@@ -104,6 +114,7 @@ export function ZonesAdminPage() {
           <thead className="bg-panel text-parchment-dim">
             <tr>
               <th className="px-3 py-2">Nazwa</th>
+              <th className="px-3 py-2">Typ</th>
               <th className="px-3 py-2">Poziomy</th>
               <th className="px-3 py-2">Podróż</th>
               <th className="px-3 py-2">Potwory</th>
@@ -115,6 +126,7 @@ export function ZonesAdminPage() {
             {zonesQuery.data?.map((zone) => (
               <tr key={zone.id}>
                 <td className="px-3 py-2 text-parchment">{zone.name}</td>
+                <td className="px-3 py-2 text-parchment-dim">{zone.isTown ? "Miasto" : "Dzicz"}</td>
                 <td className="px-3 py-2 text-parchment-dim">
                   {zone.minLevel}–{zone.maxLevel}
                 </td>
@@ -136,7 +148,7 @@ export function ZonesAdminPage() {
             ))}
             {zonesQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
+                <td colSpan={7} className="px-3 py-6 text-center text-parchment-faint">
                   Brak krain. Dodaj pierwszą.
                 </td>
               </tr>
@@ -185,6 +197,15 @@ export function ZonesAdminPage() {
             </Field>
           </div>
 
+          <label className="flex items-center gap-2 text-sm text-parchment-dim">
+            <input
+              type="checkbox"
+              checked={form.isTown}
+              onChange={(e) => setForm({ ...form, isTown: e.target.checked })}
+            />
+            Kraina typu miasto (bez potworów, z listą NPC zamiast walki)
+          </label>
+
           <Field label="Opis">
             <textarea
               className={inputClass}
@@ -194,6 +215,7 @@ export function ZonesAdminPage() {
             />
           </Field>
 
+          {!form.isTown && (
           <div>
             <p className="mb-2 text-xs font-medium text-parchment-dim">
               Potwory w tej krainie (jakie i ile)
@@ -264,6 +286,7 @@ export function ZonesAdminPage() {
               </button>
             </div>
           </div>
+          )}
 
           <div>
             <p className="mb-2 text-xs font-medium text-parchment-dim">

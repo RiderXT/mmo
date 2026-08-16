@@ -20,6 +20,8 @@ export const CreateZoneSchema = z.object({
   maxLevel: z.number().int().min(1).max(999),
   // Base one-way travel time from the village, in seconds, before movementSpeed reduction.
   travelTimeSeconds: z.number().int().min(0).max(3600).default(30),
+  // Town zones have no monsters/combat — the "walcz" flow is replaced by an NPC list.
+  isTown: z.boolean().default(false),
   monsters: z.array(ZoneMonsterInputSchema).default([]),
   drops: z.array(ZoneDropInputSchema).default([]),
 }).refine((z) => z.maxLevel >= z.minLevel, {

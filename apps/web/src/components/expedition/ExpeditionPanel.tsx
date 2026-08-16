@@ -17,6 +17,7 @@ import {
 import { CombatLog } from "./CombatLog";
 import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
+import { NpcShopPanel } from "./NpcShopPanel";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
 import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
@@ -251,19 +252,19 @@ export function ExpeditionPanel({
   if (character.currentZoneId) {
     const currentZone = zones.find((z) => z.id === character.currentZoneId);
     const otherZones = zones.filter((z) => z.id !== character.currentZoneId);
+    const isTown = currentZone?.isTown ?? false;
 
-    return (
-      <div className="panel p-4">
-        <h2 className="font-medium text-parchment">{currentZone?.name ?? "Kraina"}</h2>
-        <p className="mt-1 text-xs text-parchment-faint">Postać stoi w tej krainie — wybierz co robić dalej.</p>
-
+    const travelControls = (
+      <>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            onClick={() => setPickerOpen(true)}
-            className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
-          >
-            Walcz
-          </button>
+          {!isTown && (
+            <button
+              onClick={() => setPickerOpen(true)}
+              className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
+            >
+              Walcz
+            </button>
+          )}
           <button
             onClick={() => setOtherZonesOpen((v) => !v)}
             className=" border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
@@ -304,6 +305,24 @@ export function ExpeditionPanel({
         )}
 
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      </>
+    );
+
+    if (isTown && currentZone) {
+      return (
+        <div>
+          <NpcShopPanel characterId={characterId} zone={currentZone} gold={character.gold} itemFor={itemFor} />
+          <div className="panel mt-3 p-4">{travelControls}</div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="panel p-4">
+        <h2 className="font-medium text-parchment">{currentZone?.name ?? "Kraina"}</h2>
+        <p className="mt-1 text-xs text-parchment-faint">Postać stoi w tej krainie — wybierz co robić dalej.</p>
+
+        {travelControls}
 
         {pickerOpen && currentZone && (
           <MonsterPickerModal

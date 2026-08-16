@@ -959,6 +959,85 @@ włącznie z typem "chest" (Etap 10). Wystarczy w Itemy stworzyć przedmiot typu
 skonfigurowaną zawartością, po czym dodać go w Krainy → Edytuj → "Dodatkowe dropy krainy" z
 wybraną szansą (0-1).
 
+## Zakładki postaci, uniwersalny filtr itemów, bonus eventowy z każdej krainy, rozbicie statystyk, miasto z NPC (Etap 17-21)
+
+### Kontekst
+
+Po Etapie 16 (eventy exp/złota) użytkownik poprosił o duży pakiet siedmiu powiązanych funkcji
+naraz — rozbity na niezależnie wdrażalne etapy 17-24. Ten rozdział opisuje etapy 17-21;
+22-24 (Kowadło, cooldown umiejętności/mikstury w czasie, taktyka walki przed starciem) są
+opisane osobno po ich ukończeniu.
+
+### Etap 17 — GamePage jako kontener zakładek
+
+`GamePage.tsx` (dawniej jedna strona) rozbita na trzy zakładki przez `?tab=` w obrębie tej
+samej trasy `/game/:characterId` (wzorem `AdminSettingsPage.tsx`, `TABS` = `character`/
+`expeditions`/`anvil`) — bez nowych tras w `App.tsx`, bo appka nie ma warstwy `<Outlet>`.
+Zawartość przeniesiona 1:1 do `pages/game/CharacterTab.tsx` i `pages/game/ExpeditionsTab.tsx`.
+
+### Etap 18 — uniwersalny filtr wyboru itemu
+
+`hooks/useItemPickerFilter.ts` (search/typ/klasa/`filtered`/`total`) +
+`components/admin/ItemPickerFilterBar.tsx` (prezentacyjny pasek) — wydzielone z istniejącej
+logiki `GrantAdminPage.tsx` i zastosowane też tam, gdzie filtra wcześniej brakowało:
+`ItemsAdminPage.tsx` (materiały ulepszenia, zawartość skrzyni), `MonstersAdminPage.tsx` i
+`ZonesAdminPage.tsx` (dropy).
+
+### Etap 19 — globalny bonusowy drop z eventu
+
+`GameEvent` += `bonusDropItemId String?`, `bonusDropChance Float? @default(0)` (addytywne).
+Przy kilku aktywnych eventach z bonusowym dropem wygrywa ten o najwyższej szansie (ta sama
+filozofia "bierz najlepszy, nie sumuj" co przy mnożnikach exp/złota — `getActiveEventMultipliers`
+w `lib/gameEvents.ts` zwraca teraz też `bonusDrop: {itemId, dropChance} | null`).
+`simulateExpedition` losuje ten drop dokładnie obok pętli po `zone.drops`, reużywając istniejący
+event `"loot"` — zero zmian w kształcie `CombatEvent`. Dzięki temu event może dodać "eventową
+skrzynkę" wypadającą z każdej krainy bez ręcznego dopisywania jej do każdej z osobna.
+
+### Etap 20 — zakładka "Postać": rozbicie statystyk na źródło
+
+`computeDerivedStatsBreakdown` w `combat.ts` — reimplementuje dokładnie te same formuły co
+`computeDerivedStats`, ale zamiast jednej zblendowanej liczby per stat zwraca
+`{base, equipment, passive, total}` (współdzielone helpery `sumEquip`/`sumPassive` gwarantują,
+że `total` zawsze zgadza się z wynikiem `computeDerivedStats` dla tych samych wejść). Nowy
+endpoint `GET /api/characters/:id/combat-stats/breakdown`, nowa tabela w `CharacterTab.tsx`.
+
+### Etap 21 — zakładka "Ekspedycje", typ krainy "miasto", NPC-handlarz
+
+`Zone` += `isTown Boolean @default(false)` (addytywne). Miasto to zwykły wiersz `Zone`, do
+którego podróżuje się przez ten sam mechanizm co do każdej innej krainy (Etap 9) — nie osobny,
+oderwany od reszty ekran. Nowe modele: `Npc {id, zoneId, name, kind String @default("merchant")}`,
+`NpcShopItem {id, npcId, itemId, goldPrice Int, stock Int?}` (`stock: null` = nieograniczony
+zapas).
+
+**Backend**: `modules/admin/npcs` — CRUD wzorem `admin/zones` (zagnieżdżone `shopItems` przez
+delete-then-recreate w transakcji). `admin/zones/service.ts`'s `zoneInclude` += `npcs`
+(read-only stąd — NPC-e zarządzane osobno) i `isTown` w create/update. Nowy moduł `npcShop`:
+
+- `GET /api/npc-shop/zone/:zoneId` (publiczny, `requireAuth`) — lista NPC z pełnym `shopItems`
+  danej krainy; oddzielone od `admin/npcs`, bo `ZoneDto.npcs` (współdzielony przez panel admina
+  i graczy) świadomie ujawnia graczom tylko `id/name/kind`, nie ceny/zapas per przedmiot.
+- `POST /api/npc-shop/:characterId/buy` — `buyFromNpc()` w `npcShop/service.ts`: sprawdza że
+  postać fizycznie stoi w krainie NPC (`character.currentZoneId === npc.zoneId`), sprawdza
+  złoto/zapas, **atomowy `updateMany` guard** na `stock` (`WHERE stock >= quantity`) zanim
+  ruszy transakcja odejmująca złoto (analogiczny `updateMany` guard w środku transakcji) +
+  `addLootToInventory` (reużyta z `inventory/service.ts`); przy błędzie transakcji po
+  zarezerwowaniu zapasu — zapas jest cofany.
+
+**Frontend**: `ZonesAdminPage.tsx` — checkbox "Kraina typu miasto" (ukrywa sekcję potworów w
+formularzu, gdy zaznaczony); nowy `NpcsAdminPage.tsx` (lista NPC filtrowana do krain
+`isTown`) + zakładka "NPC" w `AdminSettingsPage.tsx`; nowy `NpcShopPanel.tsx` — w
+`ExpeditionPanel.tsx`, gdy `currentZone.isTown`, zamiast przycisku "Walcz" pokazuje listę NPC z
+towarem (przycisk "Kup" wyłączony przy braku złota/zapasu), z zachowaniem "Idź do innej
+krainy"/"Wróć do wioski".
+
+Zweryfikowane: curl — kraina `isTown:true` z NPC i towarem (`stock:2`), postać podróżuje tam,
+dwa udane zakupy wyczerpują zapas (409 "Za mało towaru na stanie" przy trzecim), złoto i
+ekwipunek poprawnie zaktualizowane (50→30, +2 do istniejącego stosu mikstur), próba zakupu
+towaru droższego niż posiadane złoto → 409 "Za mało złota". Przeglądarka: postać w mieście
+widzi panel NPC zamiast "Walcz", przycisk zakupu wyłączony przy niewystarczającym złocie (klik
+nie wywołuje żądania), po obniżeniu ceny zakup przechodzi — złoto w nagłówku i panelu spada z
+30 na 25, komunikat "Kupiono Mikstura Życia za 5 złota." się pojawia.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

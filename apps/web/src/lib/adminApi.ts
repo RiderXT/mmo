@@ -12,6 +12,8 @@ import type {
   AdminGrantInput,
   AdminCharacterDto,
   CreateGameEventInput,
+  CreateNpcInput,
+  NpcKind,
 } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
@@ -22,6 +24,7 @@ export interface ZoneDto {
   minLevel: number;
   maxLevel: number;
   travelTimeSeconds: number;
+  isTown: boolean;
   monsters: {
     id: string;
     monsterId: string;
@@ -30,6 +33,24 @@ export interface ZoneDto {
     monster: { id: string; name: string; level: number; hp: number; expReward: number; goldReward: number };
   }[];
   drops: { id: string; itemId: string; dropChance: number; item: { id: string; name: string; type: string } }[];
+  npcs: { id: string; name: string; kind: string }[];
+}
+
+export interface NpcShopItemDto {
+  id: string;
+  itemId: string;
+  goldPrice: number;
+  stock: number | null;
+  item: { id: string; name: string; type: string };
+}
+
+export interface NpcDto {
+  id: string;
+  zoneId: string;
+  name: string;
+  kind: NpcKind;
+  zone: { id: string; name: string; isTown: boolean };
+  shopItems: NpcShopItemDto[];
 }
 
 export interface MonsterDto {
@@ -215,3 +236,11 @@ export const createEvent = (input: CreateGameEventInput) =>
 export const updateEvent = (id: string, input: CreateGameEventInput) =>
   apiFetch<GameEventDto>(`/api/admin/events/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteEvent = (id: string) => apiFetch<void>(`/api/admin/events/${id}`, { method: "DELETE" });
+
+// NPCs (town shop merchants)
+export const listNpcs = () => apiFetch<NpcDto[]>("/api/admin/npcs");
+export const createNpc = (input: CreateNpcInput) =>
+  apiFetch<NpcDto>("/api/admin/npcs", { method: "POST", body: JSON.stringify(input) });
+export const updateNpc = (id: string, input: CreateNpcInput) =>
+  apiFetch<NpcDto>(`/api/admin/npcs/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteNpc = (id: string) => apiFetch<void>(`/api/admin/npcs/${id}`, { method: "DELETE" });

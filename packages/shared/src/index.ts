@@ -11,3 +11,4 @@ export * from "./schemas/combatEvent.js";
 export * from "./schemas/gameLog.js";
 export * from "./schemas/travel.js";
 export * from "./schemas/gameEvent.js";
+export * from "./schemas/npc.js";
