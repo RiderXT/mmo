@@ -28,6 +28,18 @@ export interface CombatStatsDto {
 export const getCombatStats = (characterId: string) =>
   apiFetch<CombatStatsDto>(`/api/characters/${characterId}/combat-stats`);
 
+export interface StatContribution {
+  base: number;
+  equipment: number;
+  passive: number;
+  total: number;
+}
+
+export type CombatStatsBreakdownDto = Record<keyof CombatStatsDto, StatContribution>;
+
+export const getCombatStatsBreakdown = (characterId: string) =>
+  apiFetch<CombatStatsBreakdownDto>(`/api/characters/${characterId}/combat-stats/breakdown`);
+
 export interface CharacterSkillDto {
   id: string;
   characterId: string;

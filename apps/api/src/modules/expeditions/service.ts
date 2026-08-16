@@ -6,6 +6,7 @@ import { getExpeditionDurationMinutes } from "../settings/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import {
   computeDerivedStats,
+  computeDerivedStatsBreakdown,
   interpolateUpgrade,
   simulateExpedition,
   type CharacterCoreStats,
@@ -14,6 +15,7 @@ import {
   type PotionSlot,
   type SimZone,
   type DerivedStats,
+  type DerivedStatsBreakdown,
 } from "./combat.js";
 import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey, CombatEvent } from "@mmo/shared";
 
@@ -114,6 +116,17 @@ export async function getCharacterCombatStats(characterId: string, userId: strin
   await assertCharacterOwnership(characterId, userId);
   const { core, equipmentStats, passiveSkills } = await gatherCombatBuild(characterId);
   return computeDerivedStats(core, equipmentStats, passiveSkills);
+}
+
+/** Same as getCharacterCombatStats but keeps base/equipment/passive contributions separate per
+ * stat — powers the "Postać" tab's stat breakdown table (see docs/architecture.md "Etap 20"). */
+export async function getCharacterCombatStatsBreakdown(
+  characterId: string,
+  userId: string,
+): Promise<DerivedStatsBreakdown> {
+  await assertCharacterOwnership(characterId, userId);
+  const { core, equipmentStats, passiveSkills } = await gatherCombatBuild(characterId);
+  return computeDerivedStatsBreakdown(core, equipmentStats, passiveSkills);
 }
 
 /** Movement-speed-only readout of a character's build, reused by modules/travel/service.ts to

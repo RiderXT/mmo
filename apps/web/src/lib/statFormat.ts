@@ -53,6 +53,36 @@ export function statHint(stat: StatKey): string {
   return STAT_FORMAT[stat] === "percent" ? "ułamek 0–1, np. 0.02 = 2%" : "liczba całkowita";
 }
 
+/** CombatStatsDto (the character's final derived stats) uses slightly different key names than
+ * StatKey ("maxHp" not "hp", "movementSpeedPct" not "movementSpeed") — map each to its StatKey
+ * so the "Postać" tab's breakdown table can reuse STAT_LABELS/STAT_FORMAT instead of duplicating
+ * them under a second set of keys. */
+export const COMBAT_STAT_TO_STAT_KEY = {
+  maxHp: "hp",
+  maxMana: "maxMana",
+  attack: "attack",
+  defense: "defense",
+  attackSpeed: "attackSpeed",
+  critChance: "critChance",
+  critDamage: "critDamage",
+  evasion: "evasion",
+  damageReduction: "damageReduction",
+  movementSpeedPct: "movementSpeed",
+} as const satisfies Record<string, StatKey>;
+
+/** Formats a raw base/equipment/passive/total value from the stat breakdown — unlike
+ * formatStatValue (always sign-prefixed, for item tooltips), zero values print as "0"/"0%"
+ * without a "+" so a stat with no equipment contribution doesn't look like a typo. */
+export function formatBreakdownValue(combatStatKey: keyof typeof COMBAT_STAT_TO_STAT_KEY, value: number): string {
+  const statKey = COMBAT_STAT_TO_STAT_KEY[combatStatKey];
+  if (STAT_FORMAT[statKey] === "percent") {
+    const pct = Math.round(value * 100);
+    return pct > 0 ? `+${pct}%` : `${pct}%`;
+  }
+  const flat = Math.round(value);
+  return flat > 0 ? `+${flat}` : `${flat}`;
+}
+
 export const TYPE_LABELS: Record<string, string> = {
   weapon: "Broń",
   armor: "Zbroja",

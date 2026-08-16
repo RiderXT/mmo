@@ -130,6 +130,78 @@ export function computeDerivedStats(
   };
 }
 
+export interface StatContribution {
+  base: number;
+  equipment: number;
+  passive: number;
+  total: number;
+}
+
+export type DerivedStatsBreakdown = Record<keyof DerivedStats, StatContribution>;
+
+function contribution(base: number, equipment: number, passive: number, clamp: (raw: number) => number): StatContribution {
+  return { base, equipment, passive, total: clamp(base + equipment + passive) };
+}
+
+/** Same formulas/clamping as computeDerivedStats, but keeping the base/equipment/passive
+ * components separate instead of collapsing them into one number — used by the "Postać" tab's
+ * stat breakdown (see docs/architecture.md "Etap 20"). `total` here always equals the
+ * corresponding field from computeDerivedStats for the same inputs. */
+export function computeDerivedStatsBreakdown(
+  core: CharacterCoreStats,
+  equipmentStats: StatBlock[],
+  passiveSkills: PassiveSkillBonus[],
+): DerivedStatsBreakdown {
+  const sumEquip = (key: StatKey) => equipmentStats.reduce((sum, s) => sum + (s[key] ?? 0), 0);
+  const sumPassive = (key: StatKey) =>
+    passiveSkills
+      .filter((p) => p.targetStat === key)
+      .reduce((sum, p) => sum + p.scalingFactor * core[p.scalingStat] * p.level, 0);
+
+  return {
+    maxHp: contribution(50 + core.vitality * 10, sumEquip("hp"), sumPassive("hp"), (v) => Math.max(1, Math.round(v))),
+    maxMana: contribution(
+      20 + core.intelligence * 5,
+      sumEquip("maxMana"),
+      sumPassive("maxMana"),
+      (v) => Math.max(0, Math.round(v)),
+    ),
+    attack: contribution(
+      5 + core.strength * 2 + core.dexterity * 0.5,
+      sumEquip("attack"),
+      sumPassive("attack"),
+      (v) => Math.max(1, Math.round(v)),
+    ),
+    defense: contribution(2 + core.vitality * 1, sumEquip("defense"), sumPassive("defense"), (v) => Math.max(0, Math.round(v))),
+    attackSpeed: contribution(
+      10 + core.dexterity * 0.3,
+      sumEquip("attackSpeed"),
+      sumPassive("attackSpeed"),
+      (v) => Math.max(1, Math.round(v)),
+    ),
+    critChance: contribution(
+      0.05 + core.dexterity * 0.002,
+      sumEquip("critChance"),
+      sumPassive("critChance"),
+      (v) => Math.min(0.75, Math.max(0, v)),
+    ),
+    critDamage: contribution(1.5, sumEquip("critDamage"), sumPassive("critDamage"), (v) => Math.max(1, v)),
+    evasion: contribution(
+      0.02 + core.dexterity * 0.001,
+      sumEquip("evasion"),
+      sumPassive("evasion"),
+      (v) => Math.min(0.6, Math.max(0, v)),
+    ),
+    damageReduction: contribution(0, sumEquip("damageReduction"), sumPassive("damageReduction"), (v) =>
+      Math.min(0.7, Math.max(0, v)),
+    ),
+    // Equipment/passive-skill only — no core-stat baseline, unlike attackSpeed.
+    movementSpeedPct: contribution(0, sumEquip("movementSpeed"), sumPassive("movementSpeed"), (v) =>
+      Math.min(0.75, Math.max(0, v)),
+    ),
+  };
+}
+
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }

@@ -11,8 +11,9 @@ import { StatsPanel } from "../../components/character/StatsPanel";
 import { SkillsPanel } from "../../components/character/SkillsPanel";
 import { VitalsPanel } from "../../components/character/VitalsPanel";
 import { ApiError } from "../../lib/apiClient";
+import { getCombatStatsBreakdown } from "../../lib/charactersApi";
 import { interpolateUpgrade } from "../../lib/statMath";
-import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
+import { STAT_LABELS, TYPE_LABELS, formatStatValue, COMBAT_STAT_TO_STAT_KEY, formatBreakdownValue } from "../../lib/statFormat";
 import { listPlayerItems } from "../../lib/itemsApi";
 import {
   listInventory,
@@ -54,6 +55,11 @@ export function CharacterTab({ character }: { character: Character }) {
     queryFn: () => listInventory(characterId),
   });
 
+  const breakdownQuery = useQuery({
+    queryKey: ["combat-stats-breakdown", characterId],
+    queryFn: () => getCombatStatsBreakdown(characterId),
+  });
+
   function invalidateInventory() {
     queryClient.invalidateQueries({ queryKey: ["inventory", characterId] });
   }
@@ -61,6 +67,7 @@ export function CharacterTab({ character }: { character: Character }) {
   function invalidateInventoryAndCombatStats() {
     invalidateInventory();
     queryClient.invalidateQueries({ queryKey: ["combat-stats", characterId] });
+    queryClient.invalidateQueries({ queryKey: ["combat-stats-breakdown", characterId] });
   }
 
   const moveMutation = useMutation({
@@ -210,6 +217,39 @@ export function CharacterTab({ character }: { character: Character }) {
         <StatsPanel character={character} />
         <SkillsPanel character={character} />
       </div>
+
+      {breakdownQuery.data && (
+        <div className="mt-4 panel p-4">
+          <h2 className="font-medium text-parchment">Statystyki bojowe — źródło</h2>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[420px] text-left text-sm">
+              <thead className="text-parchment-dim">
+                <tr>
+                  <th className="py-1 pr-3">Staty</th>
+                  <th className="px-2 py-1 text-right">Baza</th>
+                  <th className="px-2 py-1 text-right">Ekwipunek</th>
+                  <th className="px-2 py-1 text-right">Umiejętności</th>
+                  <th className="py-1 pl-2 text-right">Razem</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {(Object.keys(COMBAT_STAT_TO_STAT_KEY) as (keyof typeof COMBAT_STAT_TO_STAT_KEY)[]).map((key) => {
+                  const c = breakdownQuery.data[key];
+                  return (
+                    <tr key={key}>
+                      <td className="py-1 pr-3 text-parchment-dim">{STAT_LABELS[COMBAT_STAT_TO_STAT_KEY[key]]}</td>
+                      <td className="px-2 py-1 text-right text-parchment-dim">{formatBreakdownValue(key, c.base)}</td>
+                      <td className="px-2 py-1 text-right text-parchment-dim">{formatBreakdownValue(key, c.equipment)}</td>
+                      <td className="px-2 py-1 text-right text-parchment-dim">{formatBreakdownValue(key, c.passive)}</td>
+                      <td className="py-1 pl-2 text-right font-medium text-parchment">{formatBreakdownValue(key, c.total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="mt-6 flex flex-wrap gap-8">

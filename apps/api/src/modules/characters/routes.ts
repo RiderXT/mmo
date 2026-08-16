@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { CreateCharacterSchema, AllocateStatSchema, AllocateSkillSchema } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
-import { getCharacterCombatStats, ExpeditionError } from "../expeditions/service.js";
+import { getCharacterCombatStats, getCharacterCombatStatsBreakdown, ExpeditionError } from "../expeditions/service.js";
 import {
   listCharacters,
   getCharacter,
@@ -28,6 +28,16 @@ export async function charactersRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     try {
       return reply.send(await getCharacterCombatStats(id, request.user!.sub));
+    } catch (err) {
+      if (err instanceof ExpeditionError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.get("/:id/combat-stats/breakdown", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return reply.send(await getCharacterCombatStatsBreakdown(id, request.user!.sub));
     } catch (err) {
       if (err instanceof ExpeditionError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;
