@@ -53,7 +53,7 @@ function NavIconImg({
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-2 mt-5 flex items-center gap-2 border-b border-gold/15 px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-parchment-faint">
+    <div className="mb-2 mt-5 flex items-center gap-2 border-b border-gold/15 px-3 pb-2 text-xs font-bold uppercase tracking-[0.14em] text-parchment-faint">
       <span className="h-1.5 w-1.5 shrink-0 rotate-45 border border-gold/40" />
       {children}
     </div>
@@ -89,7 +89,7 @@ function CharacterHeaderBar() {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-parchment">{character.name}</span>
-            <span className="shrink-0 rounded border border-gold/50 bg-gold/10 px-1.5 py-0.5 text-[10px] font-bold text-gold">
+            <span className="shrink-0 rounded border border-gold/50 bg-gold/10 px-1.5 py-0.5 text-xs font-bold text-gold">
               lvl. {character.level}
             </span>
           </div>

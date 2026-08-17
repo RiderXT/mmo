@@ -5,7 +5,7 @@ import { ItemTypeIcon } from "./ItemTypeIcon";
 import { ItemTooltip } from "./ItemTooltip";
 
 const TYPE_COLORS: Record<string, string> = {
-  weapon: "border-hp/60 bg-hp/10",
+  weapon: "border-rarity-rare/50 bg-rarity-rare/10",
   armor: "border-rarity-rare/50 bg-rarity-rare/10",
   helmet: "border-rarity-rare/50 bg-rarity-rare/10",
   boots: "border-rarity-rare/50 bg-rarity-rare/10",
@@ -65,7 +65,7 @@ export function ItemBox({
           onContextMenu(inventoryItem, e.clientX, e.clientY);
         }}
         style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
-        className={`relative flex w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-[10px] font-medium text-parchment transition active:cursor-grabbing hover:brightness-110 ${
+        className={`relative flex w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-xs font-medium text-parchment transition active:cursor-grabbing hover:brightness-110 ${
           tall ? "h-[7.5rem]" : "h-14"
         } ${TYPE_COLORS[inventoryItem.item.type] ?? "border-line-soft bg-panel-raised"} ${
           selected
@@ -76,12 +76,12 @@ export function ItemBox({
         <ItemTypeIcon type={inventoryItem.item.type} className="h-6 w-6 text-parchment-dim" />
         <span className="line-clamp-1 px-1 text-center leading-tight">{inventoryItem.item.name}</span>
         {inventoryItem.upgradeLevel > 0 && (
-          <span className="absolute left-0.5 top-0.5 text-[9px] text-gold-bright">
+          <span className="absolute left-0.5 top-0.5 text-xs text-gold-bright">
             +{inventoryItem.upgradeLevel}
           </span>
         )}
         {inventoryItem.quantity > 1 && (
-          <span className="absolute bottom-0.5 right-1 text-[10px] text-parchment-dim">
+          <span className="absolute bottom-0.5 right-1 text-xs text-parchment-dim">
             {inventoryItem.quantity}
           </span>
         )}

@@ -36,6 +36,10 @@ const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "shield"];
 // weapon/armor occupy 2 grid cells (Item.gridWidth) — size their equip socket to match instead of
 // cramming a tall item into a 1-cell box.
 const TALL_EQUIP_SLOTS = new Set<EquipSlot>(["weapon", "armor"]);
+// Item types with a rendered socket in this doll — drives the tap-to-equip button in the detail
+// panel, since dnd-kit drag alone is unreachable on mobile (source item and target socket are
+// often both off-screen at once; see critique 2026-08-17).
+const EQUIPPABLE_TYPES = new Set<string>([...LEFT_EQUIP_SLOTS, ...CENTER_EQUIP_SLOTS, ...RIGHT_EQUIP_SLOTS]);
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
 
@@ -134,10 +138,25 @@ export function EquipmentTab({ character }: { character: Character }) {
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się usunąć przedmiotu"),
   });
 
+  // Tap-to-activate: assigns the first free active slot rather than letting the caller pick one,
+  // so this path can never target an already-occupied slot — setActiveSlot silently orphans
+  // whatever item it bumps (clears its activeSlotIndex without giving it back a grid slotIndex),
+  // a pre-existing backend bug out of scope here. Only the slot-picking drag path can hit it.
+  function handleActivate(item: InventoryItemDto) {
+    for (let slotIndex = 0; slotIndex < ACTIVE_SLOTS; slotIndex++) {
+      if (!byActiveSlot.has(slotIndex)) {
+        setActiveSlotMutation.mutate({ inventoryItemId: item.id, slotIndex });
+        return;
+      }
+    }
+    setActionError("Wszystkie aktywne sloty są zajęte — zwolnij jeden, żeby założyć kolejną miksturę.");
+  }
+
   function handleItemContextMenu(item: InventoryItemDto, x: number, y: number) {
     setContextMenu({
       inventoryItemId: item.id,
       name: item.item.name,
+      upgradeLevel: item.upgradeLevel,
       canOpen: item.item.type === "chest",
       canSell: item.item.sellPrice > 0 && !item.equippedSlot,
       x,
@@ -380,6 +399,46 @@ export function EquipmentTab({ character }: { character: Character }) {
           {selected.item.type !== "consumable" && (
             <p className="text-xs text-parchment-faint">Ulepszanie — zobacz zakładkę "Kowadło".</p>
           )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {selected.equippedSlot && (
+              <button
+                onClick={() => unequipMutation.mutate(selected.id)}
+                disabled={unequipMutation.isPending}
+                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Zdejmij
+              </button>
+            )}
+            {!selected.equippedSlot && selected.activeSlotIndex === null && EQUIPPABLE_TYPES.has(selected.item.type) && (
+              <button
+                onClick={() => equipMutation.mutate({ inventoryItemId: selected.id, equipSlot: selected.item.type as EquipSlot })}
+                disabled={equipMutation.isPending}
+                className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Załóż
+              </button>
+            )}
+            {selected.activeSlotIndex !== null && (
+              <button
+                onClick={() => clearActiveSlotMutation.mutate(selected.id)}
+                disabled={clearActiveSlotMutation.isPending}
+                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Wyjmij ze slotu
+              </button>
+            )}
+            {!selected.equippedSlot &&
+              selected.activeSlotIndex === null &&
+              (selected.item.type === "consumable" || selected.item.type === "bait") && (
+                <button
+                  onClick={() => handleActivate(selected)}
+                  disabled={setActiveSlotMutation.isPending}
+                  className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Aktywuj
+                </button>
+              )}
+          </div>
         </div>
       )}
 

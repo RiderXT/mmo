@@ -124,6 +124,7 @@ export function NpcTab({ character }: { character: Character }) {
     setContextMenu({
       inventoryItemId: item.id,
       name: item.item.name,
+      upgradeLevel: item.upgradeLevel,
       canOpen: item.item.type === "chest",
       canSell: item.item.sellPrice > 0 && !item.equippedSlot,
       x,

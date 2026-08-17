@@ -21,7 +21,7 @@ export function ActiveItemSlotBox({ slotIndex, children }: { slotIndex: number; 
         {children}
         <SocketCorners />
       </div>
-      <span className="text-[10px] text-parchment-faint">Slot {slotIndex + 1}</span>
+      <span className="text-xs text-parchment-faint">Slot {slotIndex + 1}</span>
     </div>
   );
 }

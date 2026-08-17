@@ -47,7 +47,7 @@ export function EquipSlotBox({
         {children}
         <SocketCorners />
       </div>
-      <span className="text-[10px] text-parchment-faint">{LABELS[slot]}</span>
+      <span className="text-xs text-parchment-faint">{LABELS[slot]}</span>
     </div>
   );
 }

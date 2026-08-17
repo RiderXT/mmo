@@ -24,7 +24,7 @@ export function AnvilSlotBox({ children }: { children: ReactNode }) {
         {children}
         <SocketCorners size={14} />
       </div>
-      <span className="text-[10px] text-parchment-faint">Kowadło</span>
+      <span className="text-xs text-parchment-faint">Kowadło</span>
     </div>
   );
 }
