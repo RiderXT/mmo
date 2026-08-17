@@ -194,7 +194,7 @@ export function EquipmentTab({ character }: { character: Character }) {
   for (const item of items) {
     if (item.equippedSlot) byEquipSlot.set(item.equippedSlot, item);
     else if (item.activeSlotIndex !== null) byActiveSlot.set(item.activeSlotIndex, item);
-    else byGridSlot.set(item.slotIndex, item);
+    else byGridSlot.set(item.slotIndex!, item);
   }
   const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
     let count = 0;

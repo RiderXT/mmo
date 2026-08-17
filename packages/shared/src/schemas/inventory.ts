@@ -62,7 +62,7 @@ export const InventoryItemSchema = z.object({
   id: z.string(),
   characterId: z.string(),
   itemId: z.string(),
-  slotIndex: z.number().int(),
+  slotIndex: z.number().int().nullable(),
   quantity: z.number().int(),
   rolledStats: StatBlockSchema,
   upgradeLevel: z.number().int(),

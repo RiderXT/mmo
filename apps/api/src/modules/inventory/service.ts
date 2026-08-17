@@ -72,10 +72,15 @@ export async function moveItem(
 
   const moving = await prisma.inventoryItem.findUnique({
     where: { id: input.inventoryItemId },
-    include: { item: { select: { gridWidth: true } } },
+    include: { item: { select: { gridWidth: true, stackable: true, maxStack: true } } },
   });
   if (!moving || moving.characterId !== input.characterId) {
     throw new InventoryError("Nie znaleziono przedmiotu", 404);
+  }
+  if (moving.slotIndex === null) {
+    // Equipped/active-slotted items aren't in the grid — they leave via unequip/clear-active-slot,
+    // not a plain move.
+    throw new InventoryError("Ten przedmiot nie jest w plecaku", 400);
   }
 
   const width = moving.item.gridWidth;
@@ -84,21 +89,37 @@ export async function moveItem(
     throw new InventoryError("Przedmiot nie mieści się w tym miejscu (wychodzi poza wiersz)", 400);
   }
 
-  // Grid-placed items only — equipped/active-slot items don't occupy a grid cell and can't
-  // collide. Width>1 items have no DB row for their extra cell(s), so every candidate's range
-  // must be expanded from its own primary slotIndex + gridWidth to catch those too.
+  // Grid-placed items only — equipped/active-slot items have slotIndex: null and can't collide.
+  // Width>1 items have no DB row for their extra cell(s), so every candidate's range must be
+  // expanded from its own primary slotIndex + gridWidth to catch those too.
   const others = await prisma.inventoryItem.findMany({
-    where: { characterId: input.characterId, equippedSlot: null, activeSlotIndex: null, id: { not: moving.id } },
+    where: { characterId: input.characterId, slotIndex: { not: null }, id: { not: moving.id } },
     include: { item: { select: { gridWidth: true } } },
   });
   const overlapping = others.filter((o) => {
-    const range = inventoryOccupiedRange(o.slotIndex, o.item.gridWidth) ?? [o.slotIndex];
+    const range = inventoryOccupiedRange(o.slotIndex!, o.item.gridWidth) ?? [o.slotIndex!];
     return range.some((c) => targetRange.includes(c));
   });
 
   await prisma.$transaction(async (tx) => {
     if (overlapping.length === 0) {
       await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: input.toSlotIndex } });
+    } else if (overlapping.length === 1 && overlapping[0].itemId === moving.itemId && moving.item.stackable) {
+      // Same stackable item dropped on itself — merge quantities instead of swapping/rejecting.
+      // Whatever doesn't fit under maxStack stays behind in the source stack.
+      const occupant = overlapping[0];
+      const maxStack = moving.item.maxStack;
+      const combined = moving.quantity + occupant.quantity;
+      if (combined <= maxStack) {
+        await tx.inventoryItem.update({ where: { id: occupant.id }, data: { quantity: combined } });
+        await tx.inventoryItem.delete({ where: { id: moving.id } });
+      } else {
+        await tx.inventoryItem.update({ where: { id: occupant.id }, data: { quantity: maxStack } });
+        await tx.inventoryItem.update({
+          where: { id: moving.id },
+          data: { quantity: combined - maxStack },
+        });
+      }
     } else if (
       overlapping.length === 1 &&
       width === 1 &&
@@ -108,7 +129,7 @@ export async function moveItem(
       // Classic single-cell swap — both items are 1-wide and exactly trade places. Wider items
       // never swap: an ambiguous partial overlap is rejected instead (see else branch).
       const occupant = overlapping[0];
-      await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: -1 } });
+      await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: null } });
       await tx.inventoryItem.update({ where: { id: occupant.id }, data: { slotIndex: moving.slotIndex } });
       await tx.inventoryItem.update({ where: { id: moving.id }, data: { slotIndex: input.toSlotIndex } });
     } else {
@@ -157,7 +178,8 @@ export async function equipItem(
     });
     await tx.inventoryItem.update({
       where: { id: inventoryItem.id },
-      data: { equippedSlot: input.equipSlot },
+      // Free the grid cell(s) it was sitting in — an equipped item no longer occupies a slot.
+      data: { equippedSlot: input.equipSlot, slotIndex: null },
     });
   });
 
@@ -178,14 +200,20 @@ export async function unequipItem(
 ) {
   await assertCharacterOwnership(input.characterId, userId);
 
-  const inventoryItem = await prisma.inventoryItem.findUnique({ where: { id: input.inventoryItemId } });
+  const inventoryItem = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: { select: { gridWidth: true } } },
+  });
   if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
     throw new InventoryError("Nie znaleziono przedmiotu", 404);
   }
 
-  await prisma.inventoryItem.update({
-    where: { id: inventoryItem.id },
-    data: { equippedSlot: null },
+  await prisma.$transaction(async (tx) => {
+    const slotIndex = await findNextFreeSlotIndex(tx, input.characterId, inventoryItem.item.gridWidth);
+    await tx.inventoryItem.update({
+      where: { id: inventoryItem.id },
+      data: { equippedSlot: null, slotIndex },
+    });
   });
 
   await logAction({
@@ -223,7 +251,8 @@ export async function setActiveSlot(
     });
     await tx.inventoryItem.update({
       where: { id: inventoryItem.id },
-      data: { activeSlotIndex: input.slotIndex },
+      // Free the grid cell — an active-slotted item no longer occupies one.
+      data: { activeSlotIndex: input.slotIndex, slotIndex: null },
     });
   });
 
@@ -244,14 +273,20 @@ export async function clearActiveSlot(
 ) {
   await assertCharacterOwnership(input.characterId, userId);
 
-  const inventoryItem = await prisma.inventoryItem.findUnique({ where: { id: input.inventoryItemId } });
+  const inventoryItem = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: { select: { gridWidth: true } } },
+  });
   if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
     throw new InventoryError("Nie znaleziono przedmiotu", 404);
   }
 
-  await prisma.inventoryItem.update({
-    where: { id: inventoryItem.id },
-    data: { activeSlotIndex: null },
+  await prisma.$transaction(async (tx) => {
+    const slotIndex = await findNextFreeSlotIndex(tx, input.characterId, inventoryItem.item.gridWidth);
+    await tx.inventoryItem.update({
+      where: { id: inventoryItem.id },
+      data: { activeSlotIndex: null, slotIndex },
+    });
   });
 
   await logAction({
@@ -538,17 +573,15 @@ async function findNextFreeSlotIndex(
   characterId: string,
   width: number,
 ): Promise<number> {
-  // Every row occupies its slotIndex at the DB level regardless of equipped/active state
-  // (equipping/active-slotting an item does not reassign or clear slotIndex — see equipItem/
-  // setActiveSlot) — @@unique([characterId, slotIndex]) means an equipped item's slot must still
-  // count as taken here, or the next create() below collides with it.
+  // Equipped/active-slotted items have slotIndex: null (see equipItem/setActiveSlot) and don't
+  // occupy a grid cell at all, so they're skipped here.
   const existing = await tx.inventoryItem.findMany({
-    where: { characterId },
+    where: { characterId, slotIndex: { not: null } },
     select: { slotIndex: true, item: { select: { gridWidth: true } } },
   });
   const occupied = new Set<number>();
   for (const e of existing) {
-    for (const cell of inventoryOccupiedRange(e.slotIndex, e.item.gridWidth) ?? [e.slotIndex]) {
+    for (const cell of inventoryOccupiedRange(e.slotIndex!, e.item.gridWidth) ?? [e.slotIndex!]) {
       occupied.add(cell);
     }
   }

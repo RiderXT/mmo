@@ -5,7 +5,8 @@ export interface InventoryItemDto {
   id: string;
   characterId: string;
   itemId: string;
-  slotIndex: number;
+  // null while equipped or sitting in an active potion slot — see apps/api's InventoryItem.slotIndex.
+  slotIndex: number | null;
   quantity: number;
   rolledStats: Partial<Record<StatKey, number>>;
   upgradeLevel: number;

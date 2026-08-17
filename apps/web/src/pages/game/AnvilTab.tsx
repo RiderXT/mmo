@@ -113,7 +113,7 @@ export function AnvilTab({ character }: { character: Character }) {
     // inventoryItemId would render as two separate dnd-kit draggables at once.
     if (item.id === selectedId) continue;
     if (item.equippedSlot) byEquipSlot.set(item.equippedSlot, item);
-    else if (item.activeSlotIndex === null && UPGRADABLE_TYPES.has(item.item.type)) byGridSlot.set(item.slotIndex, item);
+    else if (item.activeSlotIndex === null && UPGRADABLE_TYPES.has(item.item.type)) byGridSlot.set(item.slotIndex!, item);
   }
   const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
     let count = 0;

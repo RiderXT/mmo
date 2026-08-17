@@ -399,7 +399,11 @@ model InventoryItem {
   id            String   @id @default(cuid())
   characterId   String
   itemId        String
-  slotIndex     Int
+  // Grid position — null while the item is equipped or sitting in an active potion slot (freed on
+  // equip/set-active, reassigned via findNextFreeSlotIndex on unequip/clear — see
+  // modules/inventory/service.ts). Nullable so multiple equipped/active items can coexist without
+  // colliding on @@unique([characterId, slotIndex]) (SQL treats each NULL as distinct).
+  slotIndex     Int?
   quantity      Int      @default(1)
   rolledStats   String   @default("{}") // JSON: StatBlock
   upgradeLevel  Int      @default(0)

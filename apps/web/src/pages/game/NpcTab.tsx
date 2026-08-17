@@ -178,7 +178,7 @@ export function NpcTab({ character }: { character: Character }) {
   const items = inventoryQuery.data ?? [];
   const byGridSlot = new Map<number, InventoryItemDto>();
   for (const item of items) {
-    if (!item.equippedSlot && item.activeSlotIndex === null) byGridSlot.set(item.slotIndex, item);
+    if (!item.equippedSlot && item.activeSlotIndex === null) byGridSlot.set(item.slotIndex!, item);
   }
   const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
     let count = 0;
