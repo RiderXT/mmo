@@ -64,6 +64,15 @@ export function ItemBox({
           e.preventDefault();
           onContextMenu(inventoryItem, e.clientX, e.clientY);
         }}
+        onKeyDown={(e) => {
+          // dnd-kit's {...attributes} already makes this div role="button" tabIndex={0}, but only
+          // wires pointer activators (no KeyboardSensor is registered) — so Enter/Space need their
+          // own handler to actually open the detail panel for keyboard users.
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
         style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
         className={`relative flex w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-xs font-medium text-parchment transition active:cursor-grabbing hover:brightness-110 ${
           tall ? "h-[7.5rem]" : "h-14"

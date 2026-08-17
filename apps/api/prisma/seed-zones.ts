@@ -21,8 +21,10 @@
  * enemy types, double-loot/double-yang chance, on-hit debuff chances, bonus stat points from
  * items. Random bonuses are limited to existing StatKey values.
  *
- * Safe to re-run after editing TIERS — existing zones/monsters/items/upgrade materials (matched
- * by name) are deleted and recreated rather than skipped, so tuning numbers is "edit and re-run".
+ * Safe to re-run after editing TIERS in dev — existing zones/monsters/items/upgrade materials
+ * (matched by name) are deleted and recreated rather than skipped, so tuning numbers is "edit and
+ * re-run". Against a production database with real characters this is destructive (see
+ * assertSafeToReseed() below) and refuses to run without an explicit ALLOW_PROD_RESEED override.
  */
 import { PrismaClient } from "@prisma/client";
 import { expRewardForLevel } from "@mmo/shared";
@@ -181,6 +183,53 @@ async function clearTier(tier: Tier) {
   }
 }
 
+/**
+ * Guard (Etap 15, po skardze produkcyjnej) — clearTier() poniżej kasuje `InventoryItem` graczy
+ * trzymających którykolwiek z usuwanych itemów (relacja `InventoryItem.item` NIE ma
+ * `onDelete: Cascade` w schema.prisma, więc te wiersze trzeba i tak skasować ręcznie przed
+ * usunięciem Itemu) oraz wszystkie `Expedition` w danej krainie. Ponowne uruchomienie tego
+ * skryptu na bazie z prawdziwymi kontami skasuje graczom przedmioty i historię ekspedycji w
+ * każdej regenerowanej krainie (patrz docs/architecture.md, notatka przy Etapie 15). Blokuje to
+ * chyba że baza wygląda na świeżą instalację (brak jeszcze postaci) albo operator jawnie się
+ * zgodzi przez ALLOW_PROD_RESEED — nie ma cichego no-op, bo pierwsze uruchomienie na pustej
+ * produkcyjnej bazie (patrz docs/deployment.md, sekcja 7) musi zadziałać bez dodatkowych flag.
+ */
+async function assertSafeToReseed() {
+  const databaseUrl = process.env.DATABASE_URL ?? "";
+  const looksLikeProdUrl = /^postgres(ql)?:\/\//i.test(databaseUrl);
+  const productionLike = process.env.NODE_ENV === "production" || looksLikeProdUrl;
+
+  const existingCharacters = await prisma.character.count();
+  const hasRealPlayers = existingCharacters > 0;
+
+  // Dev SQLite (nawet z testowymi postaciami) albo produkcyjna-ale-pusta baza (świeża instalacja,
+  // jeszcze bez graczy) — bezpiecznie kontynuować bez żadnej flagi.
+  if (!productionLike || !hasRealPlayers) return;
+
+  if (process.env.ALLOW_PROD_RESEED === "yes-i-am-sure") {
+    console.warn(
+      `UWAGA: ALLOW_PROD_RESEED=yes-i-am-sure ustawione — kontynuuję mimo ${existingCharacters} ` +
+        "istniejących postaci na bazie, która wygląda na produkcyjną. Ekwipunek i historia " +
+        "ekspedycji graczy w regenerowanych krainach ZOSTANĄ USUNIĘTE.",
+    );
+    return;
+  }
+
+  console.error(
+    "BLOKADA BEZPIECZEŃSTWA: ta baza wygląda na produkcyjną " +
+      "(NODE_ENV=production lub DATABASE_URL wskazuje na Postgresa) i ma już " +
+      `${existingCharacters} istniejących postaci.\n` +
+      "seed-zones.ts (clearTier) kasuje i tworzy od nowa krainy/potworów/itemy — po drodze " +
+      "usuwa WSZYSTKIE ekspedycje w danej krainie i InventoryItem graczy trzymających " +
+      "którykolwiek z usuwanych itemów (patrz docs/architecture.md, notatka przy Etapie 15).\n" +
+      "Jeśli NAPRAWDĘ tego chcesz, ustaw zmienną środowiskową ALLOW_PROD_RESEED=yes-i-am-sure " +
+      "i uruchom skrypt ponownie. W przeciwnym razie: punktowe poprawki liczb (np. szans dropu) " +
+      "rób przez dedykowany, addytywny skrypt (np. prisma/scripts/lower-drop-rates.ts) albo " +
+      "ręcznie przez panele admina Itemy/Potwory/Krainy.",
+  );
+  process.exit(1);
+}
+
 /** One-time cleanup of the original hand-seeded Wilcze Uroczysko content (seed.ts) — replaced
  * by this generator's own tier-0 output, which uses a different naming scheme. */
 async function clearLegacySeedContent() {
@@ -205,6 +254,8 @@ async function clearLegacySeedContent() {
 }
 
 async function main() {
+  await assertSafeToReseed();
+
   await clearLegacySeedContent();
 
   const classes = await prisma.characterClass.findMany({

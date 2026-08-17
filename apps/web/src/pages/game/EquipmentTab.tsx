@@ -7,6 +7,7 @@ import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { ActiveItemSlotBox } from "../../components/inventory/ActiveItemSlotBox";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
+import { DiscardConfirmModal } from "../../components/inventory/DiscardConfirmModal";
 import { ApiError } from "../../lib/apiClient";
 import { getPlayerClass } from "../../lib/classesApi";
 import { interpolateUpgrade } from "../../lib/statMath";
@@ -53,6 +54,7 @@ export function EquipmentTab({ character }: { character: Character }) {
   const [chestResult, setChestResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [contextMenu, setContextMenu] = useState<ItemContextMenuTarget | null>(null);
+  const [confirmingDiscardId, setConfirmingDiscardId] = useState<string | null>(null);
   // Require a small pointer movement before a drag starts, so a plain click/tap
   // (to select an item and show its details) still fires instead of being
   // swallowed by the drag sensor.
@@ -298,22 +300,37 @@ export function EquipmentTab({ character }: { character: Character }) {
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-medium text-parchment-dim">Ekwipunek (przeciągnij, by przenieść)</p>
               <div className="flex gap-1">
-                {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
-                      activeTab === tab
-                        ? "bg-gold text-ink"
-                        : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
-                    } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
-                    title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
-                  >
-                    {TAB_LABELS[tab]}
-                  </button>
-                ))}
+                {Array.from({ length: INVENTORY_TABS }, (_, tab) => {
+                  const tabLabel = `Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`;
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`relative flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
+                        activeTab === tab
+                          ? "bg-gold text-ink"
+                          : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
+                      } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
+                      title={tabLabel}
+                      aria-label={tabLabel}
+                    >
+                      {TAB_LABELS[tab]}
+                      {tabItemCounts[tab] > 0 && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full border border-line-soft bg-ink px-0.5 text-[9px] font-semibold leading-none text-gold-bright"
+                        >
+                          {tabItemCounts[tab]}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+            {tabItemCounts[activeTab] === 0 && (
+              <p className="mb-2 text-xs text-parchment-faint">Brak przedmiotów w tej zakładce.</p>
+            )}
             <div className="grid grid-cols-5 gap-2">
               {layoutGridTab(byGridSlot, activeTab * GRID_SLOTS).map((cell) => (
                 <GridSlot key={cell.slotIndex} slotIndex={cell.slotIndex} height={cell.height}>
@@ -416,6 +433,33 @@ export function EquipmentTab({ character }: { character: Character }) {
                   Aktywuj
                 </button>
               )}
+            {/* Same actions as the right-click menu, kept reachable from here since this panel is the
+                one place keyboard users can already land on (via ItemBox's Enter/Space handler). */}
+            {selected.item.type === "chest" && (
+              <button
+                onClick={() => openChestMutation.mutate(selected.id)}
+                disabled={openChestMutation.isPending}
+                className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Otwórz
+              </button>
+            )}
+            {selected.item.sellPrice > 0 && !selected.equippedSlot && (
+              <button
+                onClick={() => sellMutation.mutate(selected.id)}
+                disabled={sellMutation.isPending}
+                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Sprzedaj
+              </button>
+            )}
+            <button
+              onClick={() => setConfirmingDiscardId(selected.id)}
+              disabled={discardMutation.isPending}
+              className="rounded-md border border-red-500/50 px-4 py-1.5 text-sm text-red-400 hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Usuń
+            </button>
           </div>
         </div>
       )}
@@ -427,6 +471,18 @@ export function EquipmentTab({ character }: { character: Character }) {
           onOpen={(id) => openChestMutation.mutate(id)}
           onSell={(id) => sellMutation.mutate(id)}
           onDiscard={(id) => discardMutation.mutate(id)}
+        />
+      )}
+
+      {confirmingDiscardId && selected && confirmingDiscardId === selected.id && (
+        <DiscardConfirmModal
+          name={selected.item.name}
+          upgradeLevel={selected.upgradeLevel}
+          onCancel={() => setConfirmingDiscardId(null)}
+          onConfirm={() => {
+            discardMutation.mutate(confirmingDiscardId);
+            setConfirmingDiscardId(null);
+          }}
         />
       )}
     </div>

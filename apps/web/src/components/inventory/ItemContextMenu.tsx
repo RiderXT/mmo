@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
+import { DiscardConfirmModal } from "./DiscardConfirmModal";
 
 export interface ItemContextMenuTarget {
   inventoryItemId: string;
@@ -26,7 +27,9 @@ export function ItemContextMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
-  useEscapeKey(confirmingDiscard ? () => setConfirmingDiscard(false) : onClose);
+  // While confirming, DiscardConfirmModal owns the Escape key itself — don't also close the
+  // (now hidden) menu behind it.
+  useEscapeKey(confirmingDiscard ? () => {} : onClose);
 
   useEffect(() => {
     function handlePointerDown(e: MouseEvent) {
@@ -41,34 +44,15 @@ export function ItemContextMenu({
 
   if (confirmingDiscard) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmingDiscard(false)} />
-        <div className="relative w-full max-w-sm panel p-4">
-          <h2 className="font-medium text-parchment">Usunąć na stałe?</h2>
-          <p className="mt-2 text-sm text-parchment-dim">
-            <span className="font-medium text-parchment">{target.name}</span>
-            {target.upgradeLevel > 0 && <span className="text-gold-bright"> +{target.upgradeLevel}</span>}{" "}
-            zostanie usunięty(a) bezpowrotnie — tej operacji nie można cofnąć.
-          </p>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              onClick={() => setConfirmingDiscard(false)}
-              className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
-            >
-              Anuluj
-            </button>
-            <button
-              onClick={() => {
-                onDiscard(target.inventoryItemId);
-                onClose();
-              }}
-              className="rounded-md bg-red-500 px-4 py-1.5 text-sm font-medium text-ink hover:bg-red-400"
-            >
-              Usuń na stałe
-            </button>
-          </div>
-        </div>
-      </div>
+      <DiscardConfirmModal
+        name={target.name}
+        upgradeLevel={target.upgradeLevel}
+        onCancel={() => setConfirmingDiscard(false)}
+        onConfirm={() => {
+          onDiscard(target.inventoryItemId);
+          onClose();
+        }}
+      />
     );
   }
 

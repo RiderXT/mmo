@@ -252,11 +252,12 @@ corners reads as a border, not an engraving.
 ## Components
 
 ### Buttons
-- **Shape:** `rounded-md` (6px) on the current, restyled surfaces (login, NPC tab, buy modal,
-  header). Note: several older, not-yet-revisited buttons in `ExpeditionPanel.tsx`,
-  `CharacterTab.tsx`, and `AnvilTab.tsx` still ship with sharp corners (no radius class) from
-  before the restyle — treat `rounded-md` as the standard going forward and bring those into
-  line opportunistically rather than reading them as an intentional second style.
+- **Shape:** `rounded-md` (6px) everywhere, including `ExpeditionPanel.tsx`, `CharacterTab.tsx`
+  (via `StatsPanel.tsx`/`SkillsPanel.tsx`), and `AnvilTab.tsx` — these were the last
+  pre-restyle holdouts with sharp-cornered buttons, closed out by the "Polish pass po
+  restylingu" (see docs/architecture.md). `AnvilTab.tsx`'s inventory-tab switcher buttons use
+  bare `rounded` (4px) rather than `rounded-md`, which is intentional: it's a small icon-style
+  toggle, matching the Icon-only/pill toggles convention below, not a leftover sharp corner.
 - **Primary:** solid `gold` fill, `ink` text, `font-medium`/`font-bold`, `px-4 py-1.5` (or
   `py-3` for the full-width login CTA). Hover moves to `gold-bright`.
 - **Secondary/Ghost:** transparent fill, `border-line-soft` outline, `parchment-dim` text.
@@ -311,9 +312,10 @@ the keydown listener inline.
 Two lighter-weight overlay patterns that intentionally skip the modal backdrop and the panel
 corner-bracket: the right-click item context menu (`fixed`, positioned at the cursor, `w-44`,
 sharp corners, `shadow-lg`, dismiss on outside-click/Escape) and the item hover tooltip
-(pure-CSS `group-hover` reveal, `w-56`, sharp corners, `shadow-lg`, no JS state). Both stay
-sharp-cornered rather than `rounded-xl` — they're momentary overlays, not panels, and shouldn't
-borrow the panel's ceremony.
+(`fixed`, `w-56`, sharp corners, `shadow-lg`, revealed on hover *and* keyboard focus via
+`onMouseEnter`/`onFocus`, with its position clamped to stay on-screen near viewport edges —
+`ItemTooltip.tsx`). Both stay sharp-cornered rather than `rounded-xl` — they're momentary
+overlays, not panels, and shouldn't borrow the panel's ceremony.
 
 ### Navigation (sidebar)
 Section headers are a small rotated-diamond bullet (`rotate-45`, 1.5px `gold/40` border) plus a
@@ -360,8 +362,5 @@ a right-aligned gold-dot gold-numeral gold count.
   soft-rounded chrome is the point, not an inconsistency to fix.
 - **Don't** add the panel corner-bracket to modals, floating menus, or tooltips — that motif is
   reserved for top-level page panels.
-- **Don't** treat the sharp-cornered buttons still present in `ExpeditionPanel.tsx`/
-  `CharacterTab.tsx`/`AnvilTab.tsx` as the intended style — `rounded-md` (as shipped in the
-  login, NPC tab, header, and buy-modal buttons) is the standard.
 - **Don't** assume "FIGHT CLUB" is the final game name when writing new copy — it's the visual
   sketch's working title, not a confirmed brand (see PRODUCT.md).
