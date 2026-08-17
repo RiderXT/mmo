@@ -96,6 +96,7 @@ input[type="range"]:focus-visible {
     background-color: theme("colors.panel");
     border: 1px solid theme("colors.line");
     border-radius: theme("borderRadius.xl");
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   }
   .panel::before,
   .panel::after {

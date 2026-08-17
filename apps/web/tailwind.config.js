@@ -4,11 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: "oklch(14% 0.02 45)",
-        panel: "oklch(16% 0.02 45)",
-        "panel-raised": "oklch(20% 0.025 45)",
-        line: "oklch(28% 0.03 45)",
-        "line-soft": "oklch(32% 0.03 45)",
+        ink: "oklch(12% 0.02 45)",
+        panel: "oklch(19% 0.025 45)",
+        "panel-raised": "oklch(24% 0.03 45)",
+        line: "oklch(33% 0.035 45)",
+        "line-soft": "oklch(38% 0.035 45)",
         gold: { DEFAULT: "oklch(76% 0.09 85)", bright: "oklch(80% 0.14 85)" },
         parchment: { DEFAULT: "oklch(92% 0.01 60)", dim: "oklch(65% 0.02 50)", faint: "oklch(50% 0.02 55)" },
         hp: { DEFAULT: "oklch(48% 0.16 25)", bright: "oklch(58% 0.16 25)" },
