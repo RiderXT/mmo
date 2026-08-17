@@ -1768,6 +1768,71 @@ kilof/przynęta, mechanika połowu/wydobycia z dwoma niezależnymi oknami czasow
 "można wrócić do krainy powyżej poziomu") — to osobna, duża funkcja omówiona z użytkownikiem, ale
 jeszcze nie zaplanowana ani zaimplementowana.
 
+## System zbieractwa — łowiska i kopalnie (post-krzywa-exp)
+
+Nowa mechanika farmienia poza walką, na wzór wzorca `isTown`/`Npc` (opcjonalna funkcja krainy —
+zero lub jeden wiersz na `Zone`, więc jeden mechanizm pokrywa zarówno "łowisko w istniejącej
+krainie" jak i "kraina wyłącznie z łowiskiem" bez przypisanych potworów).
+
+**Schemat** (`FishingSpot`/`FishingDrop`, `Mine`/`MiningDrop`, oba `zoneId @unique`; nowy
+`GatherSession` — jedna aktywna sesja na postać, `characterId @unique`, mirror
+`Character.activeExpeditionId`; `Zone.allowRevisitAboveLevel Boolean` — pozwala wejść do krainy
+mimo przekroczenia `maxLevel`, nie omija `minLevel`; `Item` += `gatherSpeedBonusPctMax`/
+`gatherChanceBonusPctMax` (tylko `rod`/`pickaxe`, wartość PRZY +9, interpolowana liniowo od 0 przy
++0) i `baitChanceBonusPct` (tylko `bait`)). Nowe typy `ItemTypeSchema`: `rod`, `pickaxe`, `bait` —
+rod/pickaxe dostały własne sloty ekwipunku (jak weapon/armor), bait siedzi w aktywnym slocie jak
+potion, ale **nie jest zużywany** (`setActiveSlot` dopuszcza `consumable`||`bait`; `gatherCombatBuild`
+już filtrował `type === "consumable"` więc bait automatycznie nie wchodzi do symulacji walki).
+
+**Pętla zbieractwa (`modules/gathering/service.ts`) — świadomie NIE wzorem ekspedycji.**
+Ekspedycje pre-rollują cały wieloetapowy timeline z góry (potrzebują scrubowalnego logu walki +
+częściowej nagrody przy wcześniejszym wyjściu) — pojedynczy połów/wydobycie to tylko jeden losowy
+czas + jeden rzut, więc wzorem jest `lib/travelResolution.ts`: jeden zapisany `phaseEndsAt`,
+leniwie rozwiązywany przy najbliższym odczycie (`getActiveGathering`), bez pollingu/crona.
+`GatherSession.phase`: `catching` (łowienie, auto-loop — po złowieniu od razu losuje kolejną fazę,
+spójnie z tym że ekspedycje też walczą z wieloma potworami bez klikania) albo `extracting`/
+`searching` (kopanie — dwie NIEZALEŻNIE losowane fazy na cykl, potwierdzone explicite przez
+użytkownika: wydobycie przyspiesza kilof, szukanie złoża **zawsze** losowe, kilof go nie
+przyspiesza). Nagroda przyznawana natychmiast po rozwiązaniu każdej fazy (nie batch na końcu jak
+w ekspedycjach) — więc `stopGathering` to zwykłe usunięcie sesji, bez logiki "częściowej nagrody".
+
+**Zabezpieczenie przed nieograniczonym doganianiem AFK**: nowy klucz Settings
+`gathering.settings` z `maxCyclesPerResolve` (domyślnie 100) — pętla leniwego rozwiązywania w
+`resolveGatherSession` liczy cykle; jeśli limit padnie zanim dogoni `now`, sesja jest automatycznie
+usuwana (`logAction` z `action: "auto_stopped_cap"`) i gracz musi zacząć od nowa. Nic nie ginie —
+każda faza już wypłaciła nagrodę w momencie rozwiązania.
+
+**Naprawiony przy okazji pre-istniejący bug w `inventory/service.ts`'s `findNextFreeSlotIndex`**:
+funkcja wykluczała założone/aktywne itemy z listy "zajętych" slotów przy szukaniu wolnego miejsca
+na łup — ale `equipItem`/`setActiveSlot` nie przenoszą/nie czyszczą `slotIndex` (item zostaje na
+starym miejscu w tabeli, tylko dostaje `equippedSlot`/`activeSlotIndex`), więc DB-owy unique
+constraint `(characterId, slotIndex)` i tak wymaga tego miejsca jako zajętego. Ujawniło się to od
+razu przy pierwszym pełnym teście łowienia (postać z założoną wędką + kilkanaście złowionych ryb
+pod rząd trafiło w `P2002 Unique constraint failed`) — bug jest ogólny (dotyczy każdego źródła
+lootu: ekspedycji, skrzyń), po prostu rzadziej wcześniej wywoływany tyle razy pod rząd. Poprawka:
+`findNextFreeSlotIndex` liczy WSZYSTKIE wiersze postaci jako zajęte, nie tylko te bez
+`equippedSlot`/`activeSlotIndex`.
+
+Nowe moduły backendu: `modules/gathering` (gracz: start/active/stop pod `/api/gathering`),
+`modules/admin/fishingSpots`, `modules/admin/mines` (CRUD, walidacja że kraina nie ma już
+przypisanego łowiska/kopalni przed uderzeniem w `@unique`). Frontend: `GatheringPanel.tsx`
+(wzorem `ExpeditionPanel.tsx` — jeden fetch + lokalny tick co sekundę + `invalidateQueries` po
+przekroczeniu `phaseEndsAt`, bez `refetchInterval`), niebieski pasek postępu wydzielony do
+reużywalnego `components/common/ProgressBar.tsx` (z prywatnego `VitalBar` w
+`PlayerVitalsBar.tsx`), nowa zakładka admina "Zbieractwo" (pod-zakładki Łowiska/Kopalnie, mirror
+`NpcsAdminPage.tsx`), checkbox `allowRevisitAboveLevel` w `ZonesAdminPage.tsx` obok `isTown`, nowe
+panele warunkowe rod/pickaxe/bait w `ItemsAdminPage.tsx` (mirror sekcji potionu).
+
+Zweryfikowane: `pnpm -r typecheck` czysto. Curlem end-to-end: item `rod` z bonusami, łowisko z
+gwarantowanym dropem, start/active/stop, auto-pętla catch-up (67 cykli po odtworzeniu okna po
+awarii — potwierdza że limit `maxCyclesPerResolve=100` działa i timeline liczy się poprawnie od
+`phaseEndsAt`, nie od `now`), stackowanie łupu z overflow na drugi slot. Kopalnia: przejście
+`extracting → searching → extracting` z poprawnym rozróżnieniem przyspieszanej/nieprzyspieszanej
+fazy. W przeglądarce: panel admina (checkbox, listy Łowiska/Kopalnie, panele itemów) i panel
+gracza (przycisk zablokowany bez odpowiedniego narzędzia, auto-pętla z rosnącym licznikiem, pasek
+postępu, "Zatrzymaj") potwierdzone na żywo. Dane testowe (postać, 4 itemy, łowisko, kopalnia)
+usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

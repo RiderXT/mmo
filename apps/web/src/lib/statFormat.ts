@@ -95,4 +95,7 @@ export const TYPE_LABELS: Record<string, string> = {
   material: "Materiał",
   quest: "Zadaniowy",
   chest: "Skrzynia",
+  rod: "Wędka",
+  pickaxe: "Kilof",
+  bait: "Przynęta",
 };

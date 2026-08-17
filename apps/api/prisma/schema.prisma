@@ -104,6 +104,7 @@ model Character {
   inventory   InventoryItem[]
   skills      CharacterSkill[]
   expeditions Expedition[]    @relation("CharacterExpeditions")
+  gatherSession GatherSession?
 
   @@index([userId])
   @@index([classId])
@@ -168,6 +169,10 @@ model Zone {
   // Town zones have no monsters/combat — the "walcz" flow is replaced by an NPC list (see
   // docs/architecture.md "Etap 21"). Travel to/from a town works exactly like any other zone.
   isTown            Boolean  @default(false)
+  // Lets a character enter/use this zone (travel, gathering) even after leveling above
+  // maxLevel — e.g. to keep using a fishing spot/mine after outgrowing the zone's exp content.
+  // Does NOT bypass the minLevel floor. See docs/architecture.md (system zbieractwa).
+  allowRevisitAboveLevel Boolean @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -177,6 +182,8 @@ model Zone {
   travelingCharacters  Character[] @relation("CharacterTravelDestination")
   expeditions          Expedition[]
   npcs                 Npc[]
+  fishingSpot          FishingSpot?
+  mine                 Mine?
 
   @@index([minLevel, maxLevel])
 }
@@ -262,6 +269,14 @@ model Item {
   potionEffect        String? // "restore_hp" | "restore_mana" | "buff_attack_speed" | "buff_attack" | "buff_defense"
   potionMagnitudePct  Float?
   potionDurationSec   Int?
+  // Gathering tool bonuses — only meaningful when type === "rod" | "pickaxe". % value AT +9,
+  // linearly interpolated from 0 at +0 by (upgradeLevel/9) — see modules/gathering/service.ts.
+  // Null = this tool has no bonus of that kind (admin decides per-item, one/both/neither).
+  gatherSpeedBonusPctMax  Float?
+  gatherChanceBonusPctMax Float?
+  // Only meaningful when type === "bait". Flat % bonus to catch/mine chance while carried in an
+  // active slot (InventoryItem.activeSlotIndex) — NOT consumed, unlike potions.
+  baitChanceBonusPct  Float?
   // Gold received for selling one unit via the inventory context menu. 0 = not sellable.
   sellPrice           Int      @default(0)
   // How many horizontal grid cells this item occupies when placed unequipped (see
@@ -282,6 +297,8 @@ model Item {
   starterForClasses   ClassStarterItem[]
   gameEventBonusDrops GameEvent[]
   npcShopEntries      NpcShopItem[]
+  fishingDrops        FishingDrop[] @relation("FishingDropItem")
+  miningDrops         MiningDrop[]  @relation("MiningDropItem")
 
   @@index([classId])
 
@@ -473,4 +490,88 @@ model Settings {
   key       String   @id
   value     String // JSON
   updatedAt DateTime @updatedAt
+}
+
+// Zbieractwo (system łowisk i kopalni) — patrz docs/architecture.md. Mirror wzorca isTown/Npc:
+// opcjonalna funkcja krainy (0 lub 1 wiersz na Zone), pokrywa zarówno "łowisko w istniejącej
+// krainie" jak i "kraina wyłącznie z łowiskiem" (bez przypisanych ZoneMonster).
+model FishingSpot {
+  id              String   @id @default(cuid())
+  zoneId          String   @unique
+  name            String   @default("Łowisko")
+  // null = fallback do Settings "gathering.settings" (fishing min/max).
+  minCatchSeconds Int?
+  maxCatchSeconds Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  zone     Zone            @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  drops    FishingDrop[]
+  sessions GatherSession[] @relation("GatherFishingSpot")
+}
+
+model FishingDrop {
+  id            String @id @default(cuid())
+  fishingSpotId String
+  itemId        String
+  dropChance    Float
+  minQty        Int    @default(1)
+  maxQty        Int    @default(1)
+
+  fishingSpot FishingSpot @relation(fields: [fishingSpotId], references: [id], onDelete: Cascade)
+  item        Item        @relation("FishingDropItem", fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([fishingSpotId, itemId])
+}
+
+model Mine {
+  id                String   @id @default(cuid())
+  zoneId            String   @unique
+  name              String   @default("Kopalnia")
+  // null = fallback do Settings "gathering.settings" (miningExtract/miningSearch min/max).
+  minExtractSeconds Int?
+  maxExtractSeconds Int?
+  minSearchSeconds  Int?
+  maxSearchSeconds  Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  zone     Zone            @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  drops    MiningDrop[]
+  sessions GatherSession[] @relation("GatherMine")
+}
+
+model MiningDrop {
+  id         String @id @default(cuid())
+  mineId     String
+  itemId     String
+  dropChance Float
+  minQty     Int    @default(1)
+  maxQty     Int    @default(1)
+
+  mine Mine @relation(fields: [mineId], references: [id], onDelete: Cascade)
+  item Item @relation("MiningDropItem", fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([mineId, itemId])
+}
+
+// Jedna aktywna sesja zbieractwa na postać (characterId @unique — mirror Character.activeExpeditionId
+// uniqueness). Nagroda przyznawana natychmiast po rozwiązaniu każdej fazy (nie batch na końcu jak
+// Expedition), więc nie ma potrzeby "częściowej nagrody przy wcześniejszym wyjściu" jak w ekspedycjach.
+// Valid values kind: fishing | mining. Valid values phase: catching | extracting | searching.
+model GatherSession {
+  id            String   @id @default(cuid())
+  characterId   String   @unique
+  kind          String
+  fishingSpotId String?
+  mineId        String?
+  phase         String
+  phaseEndsAt   DateTime
+  totalGathered Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  character   Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  fishingSpot FishingSpot? @relation("GatherFishingSpot", fields: [fishingSpotId], references: [id], onDelete: Cascade)
+  mine        Mine?        @relation("GatherMine", fields: [mineId], references: [id], onDelete: Cascade)
 }

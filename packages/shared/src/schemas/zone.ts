@@ -22,6 +22,9 @@ export const CreateZoneSchema = z.object({
   travelTimeSeconds: z.number().int().min(0).max(3600).default(30),
   // Town zones have no monsters/combat — the "walcz" flow is replaced by an NPC list.
   isTown: z.boolean().default(false),
+  // Lets a character enter/use this zone even after leveling above maxLevel (e.g. to keep
+  // fishing/mining after outgrowing the zone's exp content). Does not bypass minLevel.
+  allowRevisitAboveLevel: z.boolean().default(false),
   monsters: z.array(ZoneMonsterInputSchema).default([]),
   drops: z.array(ZoneDropInputSchema).default([]),
 }).refine((z) => z.maxLevel >= z.minLevel, {

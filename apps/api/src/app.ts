@@ -26,6 +26,9 @@ import { travelRoutes } from "./modules/travel/routes.js";
 import { profileRoutes } from "./modules/profile/routes.js";
 import { friendsRoutes } from "./modules/friends/routes.js";
 import { rankingRoutes } from "./modules/ranking/routes.js";
+import { gatheringRoutes } from "./modules/gathering/routes.js";
+import { fishingSpotsRoutes } from "./modules/admin/fishingSpots/routes.js";
+import { minesRoutes } from "./modules/admin/mines/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -73,6 +76,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(profileRoutes, { prefix: "/api/profile" });
   await app.register(friendsRoutes, { prefix: "/api/friends" });
   await app.register(rankingRoutes, { prefix: "/api/ranking" });
+  await app.register(gatheringRoutes, { prefix: "/api/gathering" });
+  await app.register(fishingSpotsRoutes, { prefix: "/api/admin/fishing-spots" });
+  await app.register(minesRoutes, { prefix: "/api/admin/mines" });
 
   return app;
 }

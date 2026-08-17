@@ -1,4 +1,5 @@
 import type { CombatEvent } from "@mmo/shared";
+import { ProgressBar } from "../common/ProgressBar";
 
 /** Walks the (already time-revealed) event list to find the player's current HP/mana as of the
  * last event that touched them — "round" only updates HP (mana regen happens silently inside
@@ -17,13 +18,11 @@ function findPlayerVitals(events: CombatEvent[], maxHp: number, maxMana: number)
 }
 
 function VitalBar({ label, value, max, barClassName }: { label: string; value: number; max: number; barClassName: string }) {
-  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  const pct = max > 0 ? (value / max) * 100 : 0;
   return (
     <div className="flex items-center gap-2">
       <span className="w-6 shrink-0 text-[11px] tracking-wide text-parchment-faint">{label}</span>
-      <div className="h-2.5 flex-1 overflow-hidden bg-panel-raised">
-        <div className={`h-full transition-all ${barClassName}`} style={{ width: `${pct}%` }} />
-      </div>
+      <ProgressBar pct={pct} barClassName={barClassName} trackClassName="flex-1" />
       <span className="w-16 shrink-0 text-right text-xs tabular-nums text-parchment-dim">
         {Math.max(0, Math.round(value))} / {max}
       </span>

@@ -6,7 +6,7 @@ export type Role = z.infer<typeof RoleSchema>;
 export const LogLevelSchema = z.enum(["debug", "info", "warn", "error"]);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
-// Item type maps 1:1 onto an equip slot (except consumable/material/quest, which aren't equippable).
+// Item type maps 1:1 onto an equip slot (except consumable/material/quest/bait, which aren't equippable).
 export const ItemTypeSchema = z.enum([
   "weapon",
   "armor",
@@ -19,6 +19,9 @@ export const ItemTypeSchema = z.enum([
   "material",
   "quest",
   "chest",
+  "rod", // wędka — see modules/gathering
+  "pickaxe", // kilof — see modules/gathering
+  "bait", // przynęta/eliksir — carried in an active slot, not consumed, see modules/gathering
 ]);
 export type ItemType = z.infer<typeof ItemTypeSchema>;
 
@@ -30,8 +33,16 @@ export const EquipSlotSchema = z.enum([
   "necklace",
   "earrings",
   "ring",
+  "rod",
+  "pickaxe",
 ]);
 export type EquipSlot = z.infer<typeof EquipSlotSchema>;
+
+export const GatherKindSchema = z.enum(["fishing", "mining"]);
+export type GatherKind = z.infer<typeof GatherKindSchema>;
+
+export const GatherPhaseSchema = z.enum(["catching", "extracting", "searching"]);
+export type GatherPhase = z.infer<typeof GatherPhaseSchema>;
 
 export const ExpeditionStatusSchema = z.enum(["in_progress", "completed", "claimed", "flagged"]);
 export type ExpeditionStatus = z.infer<typeof ExpeditionStatusSchema>;

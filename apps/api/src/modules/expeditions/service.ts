@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
 import { resolveTravelArrival } from "../../lib/travelResolution.js";
+import { hasActiveGatherSession } from "../../lib/gatherGuard.js";
 import { getActiveEventMultipliers } from "../../lib/gameEvents.js";
 import { getExpeditionDurationMinutes } from "../settings/service.js";
 import { addLootToInventory } from "../inventory/service.js";
@@ -205,7 +206,8 @@ async function buildAndSimulate(
       400,
     );
   }
-  if (character.level < zone.minLevel || character.level > zone.maxLevel) {
+  const maxLevelOk = zone.allowRevisitAboveLevel || character.level <= zone.maxLevel;
+  if (character.level < zone.minLevel || !maxLevelOk) {
     throw new ExpeditionError(
       `Ta kraina jest dla poziomów ${zone.minLevel}-${zone.maxLevel}, a postać ma poziom ${character.level}`,
       400,
@@ -239,6 +241,9 @@ export async function startExpedition(
   }
   if (owner.travelArrivesAt) {
     throw new ExpeditionError("Postać jest w drodze — poczekaj na przybycie", 409);
+  }
+  if (await hasActiveGatherSession(input.characterId)) {
+    throw new ExpeditionError("Postać zbiera surowce — najpierw zatrzymaj zbieractwo", 409);
   }
   if (owner.currentZoneId !== input.zoneId) {
     throw new ExpeditionError("Postać musi najpierw dotrzeć do tej krainy", 409);

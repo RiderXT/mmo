@@ -1,7 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../lib/authGuard.js";
-import { getExpeditionDurationMinutes, setExpeditionDurationMinutes, SettingsError } from "./service.js";
+import { GatheringSettingsSchema } from "@mmo/shared";
+import {
+  getExpeditionDurationMinutes,
+  setExpeditionDurationMinutes,
+  getGatheringSettings,
+  setGatheringSettings,
+  SettingsError,
+} from "./service.js";
 
 const UpdateDurationSchema = z.object({ minutes: z.number().int() });
 
@@ -9,6 +16,11 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   // Public (any authenticated user) — players need this to know how long an expedition takes.
   app.get("/expedition-duration", { preHandler: requireAuth }, async (_request, reply) => {
     return reply.send({ minutes: await getExpeditionDurationMinutes() });
+  });
+
+  // Public — players need the catch/mine time ranges to size the gathering countdown UI.
+  app.get("/gathering-settings", { preHandler: requireAuth }, async (_request, reply) => {
+    return reply.send(await getGatheringSettings());
   });
 }
 
@@ -22,5 +34,11 @@ export async function adminSettingsRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof SettingsError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;
     }
+  });
+
+  app.put("/gathering-settings", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const input = GatheringSettingsSchema.parse(request.body);
+    const saved = await setGatheringSettings(input, request.user!.sub, request.id);
+    return reply.send(saved);
   });
 }

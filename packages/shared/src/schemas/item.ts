@@ -69,6 +69,12 @@ export const CreateItemSchema = z
     // Only meaningful when type === "chest".
     chestLoot: z.array(ChestLootInputSchema).default([]),
     potion: PotionConfigSchema.optional(),
+    // Only meaningful for type === "rod" | "pickaxe". % value AT +9, interpolated from 0 at +0
+    // by upgradeLevel/9. Null = this tool has no bonus of that kind.
+    gatherSpeedBonusPctMax: z.number().min(0).max(1).nullable().optional(),
+    gatherChanceBonusPctMax: z.number().min(0).max(1).nullable().optional(),
+    // Only meaningful for type === "bait". Flat % bonus while carried in an active slot.
+    baitChanceBonusPct: z.number().min(0).max(1).nullable().optional(),
     // Gold for selling one unit via the inventory context menu. 0 = not sellable.
     sellPrice: z.number().int().min(0).max(999999).default(0),
     // Horizontal grid cells occupied when unequipped (see apps/web/src/lib/inventoryGrid.ts).

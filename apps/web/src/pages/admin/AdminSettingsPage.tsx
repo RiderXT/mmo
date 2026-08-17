@@ -9,6 +9,7 @@ import { GrantAdminPage } from "./GrantAdminPage";
 import { BalanceStatsPage } from "./BalanceStatsPage";
 import { EventsAdminPage } from "./EventsAdminPage";
 import { NpcsAdminPage } from "./NpcsAdminPage";
+import { GatheringAdminPage } from "./GatheringAdminPage";
 
 const TABS = [
   { key: "general", label: "Ogólne", Component: SettingsAdminPage },
@@ -18,6 +19,7 @@ const TABS = [
   { key: "items", label: "Itemy", Component: ItemsAdminPage },
   { key: "events", label: "Eventy", Component: EventsAdminPage },
   { key: "npcs", label: "NPC", Component: NpcsAdminPage },
+  { key: "gathering", label: "Zbieractwo", Component: GatheringAdminPage },
   { key: "testing", label: "Testowanie", Component: GrantAdminPage },
   { key: "balance", label: "Statystyki balansu", Component: BalanceStatsPage },
 ] as const;

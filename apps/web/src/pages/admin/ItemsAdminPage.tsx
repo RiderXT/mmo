@@ -42,6 +42,9 @@ function emptyForm(): CreateItemInput {
     chestLoot: [],
     sellPrice: 0,
     gridWidth: 1,
+    gatherSpeedBonusPctMax: null,
+    gatherChanceBonusPctMax: null,
+    baitChanceBonusPct: null,
   };
 }
 
@@ -75,6 +78,9 @@ function fromDto(item: ItemDto): CreateItemInput {
     })),
     sellPrice: item.sellPrice,
     gridWidth: item.gridWidth,
+    gatherSpeedBonusPctMax: item.gatherSpeedBonusPctMax,
+    gatherChanceBonusPctMax: item.gatherChanceBonusPctMax,
+    baitChanceBonusPct: item.baitChanceBonusPct,
     potion:
       item.type === "consumable" && item.potionTrigger && item.potionEffect
         ? {
@@ -340,6 +346,9 @@ export function ItemsAdminPage() {
                     ...form,
                     type,
                     potion: type === "consumable" ? (form.potion ?? defaultPotion()) : undefined,
+                    gatherSpeedBonusPctMax: type === "rod" || type === "pickaxe" ? form.gatherSpeedBonusPctMax : null,
+                    gatherChanceBonusPctMax: type === "rod" || type === "pickaxe" ? form.gatherChanceBonusPctMax : null,
+                    baitChanceBonusPct: type === "bait" ? form.baitChanceBonusPct : null,
                   });
                 }}
               >
@@ -821,6 +830,70 @@ export function ItemsAdminPage() {
               </button>
             </div>
           </div>
+
+          {(form.type === "rod" || form.type === "pickaxe") && (
+            <div className="border border-rarity-uncommon/40 bg-rarity-uncommon/10 p-3">
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
+                Bonusy zbieractwa — wartość PRZY +9, liniowo interpolowana od 0 przy +0 po poziomie ulepszenia.
+                Puste pole = ten przedmiot nie ma tego bonusu.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Field label={form.type === "rod" ? "Skrócenie czasu połowu przy +9 (0–1)" : "Skrócenie czasu wydobycia przy +9 (0–1)"}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={1}
+                    className={inputClass}
+                    value={form.gatherSpeedBonusPctMax ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        gatherSpeedBonusPctMax: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Bonus do szansy złowienia/wydobycia przy +9 (0–1)">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={1}
+                    className={inputClass}
+                    value={form.gatherChanceBonusPctMax ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        gatherChanceBonusPctMax: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {form.type === "bait" && (
+            <div className="border border-rarity-uncommon/40 bg-rarity-uncommon/10 p-3">
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
+                Przynęta noszona w aktywnym slocie — działa pasywnie (nie jest zużywana), dopóki tam siedzi.
+              </p>
+              <Field label="Bonus do szansy złowienia/wydobycia (0–1)">
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={1}
+                  className={inputClass}
+                  value={form.baitChanceBonusPct ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, baitChanceBonusPct: e.target.value === "" ? null : Number(e.target.value) })
+                  }
+                />
+              </Field>
+            </div>
+          )}
 
           {form.type === "chest" && (
             <div>

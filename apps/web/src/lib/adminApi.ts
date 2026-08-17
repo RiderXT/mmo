@@ -14,6 +14,8 @@ import type {
   CreateGameEventInput,
   CreateNpcInput,
   NpcKind,
+  CreateFishingSpotInput,
+  CreateMineInput,
 } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
@@ -25,6 +27,7 @@ export interface ZoneDto {
   maxLevel: number;
   travelTimeSeconds: number;
   isTown: boolean;
+  allowRevisitAboveLevel: boolean;
   monsters: {
     id: string;
     monsterId: string;
@@ -34,6 +37,8 @@ export interface ZoneDto {
   }[];
   drops: { id: string; itemId: string; dropChance: number; item: { id: string; name: string; type: string } }[];
   npcs: { id: string; name: string; kind: string }[];
+  fishingSpot: { id: string; name: string } | null;
+  mine: { id: string; name: string } | null;
 }
 
 export interface NpcShopItemDto {
@@ -88,6 +93,9 @@ export interface ItemDto {
   potionEffect: PotionConfig["effect"] | null;
   potionMagnitudePct: number | null;
   potionDurationSec: number | null;
+  gatherSpeedBonusPctMax: number | null;
+  gatherChanceBonusPctMax: number | null;
+  baitChanceBonusPct: number | null;
 }
 
 export interface ClassSkillDto {
@@ -257,3 +265,53 @@ export const createNpc = (input: CreateNpcInput) =>
 export const updateNpc = (id: string, input: CreateNpcInput) =>
   apiFetch<NpcDto>(`/api/admin/npcs/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteNpc = (id: string) => apiFetch<void>(`/api/admin/npcs/${id}`, { method: "DELETE" });
+
+// Fishing spots
+export interface FishingSpotDto {
+  id: string;
+  zoneId: string;
+  name: string;
+  minCatchSeconds: number | null;
+  maxCatchSeconds: number | null;
+  zone: { id: string; name: string };
+  drops: {
+    id: string;
+    itemId: string;
+    dropChance: number;
+    minQty: number;
+    maxQty: number;
+    item: { id: string; name: string; type: string };
+  }[];
+}
+export const listFishingSpots = () => apiFetch<FishingSpotDto[]>("/api/admin/fishing-spots");
+export const createFishingSpot = (input: CreateFishingSpotInput) =>
+  apiFetch<FishingSpotDto>("/api/admin/fishing-spots", { method: "POST", body: JSON.stringify(input) });
+export const updateFishingSpot = (id: string, input: CreateFishingSpotInput) =>
+  apiFetch<FishingSpotDto>(`/api/admin/fishing-spots/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteFishingSpot = (id: string) => apiFetch<void>(`/api/admin/fishing-spots/${id}`, { method: "DELETE" });
+
+// Mines
+export interface MineDto {
+  id: string;
+  zoneId: string;
+  name: string;
+  minExtractSeconds: number | null;
+  maxExtractSeconds: number | null;
+  minSearchSeconds: number | null;
+  maxSearchSeconds: number | null;
+  zone: { id: string; name: string };
+  drops: {
+    id: string;
+    itemId: string;
+    dropChance: number;
+    minQty: number;
+    maxQty: number;
+    item: { id: string; name: string; type: string };
+  }[];
+}
+export const listMines = () => apiFetch<MineDto[]>("/api/admin/mines");
+export const createMine = (input: CreateMineInput) =>
+  apiFetch<MineDto>("/api/admin/mines", { method: "POST", body: JSON.stringify(input) });
+export const updateMine = (id: string, input: CreateMineInput) =>
+  apiFetch<MineDto>(`/api/admin/mines/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteMine = (id: string) => apiFetch<void>(`/api/admin/mines/${id}`, { method: "DELETE" });

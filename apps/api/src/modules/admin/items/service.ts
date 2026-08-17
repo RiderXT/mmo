@@ -48,6 +48,14 @@ function potionData(input: CreateItemInput) {
   };
 }
 
+function gatherData(input: CreateItemInput) {
+  return {
+    gatherSpeedBonusPctMax: input.gatherSpeedBonusPctMax ?? null,
+    gatherChanceBonusPctMax: input.gatherChanceBonusPctMax ?? null,
+    baitChanceBonusPct: input.baitChanceBonusPct ?? null,
+  };
+}
+
 export async function listItems() {
   const items = await prisma.item.findMany({ include: itemInclude, orderBy: { minLevel: "asc" } });
   return items.map(serialize);
@@ -102,6 +110,7 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
       sellPrice: input.sellPrice,
       gridWidth: input.gridWidth,
       ...potionData(input),
+      ...gatherData(input),
       upgradeRequirements: {
         create: input.upgradeRequirements.map((r) => ({
           targetLevel: r.targetLevel,
@@ -172,6 +181,7 @@ export async function updateItem(
         sellPrice: input.sellPrice,
         gridWidth: input.gridWidth,
         ...potionData(input),
+        ...gatherData(input),
         upgradeRequirements: {
           create: input.upgradeRequirements.map((r) => ({
             targetLevel: r.targetLevel,

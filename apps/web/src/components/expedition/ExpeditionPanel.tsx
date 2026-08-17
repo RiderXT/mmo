@@ -24,6 +24,7 @@ import { PlayerVitalsBar } from "./PlayerVitalsBar";
 import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
 import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
+import { GatheringPanel } from "../gathering/GatheringPanel";
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -319,7 +320,7 @@ export function ExpeditionPanel({
     const travelControls = (
       <>
         <div className="mt-3 flex flex-wrap gap-2">
-          {!isTown && (
+          {!isTown && (currentZone?.monsters.length ?? 0) > 0 && (
             <button
               onClick={() => setPickerOpen(true)}
               className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
@@ -383,6 +384,7 @@ export function ExpeditionPanel({
           </p>
 
           {travelControls}
+          <GatheringPanel character={character} zone={currentZone} />
         </div>
       );
     }
@@ -394,6 +396,7 @@ export function ExpeditionPanel({
         <p className="mt-1 text-xs text-parchment-faint">Postać stoi w tej krainie — wybierz co robić dalej.</p>
 
         {travelControls}
+        {currentZone && <GatheringPanel character={character} zone={currentZone} />}
 
         {pickerOpen && currentZone && (
           <MonsterPickerModal

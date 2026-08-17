@@ -13,5 +13,6 @@ export * from "./schemas/travel.js";
 export * from "./schemas/gameEvent.js";
 export * from "./schemas/npc.js";
 export * from "./schemas/friend.js";
+export * from "./schemas/gathering.js";
 export * from "./lib/upgradeSuccess.js";
 export * from "./lib/leveling.js";

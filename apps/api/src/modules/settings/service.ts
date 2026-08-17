@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
+import { GatheringSettingsSchema, type GatheringSettings } from "@mmo/shared";
 
 export const EXPEDITION_DURATION_KEY = "expedition.defaultDurationMinutes";
 const EXPEDITION_DURATION_DEFAULT = 30;
@@ -46,4 +47,43 @@ export async function setExpeditionDurationMinutes(
   });
 
   return minutes;
+}
+
+export const GATHERING_SETTINGS_KEY = "gathering.settings";
+const GATHERING_SETTINGS_DEFAULT: GatheringSettings = {
+  fishing: { minSeconds: 8, maxSeconds: 20 },
+  miningExtract: { minSeconds: 10, maxSeconds: 25 },
+  miningSearch: { minSeconds: 5, maxSeconds: 15 },
+  maxCyclesPerResolve: 100,
+};
+
+export async function getGatheringSettings(): Promise<GatheringSettings> {
+  const row = await prisma.settings.findUnique({ where: { key: GATHERING_SETTINGS_KEY } });
+  if (!row) return GATHERING_SETTINGS_DEFAULT;
+  const parsed = GatheringSettingsSchema.safeParse(JSON.parse(row.value));
+  return parsed.success ? parsed.data : GATHERING_SETTINGS_DEFAULT;
+}
+
+export async function setGatheringSettings(
+  input: GatheringSettings,
+  actorUserId: string,
+  requestId?: string,
+): Promise<GatheringSettings> {
+  const validated = GatheringSettingsSchema.parse(input);
+
+  await prisma.settings.upsert({
+    where: { key: GATHERING_SETTINGS_KEY },
+    create: { key: GATHERING_SETTINGS_KEY, value: JSON.stringify(validated) },
+    update: { value: JSON.stringify(validated) },
+  });
+
+  await logAction({
+    module: "admin:settings",
+    action: "update",
+    actorUserId,
+    requestId,
+    payload: { key: GATHERING_SETTINGS_KEY, ...validated },
+  });
+
+  return validated;
 }

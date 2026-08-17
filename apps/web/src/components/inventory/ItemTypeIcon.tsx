@@ -14,6 +14,9 @@ const ICON_PATHS: Record<ItemType, string> = {
   material: "M12 3 L20 8 V16 L12 21 L4 16 V8 Z M4 8 L12 13 L20 8 M12 13 V21",
   quest: "M12 3 C15 3 17 5 17 7.5 C17 10 14.5 10.5 13 12 C12.5 12.5 12 13.5 12 15 M12 18.5 V19",
   chest: "M4 9 H20 V19 H4 Z M4 9 C4 6 6 5 8 5 H16 C18 5 20 6 20 9 M10 13 H14 M9 5 V9 M15 5 V9",
+  rod: "M4 20 L18 4 M18 4 C18 4 20 4 20 6 C20 8 18 8 18 8 M18 6 C18 10 17 15 15 19 M15 19 A1.5 1.5 0 1 0 15 22 A1.5 1.5 0 1 0 15 19",
+  pickaxe: "M12 4 C7 4 4 7 4 9 C6 8 9 7.5 12 8.5 M12 4 C17 4 20 7 20 9 C18 8 15 7.5 12 8.5 M12 8.5 L6 20",
+  bait: "M12 4 C16 4 19 7 19 11 C19 16 15 20 12 20 C9 20 5 16 5 11 C5 7 8 4 12 4 Z M9 10 C9 12 11 13 12 12",
 };
 
 export function ItemTypeIcon({ type, className }: { type: ItemType; className?: string }) {

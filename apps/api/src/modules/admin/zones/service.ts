@@ -10,6 +10,8 @@ const zoneInclude = {
   },
   drops: { include: { item: { select: { id: true, name: true, type: true } } } },
   npcs: { select: { id: true, name: true, kind: true } },
+  fishingSpot: { select: { id: true, name: true } },
+  mine: { select: { id: true, name: true } },
 } as const;
 
 export function listZones() {
@@ -62,6 +64,7 @@ export async function createZone(input: CreateZoneInput, actorUserId: string, re
       maxLevel: input.maxLevel,
       travelTimeSeconds: input.travelTimeSeconds,
       isTown: input.isTown,
+      allowRevisitAboveLevel: input.allowRevisitAboveLevel,
       monsters: { create: input.monsters.map((m) => ({ monsterId: m.monsterId, spawnWeight: m.spawnWeight, maxCount: m.maxCount })) },
       drops: { create: input.drops.map((d) => ({ itemId: d.itemId, dropChance: d.dropChance })) },
     },
@@ -106,6 +109,7 @@ export async function updateZone(
         maxLevel: input.maxLevel,
         travelTimeSeconds: input.travelTimeSeconds,
         isTown: input.isTown,
+        allowRevisitAboveLevel: input.allowRevisitAboveLevel,
         monsters: { create: input.monsters.map((m) => ({ monsterId: m.monsterId, spawnWeight: m.spawnWeight, maxCount: m.maxCount })) },
         drops: { create: input.drops.map((d) => ({ itemId: d.itemId, dropChance: d.dropChance })) },
       },

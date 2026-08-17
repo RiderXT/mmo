@@ -28,6 +28,8 @@ const EQUIPPABLE_SLOTS_BY_TYPE: Partial<Record<ItemType, EquipSlot[]>> = {
   necklace: ["necklace"],
   earrings: ["earrings"],
   ring: ["ring"],
+  rod: ["rod"],
+  pickaxe: ["pickaxe"],
 };
 
 function serializeInventoryItem<T extends { rolledStats: string }>(item: T) {
@@ -209,8 +211,8 @@ export async function setActiveSlot(
   if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
     throw new InventoryError("Nie znaleziono przedmiotu", 404);
   }
-  if (inventoryItem.item.type !== "consumable") {
-    throw new InventoryError("Tylko przedmioty typu consumable można umieścić w aktywnym slocie", 400);
+  if (inventoryItem.item.type !== "consumable" && inventoryItem.item.type !== "bait") {
+    throw new InventoryError("Tylko mikstury i przynęty można umieścić w aktywnym slocie", 400);
   }
 
   await prisma.$transaction(async (tx) => {
@@ -535,8 +537,12 @@ async function findNextFreeSlotIndex(
   characterId: string,
   width: number,
 ): Promise<number> {
+  // Every row occupies its slotIndex at the DB level regardless of equipped/active state
+  // (equipping/active-slotting an item does not reassign or clear slotIndex — see equipItem/
+  // setActiveSlot) — @@unique([characterId, slotIndex]) means an equipped item's slot must still
+  // count as taken here, or the next create() below collides with it.
   const existing = await tx.inventoryItem.findMany({
-    where: { characterId, equippedSlot: null, activeSlotIndex: null },
+    where: { characterId },
     select: { slotIndex: true, item: { select: { gridWidth: true } } },
   });
   const occupied = new Set<number>();

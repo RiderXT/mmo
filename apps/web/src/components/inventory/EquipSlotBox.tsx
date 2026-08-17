@@ -11,6 +11,8 @@ const LABELS: Record<EquipSlot, string> = {
   necklace: "Naszyjnik",
   earrings: "Kolczyki",
   ring: "Pierścień",
+  rod: "Wędka",
+  pickaxe: "Kilof",
 };
 
 export function EquipSlotBox({ slot, children }: { slot: EquipSlot; children: ReactNode }) {

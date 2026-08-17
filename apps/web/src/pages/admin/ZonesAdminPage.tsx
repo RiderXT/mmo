@@ -24,6 +24,7 @@ function emptyForm(): CreateZoneInput {
     maxLevel: 10,
     travelTimeSeconds: 30,
     isTown: false,
+    allowRevisitAboveLevel: false,
     monsters: [],
     drops: [],
   };
@@ -37,6 +38,7 @@ function fromDto(zone: ZoneDto): CreateZoneInput {
     maxLevel: zone.maxLevel,
     travelTimeSeconds: zone.travelTimeSeconds,
     isTown: zone.isTown,
+    allowRevisitAboveLevel: zone.allowRevisitAboveLevel,
     monsters: zone.monsters.map((m) => ({
       monsterId: m.monsterId,
       spawnWeight: m.spawnWeight,
@@ -119,6 +121,7 @@ export function ZonesAdminPage() {
               <th className="px-3 py-2">Podróż</th>
               <th className="px-3 py-2">Potwory</th>
               <th className="px-3 py-2">Dropy krainy</th>
+              <th className="px-3 py-2">Zbieractwo</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -133,6 +136,9 @@ export function ZonesAdminPage() {
                 <td className="px-3 py-2 text-parchment-dim">{zone.travelTimeSeconds}s</td>
                 <td className="px-3 py-2 text-parchment-dim">{zone.monsters.length}</td>
                 <td className="px-3 py-2 text-parchment-dim">{zone.drops.length}</td>
+                <td className="px-3 py-2 text-parchment-dim">
+                  {[zone.fishingSpot && "Łowisko", zone.mine && "Kopalnia"].filter(Boolean).join(", ") || "—"}
+                </td>
                 <td className="space-x-2 px-3 py-2 text-right">
                   <button onClick={() => openEdit(zone)} className="text-gold-bright hover:underline">
                     Edytuj
@@ -204,6 +210,15 @@ export function ZonesAdminPage() {
               onChange={(e) => setForm({ ...form, isTown: e.target.checked })}
             />
             Kraina typu miasto (bez potworów, z listą NPC zamiast walki)
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-parchment-dim">
+            <input
+              type="checkbox"
+              checked={form.allowRevisitAboveLevel}
+              onChange={(e) => setForm({ ...form, allowRevisitAboveLevel: e.target.checked })}
+            />
+            Można wrócić mimo przekroczenia górnego limitu poziomu (np. dla łowiska/kopalni)
           </label>
 
           <Field label="Opis">
