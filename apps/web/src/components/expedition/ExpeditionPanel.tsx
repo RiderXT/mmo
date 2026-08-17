@@ -21,6 +21,7 @@ import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { MonsterPickerModal } from "./MonsterPickerModal";
 import { BattleTacticsModal } from "./BattleTacticsModal";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
+import { ActivePotionsSummary } from "./ActivePotionsSummary";
 import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
 import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
@@ -234,6 +235,7 @@ export function ExpeditionPanel({
         {flaggedBanner}
         <h2 className="font-medium text-parchment">Ekspedycja w toku</h2>
         <p className="mt-1 text-sm text-parchment-dim">Kraina: {zoneNameFor(expedition.zoneId)}</p>
+        <ActivePotionsSummary characterId={characterId} />
         {isReadyToClaim ? (
           <button
             onClick={() => claimMutation.mutate(expedition.id)}
@@ -382,6 +384,7 @@ export function ExpeditionPanel({
           <p className="mt-1 text-xs text-parchment-faint">
             To miasto — zakupy u NPC znajdziesz w zakładce NPC w menu.
           </p>
+          <ActivePotionsSummary characterId={characterId} />
 
           {travelControls}
           <GatheringPanel character={character} zone={currentZone} />
@@ -394,6 +397,7 @@ export function ExpeditionPanel({
         {flaggedBanner}
         <h2 className="font-medium text-parchment">{currentZone?.name ?? "Kraina"}</h2>
         <p className="mt-1 text-xs text-parchment-faint">Postać stoi w tej krainie — wybierz co robić dalej.</p>
+        <ActivePotionsSummary characterId={characterId} />
 
         {travelControls}
         {currentZone && <GatheringPanel character={character} zone={currentZone} />}
