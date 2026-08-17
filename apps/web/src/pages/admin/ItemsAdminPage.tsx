@@ -426,7 +426,7 @@ export function ItemsAdminPage() {
                 )}
               </div>
             </Field>
-            <Field label="Szerokość w siatce ekwipunku (kratki)">
+            <Field label="Wysokość w siatce ekwipunku (kratki)">
               <input
                 type="number"
                 min={1}

@@ -77,7 +77,7 @@ export const CreateItemSchema = z
     baitChanceBonusPct: z.number().min(0).max(1).nullable().optional(),
     // Gold for selling one unit via the inventory context menu. 0 = not sellable.
     sellPrice: z.number().int().min(0).max(999999).default(0),
-    // Horizontal grid cells occupied when unequipped (see apps/web/src/lib/inventoryGrid.ts).
+    // Grid cells occupied vertically when unequipped (see apps/web/src/lib/inventoryGrid.ts).
     gridWidth: z.number().int().min(1).max(3).default(1),
   })
   .refine((val) => val.stackable || val.maxStack === 1, {

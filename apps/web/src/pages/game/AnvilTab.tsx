@@ -190,11 +190,11 @@ export function AnvilTab({ character }: { character: Character }) {
           </div>
           <div className="grid grid-cols-5 gap-2">
             {layoutGridTab(byGridSlot, activeTab * GRID_SLOTS).map((cell) => (
-              <GridSlot key={cell.slotIndex} slotIndex={cell.slotIndex} width={cell.width}>
+              <GridSlot key={cell.slotIndex} slotIndex={cell.slotIndex} height={cell.height}>
                 {cell.item && (
                   <ItemBox
                     inventoryItem={cell.item}
-                    wide={cell.width === 2}
+                    tall={cell.height === 2}
                     selected={cell.item.id === selectedId}
                     onSelect={() => selectItem(cell.item!.id)}
                   />

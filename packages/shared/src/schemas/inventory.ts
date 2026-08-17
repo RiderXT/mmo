@@ -4,8 +4,8 @@ import { EquipSlotSchema, StatBlockSchema } from "./enums.js";
 const ACTIVE_SLOT_COUNT = 6;
 
 // Grid geometry shared by client (rendering) and server (multi-cell placement/collision for
-// Item.gridWidth > 1) — must stay identical on both sides or a 2-wide item could be validated
-// against one row width and rendered against another.
+// Item.gridWidth > 1 — weapon/armor stack 2 cells vertically) — must stay identical on both sides
+// or a 2-tall item could be validated against one grid shape and rendered against another.
 const INVENTORY_GRID_COLS = 5;
 const INVENTORY_GRID_ROWS = 7;
 const INVENTORY_GRID_SLOTS_PER_TAB = INVENTORY_GRID_COLS * INVENTORY_GRID_ROWS;
@@ -73,15 +73,17 @@ export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
 export { ACTIVE_SLOT_COUNT, INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, INVENTORY_GRID_SLOTS_PER_TAB };
 
-/** Cells occupied by an item of `width` starting at `slotIndex` (tab-relative or absolute — only
- * the column matters). Returns null if placing it here would spill past the row into the next
- * one, which is invalid regardless of whether those cells are otherwise free. */
-export function inventoryOccupiedRange(slotIndex: number, width: number): number[] | null {
+/** Cells occupied by an item of `height` (Item.gridWidth — number of grid cells, stacked
+ * vertically) starting at `slotIndex` (tab-relative or absolute — works either way since the
+ * boundary check below is done modulo one tab's worth of cells). Returns null if placing it here
+ * would spill past this tab's last row into the next tab's first row, which is invalid
+ * regardless of whether those cells are otherwise free. */
+export function inventoryOccupiedRange(slotIndex: number, height: number): number[] | null {
+  const localRow = Math.floor((slotIndex % INVENTORY_GRID_SLOTS_PER_TAB) / INVENTORY_GRID_COLS);
+  if (localRow + height > INVENTORY_GRID_ROWS) return null;
   const cells: number[] = [];
-  for (let w = 0; w < width; w++) {
-    const cell = slotIndex + w;
-    if (w > 0 && cell % INVENTORY_GRID_COLS === 0) return null;
-    cells.push(cell);
+  for (let h = 0; h < height; h++) {
+    cells.push(slotIndex + h * INVENTORY_GRID_COLS);
   }
   return cells;
 }

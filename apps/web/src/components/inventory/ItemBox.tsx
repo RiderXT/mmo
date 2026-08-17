@@ -23,16 +23,16 @@ export function ItemBox({
   onSelect,
   selected,
   onContextMenu,
-  wide = false,
+  tall = false,
 }: {
   inventoryItem: InventoryItemDto;
   onSelect: () => void;
   selected: boolean;
   onContextMenu?: (inventoryItem: InventoryItemDto, x: number, y: number) => void;
-  /** True when rendered as the primary cell of a gridWidth=2 item (weapon/armor) — widens the
-   * box to match GridSlot's own col-span-2 sizing instead of leaving it a narrow 1-cell box
+  /** True when rendered as the primary cell of a gridWidth=2 item (weapon/armor) — heightens the
+   * box to match GridSlot's own row-span-2 sizing instead of leaving it a narrow 1-cell box
    * inside a 2-cell socket. */
-  wide?: boolean;
+  tall?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inventoryItem.id,
@@ -64,8 +64,8 @@ export function ItemBox({
           onContextMenu(inventoryItem, e.clientX, e.clientY);
         }}
         style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
-        className={`relative flex h-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-[10px] font-medium text-parchment transition active:cursor-grabbing hover:brightness-110 ${
-          wide ? "w-[7.5rem]" : "w-14"
+        className={`relative flex w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-[10px] font-medium text-parchment transition active:cursor-grabbing hover:brightness-110 ${
+          tall ? "h-[7.5rem]" : "h-14"
         } ${TYPE_COLORS[inventoryItem.item.type] ?? "border-line-soft bg-panel-raised"} ${
           selected
             ? "ring-2 ring-gold-bright ring-offset-2 ring-offset-ink shadow-[0_0_10px_oklch(76%_0.09_85_/_0.5)]"
