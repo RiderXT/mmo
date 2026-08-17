@@ -7,10 +7,10 @@ export default {
         ink: "oklch(12% 0.02 45)",
         panel: "oklch(19% 0.025 45)",
         "panel-raised": "oklch(24% 0.03 45)",
-        line: "oklch(33% 0.035 45)",
-        "line-soft": "oklch(38% 0.035 45)",
+        line: "oklch(40% 0.035 45)",
+        "line-soft": "oklch(48% 0.035 45)",
         gold: { DEFAULT: "oklch(76% 0.09 85)", bright: "oklch(80% 0.14 85)" },
-        parchment: { DEFAULT: "oklch(92% 0.01 60)", dim: "oklch(65% 0.02 50)", faint: "oklch(50% 0.02 55)" },
+        parchment: { DEFAULT: "oklch(92% 0.01 60)", dim: "oklch(65% 0.02 50)", faint: "oklch(60% 0.02 55)" },
         hp: { DEFAULT: "oklch(48% 0.16 25)", bright: "oklch(58% 0.16 25)" },
         mp: { DEFAULT: "oklch(48% 0.13 250)", bright: "oklch(62% 0.13 250)" },
         rarity: {

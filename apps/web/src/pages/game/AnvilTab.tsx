@@ -337,8 +337,16 @@ export function AnvilTab({ character }: { character: Character }) {
             </>
           )}
 
-          {resultMessage && <p className="mt-3 text-sm text-rarity-uncommon">{resultMessage}</p>}
-          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+          {resultMessage && (
+            <p role="status" className="mt-3 text-sm text-rarity-uncommon">
+              {resultMessage}
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="mt-3 text-sm text-red-400">
+              {error}
+            </p>
+          )}
         </div>
       </div>
     </DndContext>

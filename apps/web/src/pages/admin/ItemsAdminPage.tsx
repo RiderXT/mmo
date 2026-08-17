@@ -113,7 +113,7 @@ function StatValueEditor({
       <p className="mb-2 text-xs font-medium text-parchment-dim">{label}</p>
       <div className="space-y-2">
         {entries.map(([stat, val], idx) => (
-          <div key={idx} className="flex flex-wrap items-end gap-2">
+          <div key={stat} className="flex flex-wrap items-end gap-2">
             <MiniField label="Staty">
               <select
                 className={`${inputClass} w-44`}
@@ -584,7 +584,7 @@ export function ItemsAdminPage() {
             </p>
             <div className="space-y-2">
               {form.possibleStatRanges.map((range, idx) => (
-                <div key={idx} className="flex flex-wrap items-end gap-2">
+                <div key={`${idx}-${range.stat}`} className="flex flex-wrap items-end gap-2">
                   <MiniField label="Staty">
                     <select
                       className={`${inputClass} w-44`}
@@ -687,7 +687,7 @@ export function ItemsAdminPage() {
             />
             <div className="space-y-2">
               {form.upgradeRequirements.map((req, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
+                <div key={`${idx}-${req.targetLevel}-${req.requiredItemId}`} className="flex flex-wrap items-center gap-2">
                   <input
                     type="number"
                     placeholder="poziom ulepszenia"
@@ -763,7 +763,7 @@ export function ItemsAdminPage() {
             </p>
             <div className="space-y-2">
               {form.upgradeLevelConfigs.map((cfg, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
+                <div key={`${idx}-${cfg.targetLevel}`} className="flex flex-wrap items-center gap-2">
                   <input
                     type="number"
                     placeholder="poziom ulepszenia"
@@ -913,7 +913,7 @@ export function ItemsAdminPage() {
               />
               <div className="space-y-2">
                 {form.chestLoot.map((entry, idx) => (
-                  <div key={idx} className="flex flex-wrap items-end gap-2">
+                  <div key={`${idx}-${entry.rewardItemId}`} className="flex flex-wrap items-end gap-2">
                     <MiniField label="Przedmiot">
                       <select
                         className={`${inputClass} w-48`}
@@ -996,7 +996,11 @@ export function ItemsAdminPage() {
             </div>
           )}
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-red-400">
+              {error}
+            </p>
+          )}
 
           <div className="flex gap-2">
             <button

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ZoneDto } from "../../lib/adminApi";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 export function MonsterPickerModal({
   zone,
@@ -13,6 +14,7 @@ export function MonsterPickerModal({
   onCancel: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEscapeKey(onCancel);
 
   function toggle(monsterId: string) {
     setSelected((prev) => {

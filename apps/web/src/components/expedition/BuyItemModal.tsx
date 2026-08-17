@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 export function BuyItemModal({
   itemName,
@@ -19,6 +20,7 @@ export function BuyItemModal({
 }) {
   const maxQty = Math.max(1, Math.min(stock ?? 999, 999));
   const [quantity, setQuantity] = useState(1);
+  useEscapeKey(onCancel);
 
   const total = quantity * goldPrice;
   const overBudget = total > gold;

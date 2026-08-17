@@ -88,7 +88,11 @@ export function RegisterPage() {
           <p className="text-xs text-parchment-faint">Min. 10 znaków, wielka i mała litera oraz cyfra.</p>
         </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"

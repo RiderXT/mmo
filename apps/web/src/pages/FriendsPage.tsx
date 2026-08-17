@@ -68,8 +68,16 @@ export function FriendsPage() {
             Zaproś
           </button>
         </form>
-        {message && <p className="mt-2 text-sm text-rarity-uncommon">{message}</p>}
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {message && (
+          <p role="status" className="mt-2 text-sm text-rarity-uncommon">
+            {message}
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-red-400">
+            {error}
+          </p>
+        )}
       </div>
 
       {friends && friends.incoming.length > 0 && (

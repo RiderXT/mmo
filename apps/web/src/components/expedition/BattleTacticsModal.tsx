@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { BattleTacticsInput } from "@mmo/shared";
 import type { ClassSkillDto } from "../../lib/adminApi";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 export function BattleTacticsModal({
   activeSkills,
@@ -14,6 +15,7 @@ export function BattleTacticsModal({
   const [useThresholdOverride, setUseThresholdOverride] = useState(false);
   const [thresholdPct, setThresholdPct] = useState(60);
   const [disabledSkillIds, setDisabledSkillIds] = useState<Set<string>>(new Set());
+  useEscapeKey(onBack);
 
   function toggleSkill(id: string) {
     setDisabledSkillIds((prev) => {

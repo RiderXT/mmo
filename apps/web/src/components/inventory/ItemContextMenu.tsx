@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 export interface ItemContextMenuTarget {
   inventoryItemId: string;
@@ -23,20 +24,14 @@ export function ItemContextMenu({
   onDiscard: (inventoryItemId: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  useEscapeKey(onClose);
 
   useEffect(() => {
     function handlePointerDown(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKey);
-    };
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [onClose]);
 
   // Keep the menu on-screen near the click point rather than off the right/bottom edge.

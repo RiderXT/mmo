@@ -2,16 +2,16 @@
 name: MMO (working title — see PRODUCT.md)
 description: Browser-based idle Metin2-style MMO with a torchlit, gold-on-ink guild-hall aesthetic
 colors:
-  ink: "oklch(14% 0.02 45)"
-  panel: "oklch(16% 0.02 45)"
-  panel-raised: "oklch(20% 0.025 45)"
-  line: "oklch(28% 0.03 45)"
-  line-soft: "oklch(32% 0.03 45)"
+  ink: "oklch(12% 0.02 45)"
+  panel: "oklch(19% 0.025 45)"
+  panel-raised: "oklch(24% 0.03 45)"
+  line: "oklch(40% 0.035 45)"
+  line-soft: "oklch(48% 0.035 45)"
   gold: "oklch(76% 0.09 85)"
   gold-bright: "oklch(80% 0.14 85)"
   parchment: "oklch(92% 0.01 60)"
   parchment-dim: "oklch(65% 0.02 50)"
-  parchment-faint: "oklch(50% 0.02 55)"
+  parchment-faint: "oklch(60% 0.02 55)"
   hp: "oklch(48% 0.16 25)"
   hp-bright: "oklch(58% 0.16 25)"
   mp: "oklch(48% 0.13 250)"
@@ -134,17 +134,27 @@ two combat-semantic hues (HP, MP) exist only inside vitals and combat narration.
   header.
 
 ### Neutral
-- **Ink** (`oklch(14% 0.02 45)`, token `ink`): page background; also the text color on filled
+- **Ink** (`oklch(12% 0.02 45)`, token `ink`): page background; also the text color on filled
   gold buttons/badges.
-- **Panel** (`oklch(16% 0.02 45)`, token `panel`): the standard card/panel surface.
-- **Panel Raised** (`oklch(20% 0.025 45)`, token `panel-raised`): one step brighter — item
+- **Panel** (`oklch(19% 0.025 45)`, token `panel`): the standard card/panel surface — deliberately
+  a wide lightness gap from `ink` (was a near-invisible 2 points; widened this session so cards
+  read as distinct surfaces at a glance, not a wash of the same near-black).
+- **Panel Raised** (`oklch(24% 0.03 45)`, token `panel-raised`): one step brighter — item
   slots, stat-card fills, secondary-button hover, avatar badge gradients.
-- **Line** (`oklch(28% 0.03 45)`, token `line`) / **Line Soft** (`oklch(32% 0.03 45)`,
+- **Line** (`oklch(40% 0.035 45)`, token `line`) / **Line Soft** (`oklch(48% 0.035 45)`,
   token `line-soft`): borders, from structural (panel edges, table rules) to interactive
-  (input/button outlines, item-slot dashed borders).
+  (input/button outlines, item-slot dashed borders). Line Soft is tuned to clear WCAG 1.4.11's
+  3:1 non-text contrast minimum against `ink` specifically — the case that matters, since input
+  fields sit directly on `ink` with no background-color cue marking their boundary. `line` sits
+  on backgrounds that are already differentiated by tone (panels, dividers), so it's improved but
+  not pushed to the same strict bar — see Elevation & Depth for why that's an intentional,
+  reasoned tradeoff rather than an oversight.
 - **Parchment** (`oklch(92% 0.01 60)`) / **Parchment Dim** (`oklch(65% 0.02 50)`) /
-  **Parchment Faint** (`oklch(50% 0.02 55)`): body text, from primary reading text down to the
-  faintest captions and placeholder-state copy.
+  **Parchment Faint** (`oklch(60% 0.02 55)`): body text, from primary reading text down to the
+  faintest captions and placeholder-state copy. Parchment Faint is tuned to clear 4.5:1 (WCAG AA
+  for normal-size text) against both `ink` and `panel` — it was 50% lightness (only ~3.1:1)
+  before this session's accessibility pass, since it's used for genuinely small (9–11px) caption
+  text throughout inventory/equipment UI, not just large decorative text.
 
 ### Item rarity scale (semantic, not brand)
 Four additional hues gate item quality across tooltips, borders, and admin item cards —
@@ -202,16 +212,21 @@ than only appearing on mobile.
 
 ## Elevation & Depth
 
-Flat by design — there is no shadow vocabulary in the system beyond a single `shadow-lg` used
-sparingly on floating overlays (the item context menu, the item tooltip, the login card) to lift
-them off the page. Depth is otherwise conveyed through the `ink` → `panel` → `panel-raised`
-tonal ladder (each step ~4–6% lighter in `oklch`), not through cast shadows. Modals add a flat
+Mostly flat by design — the primary depth cue is still the `ink` → `panel` → `panel-raised`
+tonal ladder (each step ~5–7% lighter in `oklch`), not cast shadows. `.panel` itself also carries
+a soft `0 4px 14px rgba(0,0,0,0.4)` shadow (added alongside the contrast widening above) as a
+second, redundant boundary cue — useful precisely because `line`'s border-only contrast on a
+panel doesn't reach the strict WCAG non-text minimum on its own (see Neutral, above); the shadow
+plus the tonal step together carry the boundary. `shadow-lg` remains reserved for genuinely
+floating overlays (the item context menu, the item tooltip, the login card). Modals add a flat
 `bg-black/60` backdrop rather than a shadow to separate themselves from the page beneath.
 
 ### Named Rules
 **The Tonal-Not-Cast Rule.** Reach for the next step up the `ink`/`panel`/`panel-raised` ladder
-before reaching for a `box-shadow`. Shadows are reserved for genuinely floating elements
-(menus, tooltips, the login card), never for ordinary card-on-page separation.
+before reaching for a `box-shadow`. `shadow-lg` is reserved for genuinely floating elements
+(menus, tooltips, the login card); `.panel`'s own soft shadow is a fixed, quieter exception that
+exists specifically to back up border contrast, not a precedent for shadows on ordinary
+card-on-page separation elsewhere.
 
 ## Shapes
 
@@ -253,7 +268,7 @@ corners reads as a border, not an engraving.
 
 ### Cards / Containers (`.panel`)
 - **Corner Style:** `rounded-xl` (12px), plus the gold two-corner bracket motif (see Shapes).
-- **Background:** `panel` (`oklch(16% 0.02 45)`).
+- **Background:** `panel` (`oklch(19% 0.025 45)`).
 - **Border:** 1px `line`.
 - **Shadow Strategy:** none at rest (see Elevation & Depth).
 - **Internal Padding:** `p-4` (16px) standard; denser item-grid cards use `p-3`–`p-3.5`.
@@ -261,7 +276,9 @@ corners reads as a border, not an engraving.
 ### Item Slots (signature component)
 Dashed-border sockets used throughout inventory, equipment, active-item, and Kowadło UI
 (`GridSlot`, `EquipSlotBox`, `ActiveItemSlotBox`, `AnvilSlotBox`). Square, `56px` (`80px` for
-the single Kowadło anvil slot), 1px dashed `line` border at rest, switching to `gold-bright`
+the single Kowadło anvil slot), 1px dashed `line-soft` border at rest (all four socket components
+share this token now — `GridSlot` used the weaker `line` until this session's accessibility pass,
+since sockets are interactive drop targets, not decorative panel chrome), switching to `gold-bright`
 border with a `gold/10` wash the instant a dragged item is over a valid target
 (`dnd-kit`'s `isOver`). No radius. A small `parchment-faint` caption sits below the socket
 (equip slot name, "Kowadło").
@@ -285,7 +302,10 @@ click.
 Centered overlay pattern (`MonsterPickerModal`, `BattleTacticsModal`, `BuyItemModal`): full-
 screen `fixed inset-0` wrapper, flat `bg-black/60` backdrop (click-to-dismiss), a `panel` box
 capped at `max-w-sm`–`max-w-lg` and scrollable past `85vh`. Footer is always a right-aligned
-button pair: secondary "Anuluj"/"Wstecz" first, primary gold action last.
+button pair: secondary "Anuluj"/"Wstecz" first, primary gold action last. All three also dismiss
+on Escape via the shared `useEscapeKey` hook (`hooks/useEscapeKey.ts`), matching the item context
+menu's own dismiss behavior below — use that hook for any future modal instead of re-implementing
+the keydown listener inline.
 
 ### Floating Menus & Tooltips
 Two lighter-weight overlay patterns that intentionally skip the modal backdrop and the panel
@@ -300,10 +320,12 @@ Section headers are a small rotated-diamond bullet (`rotate-45`, 1.5px `gold/40`
 `gold/15` bottom rule and an uppercase, letter-spaced (`0.14em`) `parchment-faint` label — never
 just a bare label. Each nav link carries a circular icon badge (`rounded-full`, gradient
 `panel-raised`→`panel`, 1px border) with a small solid color dot inside, distinct per
-destination (not a semantic color system — decorative variety). Active state: `gold/60` badge
-border + `gold/10`-filled, `gold/60`-bordered row background. Disabled/gated links (Kowadło and
-NPC outside a town) render as a non-interactive, `50%`-opacity row with the same badge shape,
-carrying a `title` tooltip explaining the gate rather than being hidden.
+destination (not a semantic color system — decorative variety), plus a `border-l-2` accent on the
+row itself (`transparent` at rest, `gold-bright` when active) — a restrained active-state
+indicator, not the generic per-card side-stripe the "AI slop" pattern usually refers to. Active
+state: `gold/60` badge border + `gold/10`-filled, `gold/60`-bordered row background. Disabled/
+gated links (Kowadło and NPC outside a town) render as a non-interactive, `50%`-opacity row with
+the same badge shape, carrying a `title` tooltip explaining the gate rather than being hidden.
 
 ### Header (signature component)
 Sticky bar spanning the full page, present on both desktop and mobile (not a mobile-only

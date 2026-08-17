@@ -269,7 +269,11 @@ export function ExpeditionPanel({
             </button>
           </>
         )}
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-red-400">
+            {error}
+          </p>
+        )}
         {combatStatsQuery.data && (
           <div className="mt-3">
             <PlayerVitalsBar
@@ -372,7 +376,11 @@ export function ExpeditionPanel({
           </div>
         )}
 
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-red-400">
+            {error}
+          </p>
+        )}
       </>
     );
 
@@ -466,7 +474,11 @@ export function ExpeditionPanel({
         {zones.length === 0 && <p className="text-sm text-parchment-faint">Brak dostępnych krain.</p>}
       </div>
 
-      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {error}
+        </p>
+      )}
 
       <button
         onClick={() => selectedZoneId && travelMutation.mutate(selectedZoneId)}

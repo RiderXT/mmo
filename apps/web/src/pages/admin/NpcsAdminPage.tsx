@@ -172,7 +172,7 @@ export function NpcsAdminPage() {
             />
             <div className="space-y-2">
               {form.shopItems.map((entry, idx) => (
-                <div key={idx} className="flex flex-wrap items-end gap-2">
+                <div key={`${idx}-${entry.itemId}`} className="flex flex-wrap items-end gap-2">
                   <MiniField label="Przedmiot">
                     <select
                       className={`${inputClass} w-48`}
@@ -236,7 +236,11 @@ export function NpcsAdminPage() {
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-red-400">
+              {error}
+            </p>
+          )}
 
           <div className="flex gap-2">
             <button

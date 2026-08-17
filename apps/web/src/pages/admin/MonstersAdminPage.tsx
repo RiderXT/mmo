@@ -222,7 +222,7 @@ export function MonstersAdminPage() {
             <p className="mb-2 text-xs font-medium text-parchment-dim">Umiejętności</p>
             <div className="space-y-2">
               {form.skills.map((skill, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
+                <div key={`${idx}-${skill.name}`} className="flex flex-wrap items-center gap-2">
                   <input
                     placeholder="nazwa"
                     className={`${inputClass} w-32`}
@@ -290,7 +290,7 @@ export function MonstersAdminPage() {
             />
             <div className="space-y-2">
               {form.drops.map((drop, idx) => (
-                <div key={idx} className="flex flex-wrap items-end gap-2">
+                <div key={`${idx}-${drop.itemId}`} className="flex flex-wrap items-end gap-2">
                   <MiniField label="Przedmiot">
                     <select
                       className={`${inputClass} w-48`}
@@ -370,7 +370,11 @@ export function MonstersAdminPage() {
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-red-400">
+              {error}
+            </p>
+          )}
 
           <div className="flex gap-2">
             <button

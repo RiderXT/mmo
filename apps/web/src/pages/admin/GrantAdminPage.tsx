@@ -130,7 +130,7 @@ export function GrantAdminPage() {
             <p className="mt-3 text-sm text-parchment-faint">Wczytywanie...</p>
           )}
           {charactersQuery.isError && (
-            <p className="mt-3 text-sm text-red-400">
+            <p role="alert" className="mt-3 text-sm text-red-400">
               Nie udało się wczytać postaci:{" "}
               {charactersQuery.error instanceof ApiError
                 ? charactersQuery.error.message
@@ -207,7 +207,7 @@ export function GrantAdminPage() {
                 />
                 <div className="space-y-2">
                   {form.items.map((entry, idx) => (
-                    <div key={idx} className="flex flex-wrap items-center gap-2">
+                    <div key={`${idx}-${entry.itemId}`} className="flex flex-wrap items-center gap-2">
                       <select
                         className={`${inputClass} w-56`}
                         value={entry.itemId}
@@ -255,8 +255,16 @@ export function GrantAdminPage() {
                 </div>
               </div>
 
-              {error && <p className="text-sm text-red-400">{error}</p>}
-              {result && <p className="text-sm text-rarity-uncommon">{result}</p>}
+              {error && (
+                <p role="alert" className="text-sm text-red-400">
+                  {error}
+                </p>
+              )}
+              {result && (
+                <p role="status" className="text-sm text-rarity-uncommon">
+                  {result}
+                </p>
+              )}
 
               <button
                 onClick={handleSubmit}
@@ -303,7 +311,11 @@ export function GrantAdminPage() {
             Cofnij
           </button>
         </div>
-        {revertError && <p className="mt-2 text-sm text-red-400">{revertError}</p>}
+        {revertError && (
+          <p role="alert" className="mt-2 text-sm text-red-400">
+            {revertError}
+          </p>
+        )}
         {revertResult && (
           <div className="mt-3 space-y-1 border border-line bg-ink/60 p-3 text-sm">
             <p className="text-parchment">
@@ -430,8 +442,16 @@ export function GrantAdminPage() {
             </button>
           </div>
         </details>
-        {resolveError && <p className="mt-2 text-sm text-red-400">{resolveError}</p>}
-        {resolveResult && <p className="mt-2 text-sm text-rarity-uncommon">{resolveResult}</p>}
+        {resolveError && (
+          <p role="alert" className="mt-2 text-sm text-red-400">
+            {resolveError}
+          </p>
+        )}
+        {resolveResult && (
+          <p role="status" className="mt-2 text-sm text-rarity-uncommon">
+            {resolveResult}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -270,8 +270,16 @@ export function NpcTab({ character }: { character: Character }) {
             </div>
           )}
 
-          {actionError && <p className="mt-3 text-sm text-red-400">{actionError}</p>}
-          {actionMessage && <p className="mt-3 text-sm text-rarity-uncommon">{actionMessage}</p>}
+          {actionError && (
+            <p role="alert" className="mt-3 text-sm text-red-400">
+              {actionError}
+            </p>
+          )}
+          {actionMessage && (
+            <p role="status" className="mt-3 text-sm text-rarity-uncommon">
+              {actionMessage}
+            </p>
+          )}
         </div>
 
         <div className="panel p-4">

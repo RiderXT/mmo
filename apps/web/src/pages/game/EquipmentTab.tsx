@@ -336,8 +336,16 @@ export function EquipmentTab({ character }: { character: Character }) {
         </div>
       </DndContext>
 
-      {actionError && <p className="mt-3 text-sm text-red-400">{actionError}</p>}
-      {chestResult && <p className="mt-3 text-sm text-rarity-uncommon">{chestResult}</p>}
+      {actionError && (
+        <p role="alert" className="mt-3 text-sm text-red-400">
+          {actionError}
+        </p>
+      )}
+      {chestResult && (
+        <p role="status" className="mt-3 text-sm text-rarity-uncommon">
+          {chestResult}
+        </p>
+      )}
 
       {selected && (
         <div className="mt-6 max-w-sm space-y-2 panel p-4">

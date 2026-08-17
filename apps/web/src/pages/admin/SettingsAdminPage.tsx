@@ -82,7 +82,11 @@ export function SettingsAdminPage() {
           postaci, która nigdy by nie przegrała: po tym czasie walka i tak się kończy, a postać
           przeżywa.
         </p>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        )}
         {saved && <p className="text-sm text-rarity-uncommon">Zapisano.</p>}
         <button
           onClick={() => saveMutation.mutate(minutes)}
@@ -188,7 +192,11 @@ export function SettingsAdminPage() {
             onChange={(e) => setGathering({ ...gathering, maxCyclesPerResolve: Number(e.target.value) })}
           />
         </Field>
-        {gatheringError && <p className="text-sm text-red-400">{gatheringError}</p>}
+        {gatheringError && (
+          <p role="alert" className="text-sm text-red-400">
+            {gatheringError}
+          </p>
+        )}
         {gatheringSaved && <p className="text-sm text-rarity-uncommon">Zapisano.</p>}
         <button
           onClick={() => saveGatheringMutation.mutate(gathering)}
