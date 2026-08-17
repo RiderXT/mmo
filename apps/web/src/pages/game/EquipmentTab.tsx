@@ -28,18 +28,20 @@ import {
 
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const ACTIVE_SLOTS = 6;
-// Mirrors a classic equipment doll: armor pieces down the center, weapon/shield on the
-// off-hand/main-hand side, jewelry on the other.
-const LEFT_EQUIP_SLOTS: EquipSlot[] = ["ring", "earrings", "necklace"];
+// Mirrors a classic equipment doll: helmet/armor/boots down the center, necklace+ring and
+// shield+earrings stacked in the two flanking columns (same combined height as the tall armor
+// socket), weapon alone on the outer right edge.
 const CENTER_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "boots"];
-const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "shield"];
+const COL1_SLOTS: EquipSlot[] = ["necklace", "ring"];
+const COL2_SLOTS: EquipSlot[] = ["shield", "earrings"];
+const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon"];
 // weapon/armor occupy 2 grid cells (Item.gridWidth) — size their equip socket to match instead of
 // cramming a tall item into a 1-cell box.
 const TALL_EQUIP_SLOTS = new Set<EquipSlot>(["weapon", "armor"]);
 // Item types with a rendered socket in this doll — drives the tap-to-equip button in the detail
 // panel, since dnd-kit drag alone is unreachable on mobile (source item and target socket are
 // often both off-screen at once; see critique 2026-08-17).
-const EQUIPPABLE_TYPES = new Set<string>([...LEFT_EQUIP_SLOTS, ...CENTER_EQUIP_SLOTS, ...RIGHT_EQUIP_SLOTS]);
+const EQUIPPABLE_TYPES = new Set<string>([...COL1_SLOTS, ...COL2_SLOTS, ...CENTER_EQUIP_SLOTS, ...RIGHT_EQUIP_SLOTS]);
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
 
@@ -225,94 +227,70 @@ export function EquipmentTab({ character }: { character: Character }) {
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
 
+  function renderEquipSlot(slot: EquipSlot, gridClassName: string) {
+    const item = byEquipSlot.get(slot);
+    const tall = TALL_EQUIP_SLOTS.has(slot);
+    return (
+      <div key={slot} className={gridClassName}>
+        <EquipSlotBox slot={slot} tall={tall}>
+          {item && (
+            <ItemBox
+              inventoryItem={item}
+              tall={tall}
+              selected={item.id === selectedId}
+              onSelect={() => setSelectedId(item.id)}
+              onContextMenu={handleItemContextMenu}
+            />
+          )}
+        </EquipSlotBox>
+      </div>
+    );
+  }
+
   return (
     <div>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="flex flex-wrap gap-8">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_auto_auto] sm:items-center">
-            <div className="flex flex-col items-center gap-3">
-              {LEFT_EQUIP_SLOTS.map((slot) => {
-                const item = byEquipSlot.get(slot);
-                return (
-                  <EquipSlotBox key={slot} slot={slot}>
-                    {item && (
-                      <ItemBox
-                        inventoryItem={item}
-                        selected={item.id === selectedId}
-                        onSelect={() => setSelectedId(item.id)}
-                        onContextMenu={handleItemContextMenu}
-                      />
-                    )}
-                  </EquipSlotBox>
-                );
-              })}
+          <div className="flex flex-col items-center gap-4">
+            <div className="grid grid-cols-[auto_auto_auto_auto] gap-3">
+              {renderEquipSlot("helmet", "col-start-3 row-start-1")}
+              {renderEquipSlot("necklace", "col-start-1 row-start-2")}
+              {renderEquipSlot("shield", "col-start-2 row-start-2")}
+              {renderEquipSlot("armor", "col-start-3 row-start-2 row-span-2")}
+              {renderEquipSlot("weapon", "col-start-4 row-start-2 row-span-2")}
+              {renderEquipSlot("ring", "col-start-1 row-start-3")}
+              {renderEquipSlot("earrings", "col-start-2 row-start-3")}
+              {renderEquipSlot("boots", "col-start-3 row-start-4")}
             </div>
 
-            <div className="flex flex-col items-center justify-self-center">
-              <div className="flex flex-col items-center gap-3">
-                {CENTER_EQUIP_SLOTS.map((slot) => {
-                  const item = byEquipSlot.get(slot);
+            <div className="text-center">
+              <div className="font-display text-base font-bold text-parchment">{character.name}</div>
+              <div className="text-xs text-gold">
+                {classQuery.data?.name ?? "…"} · lvl. {character.level}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center">
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
+                Aktywne itemy (potiony — zużywane automatycznie na ekspedycji)
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                {Array.from({ length: ACTIVE_SLOTS }, (_, slotIndex) => {
+                  const item = byActiveSlot.get(slotIndex);
                   return (
-                    <EquipSlotBox key={slot} slot={slot} tall={TALL_EQUIP_SLOTS.has(slot)}>
+                    <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
                       {item && (
                         <ItemBox
                           inventoryItem={item}
-                          tall={TALL_EQUIP_SLOTS.has(slot)}
                           selected={item.id === selectedId}
                           onSelect={() => setSelectedId(item.id)}
                           onContextMenu={handleItemContextMenu}
                         />
                       )}
-                    </EquipSlotBox>
+                    </ActiveItemSlotBox>
                   );
                 })}
               </div>
-              <div className="mt-3 font-display text-base font-bold text-parchment">{character.name}</div>
-              <div className="text-xs text-gold">
-                {classQuery.data?.name ?? "…"} · lvl. {character.level}
-              </div>
-
-              <div className="mt-4 flex flex-col items-center">
-                <p className="mb-2 text-xs font-medium text-parchment-dim">
-                  Aktywne itemy (potiony — zużywane automatycznie na ekspedycji)
-                </p>
-                <div className="flex flex-wrap justify-center gap-3">
-                  {Array.from({ length: ACTIVE_SLOTS }, (_, slotIndex) => {
-                    const item = byActiveSlot.get(slotIndex);
-                    return (
-                      <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
-                        {item && (
-                          <ItemBox
-                            inventoryItem={item}
-                            selected={item.id === selectedId}
-                            onSelect={() => setSelectedId(item.id)}
-                            onContextMenu={handleItemContextMenu}
-                          />
-                        )}
-                      </ActiveItemSlotBox>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-center gap-3">
-              {RIGHT_EQUIP_SLOTS.map((slot) => {
-                const item = byEquipSlot.get(slot);
-                return (
-                  <EquipSlotBox key={slot} slot={slot} tall={TALL_EQUIP_SLOTS.has(slot)}>
-                    {item && (
-                      <ItemBox
-                        inventoryItem={item}
-                        tall={TALL_EQUIP_SLOTS.has(slot)}
-                        selected={item.id === selectedId}
-                        onSelect={() => setSelectedId(item.id)}
-                        onContextMenu={handleItemContextMenu}
-                      />
-                    )}
-                  </EquipSlotBox>
-                );
-              })}
             </div>
           </div>
 
