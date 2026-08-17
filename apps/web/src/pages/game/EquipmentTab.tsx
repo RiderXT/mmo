@@ -271,6 +271,29 @@ export function EquipmentTab({ character }: { character: Character }) {
               <div className="text-xs text-gold">
                 {classQuery.data?.name ?? "…"} · lvl. {character.level}
               </div>
+
+              <div className="mt-4 flex flex-col items-center">
+                <p className="mb-2 text-xs font-medium text-parchment-dim">
+                  Aktywne itemy (potiony — zużywane automatycznie na ekspedycji)
+                </p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {Array.from({ length: ACTIVE_SLOTS }, (_, slotIndex) => {
+                    const item = byActiveSlot.get(slotIndex);
+                    return (
+                      <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
+                        {item && (
+                          <ItemBox
+                            inventoryItem={item}
+                            selected={item.id === selectedId}
+                            onSelect={() => setSelectedId(item.id)}
+                            onContextMenu={handleItemContextMenu}
+                          />
+                        )}
+                      </ActiveItemSlotBox>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-col items-center gap-3">
@@ -288,29 +311,6 @@ export function EquipmentTab({ character }: { character: Character }) {
                       />
                     )}
                   </EquipSlotBox>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-medium text-parchment-dim">
-              Aktywne itemy (potiony — zużywane automatycznie na ekspedycji)
-            </p>
-            <div className="flex flex-wrap gap-3">
-              {Array.from({ length: ACTIVE_SLOTS }, (_, slotIndex) => {
-                const item = byActiveSlot.get(slotIndex);
-                return (
-                  <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
-                    {item && (
-                      <ItemBox
-                        inventoryItem={item}
-                        selected={item.id === selectedId}
-                        onSelect={() => setSelectedId(item.id)}
-                        onContextMenu={handleItemContextMenu}
-                      />
-                    )}
-                  </ActiveItemSlotBox>
                 );
               })}
             </div>
