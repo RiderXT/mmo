@@ -28,8 +28,14 @@ import {
 
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const ACTIVE_SLOTS = 6;
-const LEFT_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "necklace", "boots"];
-const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "ring", "earrings"];
+// Mirrors a classic equipment doll: armor pieces down the center, weapon/shield on the
+// off-hand/main-hand side, jewelry on the other.
+const LEFT_EQUIP_SLOTS: EquipSlot[] = ["ring", "earrings", "necklace"];
+const CENTER_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "boots"];
+const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "shield"];
+// weapon/armor occupy 2 grid cells (Item.gridWidth) — size their equip socket to match instead of
+// cramming a tall item into a 1-cell box.
+const TALL_EQUIP_SLOTS = new Set<EquipSlot>(["weapon", "armor"]);
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
 
@@ -224,16 +230,23 @@ export function EquipmentTab({ character }: { character: Character }) {
             </div>
 
             <div className="flex flex-col items-center justify-self-center">
-              <div
-                className="flex h-40 w-32 items-center justify-center rounded-xl border border-gold/40 text-center text-[11px] text-parchment-faint shadow-[inset_0_0_40px_rgba(230,180,90,0.1)]"
-                style={{
-                  background:
-                    "repeating-linear-gradient(45deg, oklch(20% 0.02 45), oklch(20% 0.02 45) 10px, oklch(17% 0.02 45) 10px, oklch(17% 0.02 45) 20px)",
-                }}
-              >
-                postać gracza
-                <br />
-                (grafika)
+              <div className="flex flex-col items-center gap-3">
+                {CENTER_EQUIP_SLOTS.map((slot) => {
+                  const item = byEquipSlot.get(slot);
+                  return (
+                    <EquipSlotBox key={slot} slot={slot} tall={TALL_EQUIP_SLOTS.has(slot)}>
+                      {item && (
+                        <ItemBox
+                          inventoryItem={item}
+                          tall={TALL_EQUIP_SLOTS.has(slot)}
+                          selected={item.id === selectedId}
+                          onSelect={() => setSelectedId(item.id)}
+                          onContextMenu={handleItemContextMenu}
+                        />
+                      )}
+                    </EquipSlotBox>
+                  );
+                })}
               </div>
               <div className="mt-3 font-display text-base font-bold text-parchment">{character.name}</div>
               <div className="text-xs text-gold">
@@ -245,10 +258,11 @@ export function EquipmentTab({ character }: { character: Character }) {
               {RIGHT_EQUIP_SLOTS.map((slot) => {
                 const item = byEquipSlot.get(slot);
                 return (
-                  <EquipSlotBox key={slot} slot={slot}>
+                  <EquipSlotBox key={slot} slot={slot} tall={TALL_EQUIP_SLOTS.has(slot)}>
                     {item && (
                       <ItemBox
                         inventoryItem={item}
+                        tall={TALL_EQUIP_SLOTS.has(slot)}
                         selected={item.id === selectedId}
                         onSelect={() => setSelectedId(item.id)}
                         onContextMenu={handleItemContextMenu}

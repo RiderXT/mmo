@@ -17,9 +17,18 @@ import { listPlayerZones } from "../../lib/zonesApi";
 import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
 import type { ItemDto } from "../../lib/adminApi";
 
-const UPGRADABLE_TYPES = new Set<ItemType>(["weapon", "armor", "helmet", "boots", "necklace", "earrings", "ring"]);
+const UPGRADABLE_TYPES = new Set<ItemType>([
+  "weapon",
+  "armor",
+  "helmet",
+  "boots",
+  "shield",
+  "necklace",
+  "earrings",
+  "ring",
+]);
 const LEFT_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "necklace", "boots"];
-const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "ring", "earrings"];
+const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "shield", "ring", "earrings"];
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];

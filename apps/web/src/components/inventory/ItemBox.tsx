@@ -9,6 +9,7 @@ const TYPE_COLORS: Record<string, string> = {
   armor: "border-rarity-rare/50 bg-rarity-rare/10",
   helmet: "border-rarity-rare/50 bg-rarity-rare/10",
   boots: "border-rarity-rare/50 bg-rarity-rare/10",
+  shield: "border-rarity-rare/50 bg-rarity-rare/10",
   necklace: "border-gold/50 bg-gold/10",
   earrings: "border-gold/50 bg-gold/10",
   ring: "border-gold/50 bg-gold/10",

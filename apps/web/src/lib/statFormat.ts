@@ -88,6 +88,7 @@ export const TYPE_LABELS: Record<string, string> = {
   armor: "Zbroja",
   helmet: "Hełm",
   boots: "Buty",
+  shield: "Tarcza",
   necklace: "Naszyjnik",
   earrings: "Kolczyki",
   ring: "Pierścień",

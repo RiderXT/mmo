@@ -8,6 +8,7 @@ const LABELS: Record<EquipSlot, string> = {
   armor: "Zbroja",
   helmet: "Hełm",
   boots: "Buty",
+  shield: "Tarcza",
   necklace: "Naszyjnik",
   earrings: "Kolczyki",
   ring: "Pierścień",
@@ -15,7 +16,17 @@ const LABELS: Record<EquipSlot, string> = {
   pickaxe: "Kilof",
 };
 
-export function EquipSlotBox({ slot, children }: { slot: EquipSlot; children: ReactNode }) {
+/** `tall` heightens the socket to match ItemBox's own gridWidth=2 sizing (weapon/armor) instead
+ * of leaving a 2-cell item cramped into a 1-cell socket. */
+export function EquipSlotBox({
+  slot,
+  tall = false,
+  children,
+}: {
+  slot: EquipSlot;
+  tall?: boolean;
+  children: ReactNode;
+}) {
   const { setNodeRef, isOver } = useDroppable({
     id: `equip-${slot}`,
     data: { type: "equip", equipSlot: slot },
@@ -25,7 +36,9 @@ export function EquipSlotBox({ slot, children }: { slot: EquipSlot; children: Re
     <div className="flex flex-col items-center gap-1">
       <div
         ref={setNodeRef}
-        className={`relative flex h-14 w-14 items-center justify-center border-2 border-dashed shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)] transition ${
+        className={`relative flex w-14 items-center justify-center border-2 border-dashed shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)] transition ${
+          tall ? "h-[7.5rem]" : "h-14"
+        } ${
           isOver
             ? "border-gold-bright bg-gold/10 shadow-[inset_0_1px_4px_rgba(0,0,0,0.45),0_0_8px_oklch(76%_0.09_85_/_0.35)]"
             : "border-line-soft"

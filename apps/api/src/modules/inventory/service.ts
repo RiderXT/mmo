@@ -25,6 +25,7 @@ const EQUIPPABLE_SLOTS_BY_TYPE: Partial<Record<ItemType, EquipSlot[]>> = {
   armor: ["armor"],
   helmet: ["helmet"],
   boots: ["boots"],
+  shield: ["shield"],
   necklace: ["necklace"],
   earrings: ["earrings"],
   ring: ["ring"],

@@ -19,7 +19,7 @@ const ITEM_TYPES = ItemTypeSchema.options;
 const STAT_KEYS = StatKeySchema.options;
 const POTION_TRIGGERS = PotionTriggerSchema.options;
 const POTION_EFFECTS = PotionEffectSchema.options;
-const CLASS_RESTRICTABLE_TYPES = new Set<CreateItemInput["type"]>(["weapon", "armor", "helmet"]);
+const CLASS_RESTRICTABLE_TYPES = new Set<CreateItemInput["type"]>(["weapon", "armor", "helmet", "shield"]);
 
 function defaultPotion(): NonNullable<CreateItemInput["potion"]> {
   return { trigger: "hp_below", thresholdPct: 0.3, effect: "restore_hp", magnitudePct: 0.3 };
