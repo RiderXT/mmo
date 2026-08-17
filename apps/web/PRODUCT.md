@@ -38,6 +38,9 @@ wyłącznie przez panele administracyjne, bez zmian w kodzie.
   w mieście).
 - Krainy dzielą się na dzikie (walka z potworami) i miasta (`isTown`) — tylko w mieście działa
   handel i kowadło; podróż między krainami/miastem trwa realny, wyliczony czas.
+- Niektóre dzikie krainy mają dodatkowo łowisko i/lub kopalnię — alternatywna, pasywna aktywność
+  obok walki: gracz zakłada wędkę/kilof i uruchamia auto-pętlę łowienia/wydobywania (podobnie jak
+  ekspedycja, bez klikania po każdym cyklu), zbierając surowce zamiast expu z potworów.
 - Admin/moderator: osobny panel (`/admin/*`, bez wspólnego layoutu z grą) do zarządzania
   krainami, potworami, przedmiotami, klasami postaci, NPC, eventami czasowymi, ustawieniami,
   przeglądu logów akcji i statystyk balansu, oraz do ręcznego rozwiązywania ekspedycji
