@@ -1,7 +1,8 @@
-import { useParams } from "react-router-dom";
+import { useParams, Navigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { getCharacter } from "../lib/charactersApi";
+import { useCharacterStore } from "../store/characterStore";
 import { CharacterTab } from "./game/CharacterTab";
 import { EquipmentTab } from "./game/EquipmentTab";
 import { ExpeditionsTab } from "./game/ExpeditionsTab";
@@ -11,7 +12,8 @@ import { NpcTab } from "./game/NpcTab";
 type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc";
 
 export function GamePage() {
-  const { characterId, tab } = useParams<{ characterId: string; tab?: string }>();
+  const { tab } = useParams<{ tab?: string }>();
+  const characterId = useCharacterStore((s) => s.activeCharacterId);
   const queryClient = useQueryClient();
   const activeTab = (tab as TabKey | undefined) ?? "character";
 
@@ -23,11 +25,7 @@ export function GamePage() {
   const character = characterQuery.data;
 
   if (!characterId) {
-    return (
-      <AppShell>
-        <p className="text-parchment-dim">Wybierz postać z listy.</p>
-      </AppShell>
-    );
+    return <Navigate to="/characters" replace />;
   }
 
   return (

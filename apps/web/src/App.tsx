@@ -32,9 +32,8 @@ export function App() {
           </ProtectedRoute>
         }
       />
-      <Route path="/game" element={<Navigate to="/characters" replace />} />
       <Route
-        path="/game/:characterId"
+        path="/game"
         element={
           <ProtectedRoute>
             <GamePage />
@@ -42,7 +41,7 @@ export function App() {
         }
       />
       <Route
-        path="/game/:characterId/:tab"
+        path="/game/:tab"
         element={
           <ProtectedRoute>
             <GamePage />

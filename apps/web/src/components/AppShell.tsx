@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { expForLevel } from "@mmo/shared";
 import { logoutRequest } from "../lib/authApi";
 import { useAuthStore } from "../store/authStore";
+import { useCharacterStore } from "../store/characterStore";
 import { getCharacter } from "../lib/charactersApi";
 import { listPlayerZones } from "../lib/zonesApi";
 import { UpdateBanner } from "./UpdateBanner";
@@ -60,11 +61,11 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
-/** Character-scoped header bar (avatar/level/XP/gold) — only rendered while inside
- * /game/:characterId/*. Shares the exact ["character", characterId] query key GamePage.tsx
- * already uses, so react-query dedupes the fetch instead of firing an extra request. */
+/** Character-scoped header bar (avatar/level/XP/gold) — rendered whenever a character is
+ * active. Shares the exact ["character", characterId] query key GamePage.tsx already uses, so
+ * react-query dedupes the fetch instead of firing an extra request. */
 function CharacterHeaderBar() {
-  const { characterId } = useParams<{ characterId: string }>();
+  const characterId = useCharacterStore((s) => s.activeCharacterId);
   const characterQuery = useQuery({
     queryKey: ["character", characterId],
     queryFn: () => getCharacter(characterId!),
@@ -106,23 +107,22 @@ function CharacterHeaderBar() {
   );
 }
 
-/** Each character-scoped tab now has its own pathname (/game/:characterId/:tab), so NavLink's
- * built-in isActive matching (by pathname) works without any manual comparison. */
+/** Each character-scoped tab has its own pathname (/game/:tab), so NavLink's built-in isActive
+ * matching (by pathname) works without any manual comparison. The active character itself lives
+ * in characterStore, not the URL. */
 function TabNavLink({
-  characterId,
   tab,
   icon,
   label,
   onNavigate,
 }: {
-  characterId: string;
   tab: string;
   icon: string;
   label: string;
   onNavigate?: () => void;
 }) {
   return (
-    <NavLink to={`/game/${characterId}/${tab}`} className={navLinkClass} onClick={onNavigate}>
+    <NavLink to={`/game/${tab}`} className={navLinkClass} onClick={onNavigate}>
       {({ isActive }) => (
         <>
           <NavIconImg src={icon} alt="" active={isActive} />
@@ -133,12 +133,12 @@ function TabNavLink({
   );
 }
 
-/** Character-scoped nav links (Postać/Ekwipunek/Ekspedycje/Kowadło/NPC) — only rendered while
- * inside /game/:characterId/* (Kowadło/NPC additionally gated to town zones). Shares the exact
+/** Character-scoped nav links (Postać/Ekwipunek/Ekspedycje/Kowadło/NPC) — rendered whenever a
+ * character is active (Kowadło/NPC additionally gated to town zones). Shares the exact
  * ["character", characterId] / ["player-zones"] query keys GamePage.tsx and ExpeditionPanel.tsx
  * already use, so react-query dedupes the fetch instead of firing an extra request. */
 function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const { characterId } = useParams<{ characterId: string }>();
+  const characterId = useCharacterStore((s) => s.activeCharacterId);
   const characterQuery = useQuery({
     queryKey: ["character", characterId],
     queryFn: () => getCharacter(characterId!),
@@ -160,20 +160,20 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
       <SectionTitle>Postać</SectionTitle>
       <div className="space-y-1 px-2">
         <TabNavLink
-          characterId={characterId}
-          tab="character"          icon="/icons/nav/postac.png"
+          tab="character"
+          icon="/icons/nav/postac.png"
           label="Postać"
           onNavigate={onNavigate}
         />
         <TabNavLink
-          characterId={characterId}
-          tab="equipment"          icon="/icons/nav/ekwipunek.png"
+          tab="equipment"
+          icon="/icons/nav/ekwipunek.png"
           label="Ekwipunek"
           onNavigate={onNavigate}
         />
         <TabNavLink
-          characterId={characterId}
-          tab="expeditions"          icon="/icons/nav/ekspedycje.png"
+          tab="expeditions"
+          icon="/icons/nav/ekspedycje.png"
           label="Ekspedycje"
           onNavigate={onNavigate}
         />
@@ -191,8 +191,8 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
       <div className="space-y-1 px-2">
         {inTown ? (
           <TabNavLink
-            characterId={characterId}
-            tab="anvil"            icon="/icons/nav/kowadlo.png"
+            tab="anvil"
+            icon="/icons/nav/kowadlo.png"
             label="Kowadło"
             onNavigate={onNavigate}
           />
@@ -207,8 +207,8 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
         )}
         {inTown ? (
           <TabNavLink
-            characterId={characterId}
-            tab="npc"            icon="/icons/nav/npc.png"
+            tab="npc"
+            icon="/icons/nav/npc.png"
             label="NPC"
             onNavigate={onNavigate}
           />

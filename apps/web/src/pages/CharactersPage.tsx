@@ -8,10 +8,12 @@ import { inputClass } from "../components/admin/Field";
 import { ApiError } from "../lib/apiClient";
 import { listCharacters, createCharacter } from "../lib/charactersApi";
 import { listPlayerClasses } from "../lib/classesApi";
+import { useCharacterStore } from "../store/characterStore";
 
 export function CharactersPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const setActiveCharacterId = useCharacterStore((s) => s.setActiveCharacterId);
   const charactersQuery = useQuery({ queryKey: ["characters"], queryFn: listCharacters });
   const classesQuery = useQuery({ queryKey: ["player-classes"], queryFn: listPlayerClasses });
   const [name, setName] = useState("");
@@ -24,7 +26,8 @@ export function CharactersPage() {
       queryClient.invalidateQueries({ queryKey: ["characters"] });
       setName("");
       setError(null);
-      navigate(`/game/${character.id}`);
+      setActiveCharacterId(character.id);
+      navigate("/game/character");
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się utworzyć postaci"),
   });
@@ -47,7 +50,14 @@ export function CharactersPage() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {charactersQuery.data?.map((c) => (
-          <button key={c.id} onClick={() => navigate(`/game/${c.id}`)} className="text-left">
+          <button
+            key={c.id}
+            onClick={() => {
+              setActiveCharacterId(c.id);
+              navigate("/game/character");
+            }}
+            className="text-left"
+          >
             <PanelFrame title={c.name} emphasis="secondary" className="transition hover:border-gold">
               <p className="text-sm text-parchment-dim">
                 Poziom {c.level} · {c.exp} exp · {c.gold} złota
