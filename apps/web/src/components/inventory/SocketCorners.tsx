@@ -1,10 +1,12 @@
 import type { CSSProperties } from "react";
 
-/** Small engraved corner bracket for item sockets — the "kratki ekwipunku" counterpart to the
- * .panel Two-Corner Rule brackets in index.css (top-left + bottom-right only). Hand-authored to
- * match the app's inline-SVG icon grammar (see ItemTypeIcon.tsx/CombatIcon.tsx: currentColor
- * stroke, no fill) instead of importing outside artwork, and reuses the rotated-diamond motif
- * already established in AppShell.tsx's SectionTitle bullet. */
+/** Small engraved corner bracket for item sockets (equip slots, inventory grid, active-item
+ * slots, anvil slot) — the small-scale sibling of common/PanelCorners, same 4-corner treatment
+ * and full-strength gold (not the old washed-out /70 two-corner version) for consistency with
+ * the panels that frame them. Hand-authored to match the app's inline-SVG icon grammar (see
+ * ItemTypeIcon.tsx/CombatIcon.tsx: currentColor stroke, no fill) instead of importing outside
+ * artwork, and reuses the rotated-diamond motif already established in AppShell.tsx's
+ * SectionTitle bullet. */
 function CornerBracket({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={className} style={style} xmlns="http://www.w3.org/2000/svg">
@@ -18,9 +20,14 @@ export function SocketCorners({ size = 10 }: { size?: number }) {
   const style = { width: size, height: size };
   return (
     <>
-      <CornerBracket className="pointer-events-none absolute -left-px -top-px text-gold/70" style={style} />
+      <CornerBracket className="pointer-events-none absolute -left-px -top-px text-gold" style={style} />
+      <CornerBracket className="pointer-events-none absolute -right-px -top-px rotate-90 text-gold" style={style} />
       <CornerBracket
-        className="pointer-events-none absolute -bottom-px -right-px rotate-180 text-gold/70"
+        className="pointer-events-none absolute -bottom-px -right-px rotate-180 text-gold"
+        style={style}
+      />
+      <CornerBracket
+        className="pointer-events-none absolute -bottom-px -left-px -rotate-90 text-gold"
         style={style}
       />
     </>
