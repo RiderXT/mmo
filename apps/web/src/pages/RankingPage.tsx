@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
+import { PanelFrame } from "../components/common/PanelFrame";
 import { listRanking } from "../lib/rankingApi";
 import { listPlayerClasses } from "../lib/classesApi";
 
@@ -16,10 +17,8 @@ export function RankingPage() {
 
   return (
     <AppShell>
-      <div className="panel p-4">
-        <h1 className="font-display text-lg font-bold text-parchment">Ranking</h1>
-
-        <div className="mt-3 flex flex-wrap gap-2">
+      <PanelFrame title="Ranking">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setClassId(null)}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
@@ -83,7 +82,7 @@ export function RankingPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </PanelFrame>
     </AppShell>
   );
 }

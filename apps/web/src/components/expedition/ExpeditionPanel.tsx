@@ -26,6 +26,7 @@ import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
 import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 import { GatheringPanel } from "../gathering/GatheringPanel";
+import { PanelFrame } from "../common/PanelFrame";
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -195,9 +196,8 @@ export function ExpeditionPanel({
 
   if (claimResult) {
     return (
-      <div className="panel p-4">
+      <PanelFrame title="Ekspedycja zakończona">
         {flaggedBanner}
-        <h2 className="font-medium text-parchment">Ekspedycja zakończona</h2>
         <p className="mt-1 text-sm text-parchment-dim">
           Pokonano {claimResult.result.monstersDefeated} potworów · +{claimResult.result.expGained} exp ·
           +{claimResult.result.goldGained} złota
@@ -225,15 +225,14 @@ export function ExpeditionPanel({
         >
           OK
         </button>
-      </div>
+      </PanelFrame>
     );
   }
 
   if (expedition) {
     return (
-      <div className="panel p-4">
+      <PanelFrame title="Ekspedycja w toku">
         {flaggedBanner}
-        <h2 className="font-medium text-parchment">Ekspedycja w toku</h2>
         <p className="mt-1 text-sm text-parchment-dim">Kraina: {zoneNameFor(expedition.zoneId)}</p>
         <ActivePotionsSummary characterId={characterId} />
         {isReadyToClaim ? (
@@ -297,20 +296,19 @@ export function ExpeditionPanel({
           <LootBar events={revealedEvents} itemFor={itemFor} />
         </div>
         <CombatLog events={revealedEvents} itemFor={itemFor} />
-      </div>
+      </PanelFrame>
     );
   }
 
   if (isTraveling) {
     return (
-      <div className="panel p-4">
+      <PanelFrame title="W drodze">
         {flaggedBanner}
-        <h2 className="font-medium text-parchment">W drodze</h2>
         <p className="mt-1 text-sm text-parchment-dim">Cel: {zoneNameFor(character.travelDestinationZoneId)}</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums text-parchment">
           {formatDuration((travelArrivesAtMs ?? now) - now)}
         </p>
-      </div>
+      </PanelFrame>
     );
   }
 
@@ -386,9 +384,8 @@ export function ExpeditionPanel({
 
     if (isTown && currentZone) {
       return (
-        <div className="panel p-4">
+        <PanelFrame title={currentZone.name}>
           {flaggedBanner}
-          <h2 className="font-medium text-parchment">{currentZone.name}</h2>
           <p className="mt-1 text-xs text-parchment-faint">
             To miasto — zakupy u NPC znajdziesz w zakładce NPC w menu.
           </p>
@@ -396,14 +393,13 @@ export function ExpeditionPanel({
 
           {travelControls}
           <GatheringPanel character={character} zone={currentZone} />
-        </div>
+        </PanelFrame>
       );
     }
 
     return (
-      <div className="panel p-4">
+      <PanelFrame title={currentZone?.name ?? "Kraina"}>
         {flaggedBanner}
-        <h2 className="font-medium text-parchment">{currentZone?.name ?? "Kraina"}</h2>
         <p className="mt-1 text-xs text-parchment-faint">Postać stoi w tej krainie — wybierz co robić dalej.</p>
         <ActivePotionsSummary characterId={characterId} />
 
@@ -436,14 +432,13 @@ export function ExpeditionPanel({
             }
           />
         )}
-      </div>
+      </PanelFrame>
     );
   }
 
   return (
-    <div className="panel p-4">
+    <PanelFrame title="Wyrusz do krainy">
       {flaggedBanner}
-      <h2 className="font-medium text-parchment">Wyrusz do krainy</h2>
       {durationQuery.data && (
         <p className="mt-1 text-xs text-parchment-faint">
           Walka trwa, aż postać zginie (max. {durationQuery.data.minutes} min — zabezpieczenie).
@@ -487,6 +482,6 @@ export function ExpeditionPanel({
       >
         Wyrusz do krainy
       </button>
-    </div>
+    </PanelFrame>
   );
 }

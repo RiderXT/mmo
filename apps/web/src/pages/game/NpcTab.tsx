@@ -7,6 +7,7 @@ import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
 import { ItemTypeIcon } from "../../components/inventory/ItemTypeIcon";
 import { BuyItemModal } from "../../components/expedition/BuyItemModal";
+import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
 import { listPlayerZones } from "../../lib/zonesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
@@ -169,10 +170,9 @@ export function NpcTab({ character }: { character: Character }) {
 
   if (zonesQuery.data && !inTown) {
     return (
-      <div className="panel p-4">
-        <h2 className="font-medium text-parchment">NPC</h2>
+      <PanelFrame title="NPC">
         <p className="mt-2 text-sm text-parchment-faint">Handel z NPC jest dostępny tylko w mieście.</p>
-      </div>
+      </PanelFrame>
     );
   }
 
@@ -200,9 +200,9 @@ export function NpcTab({ character }: { character: Character }) {
   return (
     <DndContext sensors={sensors} onDragEnd={() => {}}>
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="panel p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-medium text-parchment">Twój ekwipunek</h2>
+        <PanelFrame
+          title="Twój ekwipunek"
+          headerRight={
             <button
               onClick={() => {
                 setSelectMode((v) => !v);
@@ -216,9 +216,9 @@ export function NpcTab({ character }: { character: Character }) {
             >
               {selectMode ? "Anuluj zaznaczanie" : "Zaznacz do sprzedaży"}
             </button>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between">
+          }
+        >
+          <div className="flex items-center justify-between">
             <p className="text-xs text-parchment-faint">
               {selectMode
                 ? "Klikaj przedmioty z wartością sprzedaży, żeby je zaznaczyć."
@@ -281,11 +281,9 @@ export function NpcTab({ character }: { character: Character }) {
               {actionMessage}
             </p>
           )}
-        </div>
+        </PanelFrame>
 
-        <div className="panel p-4">
-          <h2 className="font-medium text-parchment">Handel</h2>
-
+        <PanelFrame title="Handel">
           {npcs.length === 0 && (
             <p className="mt-3 text-sm text-parchment-faint">W tym mieście nie ma jeszcze żadnych NPC.</p>
           )}
@@ -351,7 +349,7 @@ export function NpcTab({ character }: { character: Character }) {
               )}
             </div>
           )}
-        </div>
+        </PanelFrame>
       </div>
 
       {contextMenu && (

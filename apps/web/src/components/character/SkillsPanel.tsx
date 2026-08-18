@@ -3,6 +3,7 @@ import type { Character } from "@mmo/shared";
 import { getPlayerClass } from "../../lib/classesApi";
 import { allocateSkill, getCharacterSkills } from "../../lib/charactersApi";
 import { ApiError } from "../../lib/apiClient";
+import { PanelFrame } from "../common/PanelFrame";
 
 export function SkillsPanel({ character }: { character: Character }) {
   const queryClient = useQueryClient();
@@ -33,14 +34,15 @@ export function SkillsPanel({ character }: { character: Character }) {
   const levelByClassSkillId = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s.level]) ?? []);
 
   return (
-    <div className="panel p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-medium text-parchment">Umiejętności ({classQuery.data.name})</h2>
-        <span className="text-xs text-parchment-dim">
+    <PanelFrame
+      title={`Umiejętności (${classQuery.data.name})`}
+      headerRight={
+        <span className="text-xs normal-case tracking-normal text-parchment-dim">
           Niewydane punkty: <span className="text-gold-bright">{character.unspentSkillPoints}</span>
         </span>
-      </div>
-      <div className="mt-2 space-y-1">
+      }
+    >
+      <div className="space-y-1">
         {classQuery.data.skills.map((skill) => {
           const level = levelByClassSkillId.get(skill.id) ?? 0;
           const maxed = level >= skill.maxLevel;
@@ -68,6 +70,6 @@ export function SkillsPanel({ character }: { character: Character }) {
           );
         })}
       </div>
-    </div>
+    </PanelFrame>
   );
 }

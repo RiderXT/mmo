@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
+import { PanelFrame } from "../components/common/PanelFrame";
 import { ApiError } from "../lib/apiClient";
 import {
   listFriends,
@@ -45,14 +46,13 @@ export function FriendsPage() {
 
   return (
     <AppShell>
-      <div className="panel p-4">
-        <h1 className="font-display text-lg font-bold text-parchment">Znajomi</h1>
+      <PanelFrame title="Znajomi">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             if (targetName.trim()) sendMutation.mutate();
           }}
-          className="mt-3 flex flex-wrap gap-2"
+          className="flex flex-wrap gap-2"
         >
           <input
             value={targetName}
@@ -78,12 +78,11 @@ export function FriendsPage() {
             {error}
           </p>
         )}
-      </div>
+      </PanelFrame>
 
       {friends && friends.incoming.length > 0 && (
-        <div className="mt-4 panel p-4">
-          <h2 className="font-medium text-parchment">Przychodzące zaproszenia</h2>
-          <ul className="mt-2 space-y-2">
+        <PanelFrame title="Przychodzące zaproszenia" className="mt-4">
+          <ul className="space-y-2">
             {friends.incoming.map((r) => (
               <li key={r.friendRequestId} className="flex items-center justify-between text-sm">
                 <span className="text-parchment">{r.characterName ?? "(brak postaci)"}</span>
@@ -104,13 +103,12 @@ export function FriendsPage() {
               </li>
             ))}
           </ul>
-        </div>
+        </PanelFrame>
       )}
 
       {friends && friends.outgoing.length > 0 && (
-        <div className="mt-4 panel p-4">
-          <h2 className="font-medium text-parchment">Wysłane zaproszenia</h2>
-          <ul className="mt-2 space-y-2">
+        <PanelFrame title="Wysłane zaproszenia" className="mt-4">
+          <ul className="space-y-2">
             {friends.outgoing.map((r) => (
               <li key={r.friendRequestId} className="flex items-center justify-between text-sm">
                 <span className="text-parchment">{r.characterName ?? "(brak postaci)"}</span>
@@ -123,15 +121,14 @@ export function FriendsPage() {
               </li>
             ))}
           </ul>
-        </div>
+        </PanelFrame>
       )}
 
-      <div className="mt-4 panel p-4">
-        <h2 className="font-medium text-parchment">Lista znajomych</h2>
+      <PanelFrame title="Lista znajomych" className="mt-4">
         {!friends || friends.friends.length === 0 ? (
-          <p className="mt-2 text-sm text-parchment-faint">Nie masz jeszcze żadnych znajomych.</p>
+          <p className="text-sm text-parchment-faint">Nie masz jeszcze żadnych znajomych.</p>
         ) : (
-          <ul className="mt-2 space-y-2">
+          <ul className="space-y-2">
             {friends.friends.map((f) => (
               <li key={f.userId} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
@@ -156,7 +153,7 @@ export function FriendsPage() {
             ))}
           </ul>
         )}
-      </div>
+      </PanelFrame>
     </AppShell>
   );
 }

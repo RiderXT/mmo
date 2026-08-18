@@ -8,6 +8,7 @@ import { ActiveItemSlotBox } from "../../components/inventory/ActiveItemSlotBox"
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
 import { DiscardConfirmModal } from "../../components/inventory/DiscardConfirmModal";
+import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
 import { getPlayerClass } from "../../lib/classesApi";
 import { interpolateUpgrade } from "../../lib/statMath";
@@ -253,7 +254,7 @@ export function EquipmentTab({ character }: { character: Character }) {
     <div>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="flex flex-wrap gap-8">
-          <div className="flex flex-col items-center gap-4">
+          <PanelFrame title="Ekwipunek" bodyClassName="flex flex-col items-center gap-4">
             <div className="grid grid-cols-[auto_auto_auto_auto] gap-3">
               {renderEquipSlot("helmet", "col-start-3 row-start-1")}
               {renderEquipSlot("necklace", "col-start-1 row-start-2")}
@@ -294,11 +295,11 @@ export function EquipmentTab({ character }: { character: Character }) {
                 })}
               </div>
             </div>
-          </div>
+          </PanelFrame>
 
-          <div>
+          <PanelFrame title="Inwentarz">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium text-parchment-dim">Ekwipunek (przeciągnij, by przenieść)</p>
+              <p className="text-xs font-medium text-parchment-dim">Przeciągnij, by przenieść</p>
               <div className="flex gap-1">
                 {Array.from({ length: INVENTORY_TABS }, (_, tab) => {
                   const tabLabel = `Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`;
@@ -346,7 +347,7 @@ export function EquipmentTab({ character }: { character: Character }) {
                 </GridSlot>
               ))}
             </div>
-          </div>
+          </PanelFrame>
         </div>
       </DndContext>
 
@@ -362,16 +363,25 @@ export function EquipmentTab({ character }: { character: Character }) {
       )}
 
       {selected && (
-        <div className="mt-6 max-w-sm space-y-2 panel p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-medium text-parchment">
+        <PanelFrame
+          emphasis="secondary"
+          className="mt-6 max-w-sm"
+          bodyClassName="space-y-2"
+          title={
+            <>
               {selected.item.name}
-              {selected.upgradeLevel > 0 && <span className="text-gold-bright"> +{selected.upgradeLevel}</span>}
-            </h2>
-            <button onClick={() => setSelectedId(null)} className="text-xs text-parchment-faint hover:text-parchment-dim">
+              {selected.upgradeLevel > 0 && <span className="normal-case text-gold-bright"> +{selected.upgradeLevel}</span>}
+            </>
+          }
+          headerRight={
+            <button
+              onClick={() => setSelectedId(null)}
+              className="text-xs normal-case tracking-normal text-parchment-faint hover:text-parchment-dim"
+            >
               zamknij
             </button>
-          </div>
+          }
+        >
           <p className="text-xs text-parchment-faint">
             {TYPE_LABELS[selected.item.type] ?? selected.item.type} · od poziomu {selected.item.minLevel}
             {selected.item.class ? ` · dla klasy: ${selected.item.class.name}` : " · uniwersalny"}
@@ -461,7 +471,7 @@ export function EquipmentTab({ character }: { character: Character }) {
               Usuń
             </button>
           </div>
-        </div>
+        </PanelFrame>
       )}
 
       {contextMenu && (

@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
+import { PanelFrame } from "../components/common/PanelFrame";
 import { getCharacterProfile } from "../lib/profileApi";
 import { STAT_LABELS, COMBAT_STAT_TO_STAT_KEY, formatBreakdownValue, formatStatValue } from "../lib/statFormat";
 
@@ -53,7 +54,7 @@ export function ProfilePage() {
 
   return (
     <AppShell>
-      <div className="panel p-4">
+      <PanelFrame title="Profil postaci">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -90,12 +91,11 @@ export function ProfilePage() {
               : "Nieznana"}
           </p>
         </div>
-      </div>
+      </PanelFrame>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div className="panel p-4">
-          <h2 className="font-medium text-parchment">Statystyki</h2>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+        <PanelFrame title="Statystyki">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             {(Object.keys(CORE_LABELS) as (keyof typeof CORE_LABELS)[]).map((key) => (
               <div key={key} className="flex items-center justify-between border border-line-soft bg-panel-raised px-2.5 py-1.5">
                 <span className="text-parchment-dim">{CORE_LABELS[key]}</span>
@@ -103,11 +103,10 @@ export function ProfilePage() {
               </div>
             ))}
           </div>
-        </div>
+        </PanelFrame>
 
-        <div className="panel p-4">
-          <h2 className="font-medium text-parchment">Statystyki pochodne</h2>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+        <PanelFrame title="Statystyki pochodne">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             {DERIVED_KEYS.map((key) => (
               <div key={key} className="flex items-center justify-between border border-line-soft bg-panel-raised px-2.5 py-1.5">
                 <span className="text-parchment-dim">{STAT_LABELS[COMBAT_STAT_TO_STAT_KEY[key]]}</span>
@@ -117,18 +116,15 @@ export function ProfilePage() {
               </div>
             ))}
           </div>
-        </div>
+        </PanelFrame>
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div className="panel p-4">
-          <h2 className="font-medium text-parchment">
-            Ekwipunek — {profile.equippedCount} / {profile.totalEquipSlots} slotów założonych
-          </h2>
+        <PanelFrame title={`Ekwipunek — ${profile.equippedCount} / ${profile.totalEquipSlots} slotów założonych`}>
           {profile.equipmentBonuses.length === 0 ? (
-            <p className="mt-2 text-sm text-parchment-faint">Brak założonego ekwipunku.</p>
+            <p className="text-sm text-parchment-faint">Brak założonego ekwipunku.</p>
           ) : (
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="space-y-1 text-sm">
               {profile.equipmentBonuses.map((b) => (
                 <li key={b.stat} className="flex items-center justify-between">
                   <span className="text-parchment-dim">{STAT_LABELS[b.stat]}</span>
@@ -137,14 +133,13 @@ export function ProfilePage() {
               ))}
             </ul>
           )}
-        </div>
+        </PanelFrame>
 
-        <div className="panel p-4">
-          <h2 className="font-medium text-parchment">Umiejętności</h2>
+        <PanelFrame title="Umiejętności">
           {profile.skills.length === 0 ? (
-            <p className="mt-2 text-sm text-parchment-faint">Brak wykupionych umiejętności.</p>
+            <p className="text-sm text-parchment-faint">Brak wykupionych umiejętności.</p>
           ) : (
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="space-y-1 text-sm">
               {profile.skills.map((s) => (
                 <li key={s.name} className="flex items-center justify-between">
                   <span className="text-parchment-dim">{s.name}</span>
@@ -155,12 +150,11 @@ export function ProfilePage() {
               ))}
             </ul>
           )}
-        </div>
+        </PanelFrame>
       </div>
 
-      <div className="mt-4 panel p-4">
-        <h2 className="font-medium text-parchment">Życiowe</h2>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-sm sm:w-64">
+      <PanelFrame title="Życiowe" className="mt-4">
+        <div className="grid grid-cols-2 gap-2 text-sm sm:w-64">
           <div className="flex items-center justify-between border border-line-soft bg-panel-raised px-2.5 py-1.5">
             <span className="text-parchment-dim">Zabite potwory</span>
             <span className="font-medium tabular-nums text-parchment">{profile.monstersKilled}</span>
@@ -170,7 +164,7 @@ export function ProfilePage() {
             <span className="font-medium tabular-nums text-parchment">{profile.chestsOpened}</span>
           </div>
         </div>
-      </div>
+      </PanelFrame>
     </AppShell>
   );
 }

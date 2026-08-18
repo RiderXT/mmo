@@ -6,6 +6,7 @@ import { ApiError } from "../../lib/apiClient";
 import { listInventory } from "../../lib/inventoryApi";
 import { getActiveGathering, startGathering, stopGathering } from "../../lib/gatheringApi";
 import { ProgressBar } from "../common/ProgressBar";
+import { PanelFrame } from "../common/PanelFrame";
 
 const PHASE_LABELS = {
   catching: "Łowi rybę…",
@@ -87,8 +88,7 @@ export function GatheringPanel({ character, zone }: { character: Character; zone
     : 0;
 
   return (
-    <div className="panel mt-3 p-4">
-      <h3 className="font-medium text-parchment">Zbieractwo</h3>
+    <PanelFrame title="Zbieractwo" emphasis="secondary" className="mt-3">
       {error && (
         <p role="alert" className="mt-2 text-xs text-red-400">
           {error}
@@ -132,6 +132,6 @@ export function GatheringPanel({ character, zone }: { character: Character; zone
           )}
         </div>
       )}
-    </div>
+    </PanelFrame>
   );
 }

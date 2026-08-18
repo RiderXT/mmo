@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getCombatStats } from "../../lib/charactersApi";
+import { PanelFrame } from "../common/PanelFrame";
 
 function VitalBar({
   label,
@@ -43,9 +44,8 @@ export function VitalsPanel({ characterId }: { characterId: string }) {
   if (!stats) return null;
 
   return (
-    <div className="panel p-4">
-      <h2 className="font-medium text-parchment">Kondycja</h2>
-      <div className="mt-3 space-y-2">
+    <PanelFrame title="Kondycja">
+      <div className="space-y-2">
         <VitalBar label="HP" value={stats.maxHp} max={stats.maxHp} barClassName="bg-hp" />
         <VitalBar label="MP" value={stats.maxMana} max={stats.maxMana} barClassName="bg-mp" />
       </div>
@@ -55,6 +55,6 @@ export function VitalsPanel({ characterId }: { characterId: string }) {
           (skraca podróż do krain)
         </p>
       )}
-    </div>
+    </PanelFrame>
   );
 }

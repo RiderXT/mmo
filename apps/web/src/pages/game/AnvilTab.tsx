@@ -8,6 +8,7 @@ import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { AnvilSlotBox } from "../../components/inventory/AnvilSlotBox";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemTypeIcon } from "../../components/inventory/ItemTypeIcon";
+import { PanelFrame } from "../../components/common/PanelFrame";
 import { interpolateUpgrade } from "../../lib/statMath";
 import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
 import { ApiError } from "../../lib/apiClient";
@@ -98,10 +99,9 @@ export function AnvilTab({ character }: { character: Character }) {
 
   if (zonesQuery.data && !inTown) {
     return (
-      <div className="panel p-4">
-        <h2 className="font-medium text-parchment">Kowadło</h2>
-        <p className="mt-2 text-sm text-parchment-faint">Kowadło jest dostępne tylko w mieście.</p>
-      </div>
+      <PanelFrame title="Kowadło">
+        <p className="text-sm text-parchment-faint">Kowadło jest dostępne tylko w mieście.</p>
+      </PanelFrame>
     );
   }
 
@@ -148,9 +148,8 @@ export function AnvilTab({ character }: { character: Character }) {
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="grid gap-4 lg:grid-cols-[auto_1fr_1.1fr]">
         {/* Założony ekwipunek — osobna ramka, całkowicie z lewej strony. */}
-        <div className="panel p-4">
-          <h2 className="font-medium text-parchment">Założony ekwipunek</h2>
-          <div className="mt-3 flex justify-center gap-4">
+        <PanelFrame title="Założony ekwipunek">
+          <div className="flex justify-center gap-4">
             <div className="flex flex-col items-center gap-3">
               {LEFT_EQUIP_SLOTS.map((slot) => {
                 const item = byEquipSlot.get(slot);
@@ -176,12 +175,12 @@ export function AnvilTab({ character }: { character: Character }) {
               })}
             </div>
           </div>
-        </div>
+        </PanelFrame>
 
         {/* Ekwipunek do wyboru — siatka materiałów/przedmiotów do ulepszenia. */}
-        <div className="panel p-4">
+        <PanelFrame title="Ekwipunek do wyboru">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium text-parchment-dim">Ekwipunek (przeciągnij na kowadło albo kliknij)</p>
+            <p className="text-xs font-medium text-parchment-dim">Przeciągnij na kowadło albo kliknij</p>
             <div className="flex gap-1">
               {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
                 <button
@@ -211,12 +210,11 @@ export function AnvilTab({ character }: { character: Character }) {
               </GridSlot>
             ))}
           </div>
-        </div>
+        </PanelFrame>
 
         {/* Kowadło — miejsce, w którym ląduje wybrany przedmiot, plus szczegóły ulepszenia. */}
-        <div className="panel p-4">
-          <h2 className="font-medium text-parchment">Kowadło</h2>
-          <p className="mt-1 text-xs text-parchment-faint">
+        <PanelFrame title="Kowadło">
+          <p className="text-xs text-parchment-faint">
             Przeciągnij przedmiot (z ekwipunku lub założony) tutaj, żeby go wybrać, albo kliknij.
           </p>
           <div className="mt-3 flex justify-center">
@@ -347,7 +345,7 @@ export function AnvilTab({ character }: { character: Character }) {
               {error}
             </p>
           )}
-        </div>
+        </PanelFrame>
       </div>
     </DndContext>
   );

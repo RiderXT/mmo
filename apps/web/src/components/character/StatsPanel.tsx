@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Character, CoreStatKey } from "@mmo/shared";
 import { allocateStat } from "../../lib/charactersApi";
 import { ApiError } from "../../lib/apiClient";
+import { PanelFrame } from "../common/PanelFrame";
 
 const STAT_LABELS: Record<CoreStatKey, string> = {
   strength: "Siła",
@@ -23,14 +24,15 @@ export function StatsPanel({ character }: { character: Character }) {
   });
 
   return (
-    <div className="panel p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-medium text-parchment">Statystyki</h2>
-        <span className="text-xs text-parchment-dim">
+    <PanelFrame
+      title="Statystyki"
+      headerRight={
+        <span className="text-xs normal-case tracking-normal text-parchment-dim">
           Niewydane punkty: <span className="text-gold-bright">{character.unspentStatPoints}</span>
         </span>
-      </div>
-      <div className="mt-2 space-y-1">
+      }
+    >
+      <div className="space-y-1">
         {(Object.keys(STAT_LABELS) as CoreStatKey[]).map((stat) => (
           <div key={stat} className="flex items-center justify-between text-sm">
             <span className="text-parchment-dim">{STAT_LABELS[stat]}</span>
@@ -47,6 +49,6 @@ export function StatsPanel({ character }: { character: Character }) {
           </div>
         ))}
       </div>
-    </div>
+    </PanelFrame>
   );
 }
