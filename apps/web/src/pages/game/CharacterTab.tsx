@@ -3,6 +3,7 @@ import type { Character } from "@mmo/shared";
 import { StatsPanel } from "../../components/character/StatsPanel";
 import { SkillsPanel } from "../../components/character/SkillsPanel";
 import { VitalsPanel } from "../../components/character/VitalsPanel";
+import { PanelFrame } from "../../components/common/PanelFrame";
 import { getCombatStatsBreakdown } from "../../lib/charactersApi";
 import { STAT_LABELS, COMBAT_STAT_TO_STAT_KEY, formatBreakdownValue } from "../../lib/statFormat";
 
@@ -23,9 +24,8 @@ export function CharacterTab({ character }: { character: Character }) {
       </div>
 
       {breakdownQuery.data && (
-        <div className="mt-4 panel p-4">
-          <h2 className="font-medium text-parchment">Statystyki bojowe — źródło</h2>
-          <div className="mt-2 overflow-x-auto">
+        <PanelFrame title="Statystyki bojowe — źródło" className="mt-4">
+          <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-left text-sm">
               <thead className="text-parchment-dim">
                 <tr>
@@ -52,7 +52,7 @@ export function CharacterTab({ character }: { character: Character }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </PanelFrame>
       )}
     </div>
   );

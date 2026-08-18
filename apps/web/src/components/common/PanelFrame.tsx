@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { PanelCorners } from "./PanelCorners";
 
-/** Ornate "window" panel — titled header + gold corner ornaments + higher contrast against
- * `ink` than the shared `.panel` class. Background is a near-neutral stone grey (oklch chroma
- * 0.006 — deliberately far lower than `ink`/`line`'s already-subtle 0.02–0.035, so it reads as
- * grey rather than brown next to them) rather than a new tailwind.config.js token, kept local
- * here until this replaces `.panel` app-wide.
+/** Ornate "window" panel — titled header + gold corner ornaments. Uses the shared `panel`
+ * token (tailwind.config.js) for its background — a near-neutral stone grey (oklch chroma
+ * 0.006, far lower than `ink`/`line`'s already-subtle 0.02–0.035, so it reads as grey rather
+ * than brown next to them). `.panel` (index.css) uses the same token, so any remaining plain
+ * `.panel` divs (modals, admin pages) already match this automatically.
  *
  * `emphasis="secondary"` is for panels that are supporting detail rather than a primary "room"
  * of the screen (e.g. the selected-item stat readout) — thinner border, smaller/dimmer corners,
@@ -31,7 +31,7 @@ export function PanelFrame({
   const secondary = emphasis === "secondary";
   return (
     <div
-      className={`relative border bg-[oklch(23%_0.006_45)] ${
+      className={`relative border bg-panel ${
         secondary ? "border-gold/25 shadow-[0_4px_14px_rgba(0,0,0,0.35)]" : "border-gold/40 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
       } ${className}`}
     >

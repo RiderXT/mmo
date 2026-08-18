@@ -42,6 +42,14 @@ export function App() {
         }
       />
       <Route
+        path="/game/:characterId/:tab"
+        element={
+          <ProtectedRoute>
+            <GamePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/profile/:characterId"
         element={
           <ProtectedRoute>

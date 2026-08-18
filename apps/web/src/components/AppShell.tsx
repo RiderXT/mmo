@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { expForLevel } from "@mmo/shared";
 import { logoutRequest } from "../lib/authApi";
@@ -106,30 +106,29 @@ function CharacterHeaderBar() {
   );
 }
 
-/** All character-scoped tabs live at the same pathname (/game/:characterId) and differ only by
- * ?tab=, which react-router's NavLink does not consider when computing its built-in isActive —
- * every link on this pathname would otherwise light up together. So the active tab is compared
- * manually against the current ?tab= value instead of relying on NavLink's own matching. */
+/** Each character-scoped tab now has its own pathname (/game/:characterId/:tab), so NavLink's
+ * built-in isActive matching (by pathname) works without any manual comparison. */
 function TabNavLink({
   characterId,
   tab,
-  activeTab,
   icon,
   label,
   onNavigate,
 }: {
   characterId: string;
   tab: string;
-  activeTab: string;
   icon: string;
   label: string;
   onNavigate?: () => void;
 }) {
-  const isActive = activeTab === tab;
   return (
-    <NavLink to={`/game/${characterId}?tab=${tab}`} className={navLinkClass({ isActive })} onClick={onNavigate}>
-      <NavIconImg src={icon} alt="" active={isActive} />
-      {label}
+    <NavLink to={`/game/${characterId}/${tab}`} className={navLinkClass} onClick={onNavigate}>
+      {({ isActive }) => (
+        <>
+          <NavIconImg src={icon} alt="" active={isActive} />
+          {label}
+        </>
+      )}
     </NavLink>
   );
 }
@@ -140,8 +139,6 @@ function TabNavLink({
  * already use, so react-query dedupes the fetch instead of firing an extra request. */
 function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const { characterId } = useParams<{ characterId: string }>();
-  const [searchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") ?? "character";
   const characterQuery = useQuery({
     queryKey: ["character", characterId],
     queryFn: () => getCharacter(characterId!),
@@ -164,25 +161,19 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
       <div className="space-y-1 px-2">
         <TabNavLink
           characterId={characterId}
-          tab="character"
-          activeTab={activeTab}
-          icon="/icons/nav/postac.png"
+          tab="character"          icon="/icons/nav/postac.png"
           label="Postać"
           onNavigate={onNavigate}
         />
         <TabNavLink
           characterId={characterId}
-          tab="equipment"
-          activeTab={activeTab}
-          icon="/icons/nav/ekwipunek.png"
+          tab="equipment"          icon="/icons/nav/ekwipunek.png"
           label="Ekwipunek"
           onNavigate={onNavigate}
         />
         <TabNavLink
           characterId={characterId}
-          tab="expeditions"
-          activeTab={activeTab}
-          icon="/icons/nav/ekspedycje.png"
+          tab="expeditions"          icon="/icons/nav/ekspedycje.png"
           label="Ekspedycje"
           onNavigate={onNavigate}
         />
@@ -201,9 +192,7 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
         {inTown ? (
           <TabNavLink
             characterId={characterId}
-            tab="anvil"
-            activeTab={activeTab}
-            icon="/icons/nav/kowadlo.png"
+            tab="anvil"            icon="/icons/nav/kowadlo.png"
             label="Kowadło"
             onNavigate={onNavigate}
           />
@@ -219,9 +208,7 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
         {inTown ? (
           <TabNavLink
             characterId={characterId}
-            tab="npc"
-            activeTab={activeTab}
-            icon="/icons/nav/npc.png"
+            tab="npc"            icon="/icons/nav/npc.png"
             label="NPC"
             onNavigate={onNavigate}
           />

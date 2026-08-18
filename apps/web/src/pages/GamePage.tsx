@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { getCharacter } from "../lib/charactersApi";
@@ -11,10 +11,9 @@ import { NpcTab } from "./game/NpcTab";
 type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc";
 
 export function GamePage() {
-  const { characterId } = useParams<{ characterId: string }>();
+  const { characterId, tab } = useParams<{ characterId: string; tab?: string }>();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
-  const activeTab = (searchParams.get("tab") as TabKey | null) ?? "character";
+  const activeTab = (tab as TabKey | undefined) ?? "character";
 
   const characterQuery = useQuery({
     queryKey: ["character", characterId],

@@ -5,8 +5,8 @@ export default {
     extend: {
       colors: {
         ink: "oklch(12% 0.02 45)",
-        panel: "oklch(19% 0.025 45)",
-        "panel-raised": "oklch(24% 0.03 45)",
+        panel: "oklch(23% 0.006 45)",
+        "panel-raised": "oklch(28% 0.007 45)",
         line: "oklch(40% 0.035 45)",
         "line-soft": "oklch(48% 0.035 45)",
         gold: { DEFAULT: "oklch(76% 0.09 85)", bright: "oklch(80% 0.14 85)" },
