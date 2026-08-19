@@ -10,6 +10,7 @@ import {
   OpenChestSchema,
   SellItemSchema,
   DiscardItemSchema,
+  UseBuffItemSchema,
 } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
 import {
@@ -24,6 +25,7 @@ import {
   openChest,
   sellItem,
   discardItem,
+  useBuffItem,
   InventoryError,
 } from "./service.js";
 
@@ -139,6 +141,18 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
     const body = SellItemSchema.parse(request.body);
     try {
       const result = await sellItem({ characterId, ...body }, request.user!.sub, request.id);
+      return reply.send(result);
+    } catch (err) {
+      if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:characterId/use-buff-item", { preHandler: requireAuth }, async (request, reply) => {
+    const { characterId } = request.params as { characterId: string };
+    const body = UseBuffItemSchema.parse(request.body);
+    try {
+      const result = await useBuffItem({ characterId, ...body }, request.user!.sub, request.id);
       return reply.send(result);
     } catch (err) {
       if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });

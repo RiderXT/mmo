@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
 import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import { addLootToInventory } from "../inventory/service.js";
+import { tryPayReferralReward } from "../../lib/referralRewards.js";
 import type { CreateCharacterInput, CoreStatKey } from "@mmo/shared";
 
 export class CharacterError extends Error {
@@ -96,6 +97,12 @@ export async function createCharacter(
       starterItems: characterClass.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
     },
   });
+
+  // First character reaching level 1 is when a requiredLevel<=1 referral reward becomes payable
+  // (a fresh account has no character at registration time — see lib/referralRewards.ts).
+  if (count === 0) {
+    await tryPayReferralReward(character.id);
+  }
 
   return character;
 }

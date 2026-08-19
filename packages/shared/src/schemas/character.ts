@@ -30,6 +30,14 @@ export const CharacterSchema = z.object({
   activeExpeditionId: z.string().nullable(),
   travelDestinationZoneId: z.string().nullable(),
   travelArrivesAt: z.string().nullable(),
+  // Personal temporary-item buffs — see lib/personalBuffs.ts. Null/expired "*Until" = no active
+  // bonus. multiplier is the already-computed factor (e.g. 2 = +100%), not a raw magnitudePct.
+  expBuffMultiplier: z.number().nullable(),
+  expBuffUntil: z.string().nullable(),
+  goldBuffMultiplier: z.number().nullable(),
+  goldBuffUntil: z.string().nullable(),
+  dropBuffMultiplier: z.number().nullable(),
+  dropBuffUntil: z.string().nullable(),
   createdAt: z.string(),
 });
 export type Character = z.infer<typeof CharacterSchema>;

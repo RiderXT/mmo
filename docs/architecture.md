@@ -1909,6 +1909,87 @@ lokalnym dev.db uniemożliwił żywy test (ta sama, wcześniej już zaakceptowan
 co przy weryfikacji Kowadła w Etapie zbieractwa). Dane testowe (umiejętność, książka, przedmioty)
 usunięte po weryfikacji.
 
+**Itemy czasowe (osobisty mnożnik exp/złoto/łup) + system poleceń + ustawienia konta** — trzy
+niepowiązane funkcje w jednym przebiegu:
+
+- **Itemy czasowe**: nowy `potionTrigger: "on_use"` (zużycie natychmiastowe na decyzję gracza, bez
+  progu/interwału jak `hp_below`/`mana_below`/`interval`) i trzy nowe `PotionEffect`:
+  `buff_exp`/`buff_gold`/`buff_drop`. Celowo NIE wpięte w istniejące 6 fizycznych aktywnych slotów
+  (te są zarezerwowane pod obecność-podczas-walki) — zamiast tego osobna akcja "Użyj" w menu
+  kontekstowym (`ItemContextMenu`'s `canUse`/`onUse`, mirror `canRead`/`onRead` z książek),
+  `inventory/service.ts`'s `useBuffItem` zużywa 1 sztukę i nadpisuje
+  `Character.<effect>BuffMultiplier`/`<effect>BuffUntil` (`multiplier = 1 + potionMagnitudePct`,
+  `until = now + potionDurationSec`; nowy item tego samego efektu NADPISUJE poprzedni, bez
+  sumowania). `lib/personalBuffs.ts`'s `getActivePersonalBuffMultipliers(character)` czyta te pola
+  bez dodatkowego zapytania (character i tak jest już załadowany) i zwraca `1` gdy wygasłe/nigdy
+  nieustawione. `expeditions/service.ts`'s `buildAndSimulate` MNOŻY (nie zastępuje) event×personal
+  dla exp/gold przed wywołaniem `simulateExpedition` — połączona wartość trafia do
+  `Expedition.appliedExpMultiplier` jak dotąd, więc anti-cheat (`checkRewardPlausibility`) skaluje
+  się poprawnie bez zmian. Drop: nowy parametr `dropChanceMultiplier` w `simulateExpedition`
+  (mnoży wszystkie 3 miejsca rzutu w `combat.ts`, capped `Math.min(1, ...)`) i w
+  `gathering/service.ts`'s `rollDrops` (mnoży `dropChance + chanceBonusPct`, liczone raz na
+  początku `resolveGatherSession` jak pozostałe bonusy). Frontend: `ActiveBuffsBar.tsx` (nowy) —
+  do 3 pigułek z żywym odliczaniem mm:ss (lokalny `setInterval` co sekundę), zamontowany w
+  `AppShell`'s `CharacterHeaderBar` (współdzieli już istniejące zapytanie `["character",
+  characterId]`, więc widoczny na każdej zakładce, nie tylko Ekwipunku). `ItemsAdminPage.tsx` nie
+  wymagał żadnych zmian — selecty triggera/efektu już czytają wprost z `PotionTriggerSchema
+  .options`/`PotionEffectSchema.options`, a pola `magnitudePct`/`durationSeconds` już renderują się
+  dla każdego efektu `buff_*` (gating `effect.startsWith("buff_")` sprzed tego zadania).
+- **System poleceń**: `User.referralCode` jest **nullable** (`String? @unique`, BEZ
+  `@default(cuid())`) — celowo, żeby uniknąć resetu dev.db: kolumna wymagana+unikalna z
+  domyślną wartością generowaną po stronie klienta Prisma nie da się dopisać do istniejącej
+  tabeli z danymi jednym `db push` (SQLite nie potrafi wypełnić istniejących wierszy per-wiersz
+  unikalną wartością). Zamiast tego kod generuje kod jawnie: nowe konta dostają go przy
+  rejestracji (`accountRoutes`/`account/service.ts`'s `getAccountSettings` → `ensureReferralCode`,
+  wywoływane leniwie przy pierwszym wejściu w Ustawienia konta — `crypto.randomBytes(5).toString
+  ("hex")`, retry przy kolizji). Nowy model `Referral` (`referrerId`/`referredId`/`rewardedAt` —
+  null dopóki nagroda nieczekana). `RegisterSchema.referralCode` (opcjonalne) — nieznany/zwrotny
+  na siebie kod jest CICHO ignorowany (literówka nie blokuje rejestracji). Nagroda skonfigurowana
+  w `referral.settings` (`rewardKind: none|gold|item`, `target: referrer|referred|both`,
+  `requiredLevel`) przez `lib/referralRewards.ts`'s `tryPayReferralReward(characterId)` —
+  wywoływane (a) po utworzeniu PIERWSZEJ postaci konta (rejestracja sama nie tworzy postaci, więc
+  "poziom 1 od razu" sprawdza się dopiero tutaj, w `characters/service.ts`'s `createCharacter`),
+  (b) przy każdym awansie poziomu w `expeditions/service.ts`'s `applyExpeditionReward`. Nagroda dla
+  "polecającego" trafia do jego PIERWSZEJ założonej postaci (`orderBy createdAt asc` — złoto jest
+  polem postaci, nie konta, więc trzeba wybrać którąś). Panel admina: nowa zakładka "Polecenia" w
+  `AdminSettingsPage.tsx` → `ReferralAdminPage.tsx`, `GET`/`PUT /api/admin/settings/referral-settings`.
+- **Ustawienia konta**: nowa strona `/account` (`AccountSettingsPage.tsx`, poza systemem zakładek
+  gry — dotyczy konta, nie postaci) z 4 sekcjami: link poleceń (kod+URL+kopiuj+statystyki), zmiana
+  widoczności online (`User.hideOnlineStatus`, zagatowane w `profile/service.ts` I
+  `friends/service.ts` — ukrywa zarówno `online` JAK I surowy `lastSeenAt`, nie tylko flagę), zmiana
+  hasła, usunięcie konta. `POST /api/auth/change-password` i `/request-deletion` odwołują WSZYSTKIE
+  odświeżacze sesji (`revokeAllRefreshTokensForUser`, nowe w `lib/refreshToken.ts`) i czyszczą
+  cookie — frontend wymusza wylogowanie i przekierowuje na `/login` z komunikatem (nowy wzorzec:
+  `navigate("/login", {state:{message}})`, czytany w `LoginPage.tsx` przez `useLocation()`).
+  Usunięcie konta jest leniwe (RODO-styl, 30 dni karencji) — `User.deletionRequestedAt` ustawiany
+  przy żądaniu, żadnego crona: `loginUser`/`refreshSession` w `auth/service.ts` sprawdzają przy
+  KAŻDYM logowaniu/odświeżeniu, czy `deletionRequestedAt` jest starsze niż 30 dni — jeśli tak,
+  `prisma.user.delete()` (kaskady już obsługują `RefreshToken`/`Character`/`FriendRequest`) i błąd
+  zamiast zalogowania; jeśli ustawione ale świeższe, logowanie i tak się udaje (użytkownik musi
+  móc się zalogować, żeby zobaczyć ekran cofnięcia), a `AuthUser.deletionRequestedAt` (nowe pole,
+  płynie przez `/me`, login/register/refresh) daje frontendowi sygnał. `ProtectedRoute.tsx`
+  renderuje blokujący `DeletionPendingScreen` zamiast dzieci gdy pole ustawione — "Cofnij usunięcie"
+  aktualizuje lokalny stan auth przez `setSession` (bez przeładowania strony), "Wyloguj" kończy
+  sesję. `RegisterPage.tsx` czyta `?ref=KOD` z URL (`useSearchParams`) i wstępnie wypełnia (wciąż
+  edytowalne) pole "Kod polecający".
+
+Zweryfikowane: `pnpm -r typecheck`+`build` czysto (shared/api/web). Backend skryptami bezpośrednio
+przez funkcje serwisowe (bez HTTP): `useBuffItem` — multiplier/until poprawne, stos zużyty
+2→1, odrzucenie dla itemu bez `on_use`; pełny cykl referral — rejestracja z kodem tworzy
+`Referral`, brak wypłaty przed pierwszą postacią, wypłata dokładnie przy tworzeniu pierwszej
+postaci polecającego (gold +500 u obu stron, zgodnie z `target: both`, `requiredLevel: 1`);
+zmiana hasła (stare hasło odrzucone, nowe działa), żądanie/cofnięcie usunięcia, symulacja
+usunięcia po 31 dniach (kolejne logowanie faktycznie usuwa wiersz `User` z bazy i zwraca błąd),
+`hideOnlineStatus` ukrywa `online`+`lastSeenAt` w publicznym profilu. W przeglądarce: prawdziwy
+item `on_use`/`buff_exp` utworzony przez formularz `/admin/items` (potwierdzone, że selecty
+triggera/efektu faktycznie zawierają `on_use`/`buff_exp`/`buff_gold`/`buff_drop`), przyznany
+graczowi, prawy klik → "Użyj" → toast "Użyto: +100% exp przez 2 min!", item zniknął z ekwipunku,
+pigułka "EXP x2 jeszcze przez 1:53" z żywym odliczaniem w nagłówku; `/account` renderuje 4 sekcje
+z poprawnym `GET /api/account` (200); modal usunięcia konta pokazuje błąd "Nieprawidłowe hasło"
+dla złego hasła; link "Ustawienia konta" na własnym profilu; panel admina "Polecenia" zapisuje
+(`PUT` 200) i odczytuje ustawienia. Dane testowe (testowy item, ustawienia poleceń) usunięte po
+weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

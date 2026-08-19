@@ -1,6 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { RegisterSchema, LoginSchema, type AuthResponse } from "@mmo/shared";
-import { registerUser, loginUser, refreshSession, logoutUser, AuthError } from "./service.js";
+import { RegisterSchema, LoginSchema, ChangePasswordSchema, RequestDeletionSchema, type AuthResponse } from "@mmo/shared";
+import {
+  registerUser,
+  loginUser,
+  refreshSession,
+  logoutUser,
+  changePassword,
+  requestAccountDeletion,
+  cancelAccountDeletion,
+  AuthError,
+} from "./service.js";
 import { requireAuth } from "../../lib/authGuard.js";
 import { prisma } from "../../lib/prismaClient.js";
 
@@ -92,6 +101,36 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       email: user.email,
       role: user.role,
       createdAt: user.createdAt.toISOString(),
+      deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
     });
+  });
+
+  app.post("/change-password", { preHandler: requireAuth }, async (request, reply) => {
+    const { currentPassword, newPassword } = ChangePasswordSchema.parse(request.body);
+    try {
+      await changePassword(request.user!.sub, currentPassword, newPassword, request.id);
+      reply.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+      return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof AuthError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/request-deletion", { preHandler: requireAuth }, async (request, reply) => {
+    const { password } = RequestDeletionSchema.parse(request.body);
+    try {
+      await requestAccountDeletion(request.user!.sub, password, request.id);
+      reply.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+      return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof AuthError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/cancel-deletion", { preHandler: requireAuth }, async (request, reply) => {
+    await cancelAccountDeletion(request.user!.sub, request.id);
+    return reply.code(204).send();
   });
 }

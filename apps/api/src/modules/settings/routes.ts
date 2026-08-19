@@ -1,12 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../lib/authGuard.js";
-import { GatheringSettingsSchema } from "@mmo/shared";
+import { GatheringSettingsSchema, ReferralSettingsSchema } from "@mmo/shared";
 import {
   getExpeditionDurationMinutes,
   setExpeditionDurationMinutes,
   getGatheringSettings,
   setGatheringSettings,
+  getReferralSettings,
+  setReferralSettings,
   SettingsError,
 } from "./service.js";
 
@@ -39,6 +41,16 @@ export async function adminSettingsRoutes(app: FastifyInstance): Promise<void> {
   app.put("/gathering-settings", { preHandler: requireRole("admin") }, async (request, reply) => {
     const input = GatheringSettingsSchema.parse(request.body);
     const saved = await setGatheringSettings(input, request.user!.sub, request.id);
+    return reply.send(saved);
+  });
+
+  app.get("/referral-settings", { preHandler: requireRole("admin") }, async (_request, reply) => {
+    return reply.send(await getReferralSettings());
+  });
+
+  app.put("/referral-settings", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const input = ReferralSettingsSchema.parse(request.body);
+    const saved = await setReferralSettings(input, request.user!.sub, request.id);
     return reply.send(saved);
   });
 }

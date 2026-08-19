@@ -80,7 +80,9 @@ export type SkillKind = z.infer<typeof SkillKindSchema>;
 export const SkillEffectTypeSchema = z.enum(["damage", "heal"]);
 export type SkillEffectType = z.infer<typeof SkillEffectTypeSchema>;
 
-export const PotionTriggerSchema = z.enum(["hp_below", "mana_below", "interval"]);
+// "on_use" is consumed immediately on player action (see ItemContextMenu "Użyj"/inventory
+// useBuffItem), not during simulated combat like the other triggers — no threshold/interval.
+export const PotionTriggerSchema = z.enum(["hp_below", "mana_below", "interval", "on_use"]);
 export type PotionTrigger = z.infer<typeof PotionTriggerSchema>;
 
 export const PotionEffectSchema = z.enum([
@@ -89,5 +91,10 @@ export const PotionEffectSchema = z.enum([
   "buff_attack_speed",
   "buff_attack",
   "buff_defense",
+  // Personal, time-limited multipliers applied on top of any active event multiplier — see
+  // lib/personalBuffs.ts. magnitudePct/durationSeconds (already on PotionConfigSchema) drive both.
+  "buff_exp",
+  "buff_gold",
+  "buff_drop",
 ]);
 export type PotionEffect = z.infer<typeof PotionEffectSchema>;

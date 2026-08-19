@@ -8,6 +8,7 @@ import { useCharacterStore } from "../store/characterStore";
 import { getCharacter } from "../lib/charactersApi";
 import { listPlayerZones } from "../lib/zonesApi";
 import { UpdateBanner } from "./UpdateBanner";
+import { ActiveBuffsBar } from "./expedition/ActiveBuffsBar";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition ${
@@ -99,6 +100,7 @@ function CharacterHeaderBar() {
           </div>
         </div>
       </div>
+      <ActiveBuffsBar character={character} />
       <div className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-gold">
         <span className="h-3 w-3 rounded-full bg-gold" />
         {character.gold.toLocaleString("pl-PL")}

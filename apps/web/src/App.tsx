@@ -5,6 +5,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { CharactersPage } from "./pages/CharactersPage";
 import { GamePage } from "./pages/GamePage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { AccountSettingsPage } from "./pages/AccountSettingsPage";
 import { FriendsPage } from "./pages/FriendsPage";
 import { RankingPage } from "./pages/RankingPage";
 import { AdminLogsPage } from "./pages/AdminLogsPage";
@@ -53,6 +54,14 @@ export function App() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <ProtectedRoute>
+            <AccountSettingsPage />
           </ProtectedRoute>
         }
       />

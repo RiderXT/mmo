@@ -29,7 +29,7 @@ export async function getCharacterProfile(characterName: string) {
   const character = await prisma.character.findUnique({
     where: { name: characterName },
     include: {
-      user: { select: { lastSeenAt: true } },
+      user: { select: { lastSeenAt: true, hideOnlineStatus: true } },
       class: { select: { id: true, name: true } },
       currentZone: { select: { name: true, minLevel: true, maxLevel: true } },
     },
@@ -64,8 +64,10 @@ export async function getCharacterProfile(characterName: string) {
     classId: character.classId,
     className: character.class?.name ?? null,
     createdAt: character.createdAt.toISOString(),
-    online: isOnline(character.user.lastSeenAt),
-    lastSeenAt: character.user.lastSeenAt?.toISOString() ?? null,
+    // hideOnlineStatus hides both the derived online flag AND the raw timestamp it's derived
+    // from — exposing lastSeenAt while just zeroing "online" would defeat the point of the toggle.
+    online: character.user.hideOnlineStatus ? false : isOnline(character.user.lastSeenAt),
+    lastSeenAt: character.user.hideOnlineStatus ? null : (character.user.lastSeenAt?.toISOString() ?? null),
     zoneName: character.currentZone?.name ?? null,
     zoneMinLevel: character.currentZone?.minLevel ?? null,
     zoneMaxLevel: character.currentZone?.maxLevel ?? null,

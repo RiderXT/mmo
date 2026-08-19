@@ -24,6 +24,9 @@ export interface ItemContextMenuTarget {
   canConfigureThreshold?: boolean;
   /** Item is a skill book (type "book") — drives the "Przeczytaj" entry. */
   canRead?: boolean;
+  /** Item is a consumable with potionTrigger "on_use" (personal exp/gold/drop buff) — drives the
+   * "Użyj" entry. */
+  canUse?: boolean;
   x: number;
   y: number;
 }
@@ -40,6 +43,7 @@ export function ItemContextMenu({
   onDeactivate,
   onConfigureThreshold,
   onRead,
+  onUse,
 }: {
   target: ItemContextMenuTarget;
   onClose: () => void;
@@ -52,6 +56,7 @@ export function ItemContextMenu({
   onDeactivate?: (inventoryItemId: string) => void;
   onConfigureThreshold?: (inventoryItemId: string) => void;
   onRead?: (inventoryItemId: string) => void;
+  onUse?: (inventoryItemId: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
@@ -161,6 +166,17 @@ export function ItemContextMenu({
           className="block w-full px-3 py-2 text-left text-sm text-parchment hover:bg-panel-raised"
         >
           Przeczytaj
+        </button>
+      )}
+      {target.canUse && onUse && (
+        <button
+          onClick={() => {
+            onUse(target.inventoryItemId);
+            onClose();
+          }}
+          className="block w-full px-3 py-2 text-left text-sm text-parchment hover:bg-panel-raised"
+        >
+          Użyj
         </button>
       )}
       {target.canOpen && (

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LoginSchema } from "@mmo/shared";
 import { loginRequest } from "../lib/authApi";
 import { ApiError } from "../lib/apiClient";
@@ -7,6 +7,10 @@ import { useAuthStore } from "../store/authStore";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  // Post-action redirect banner (e.g. "Hasło zmienione — zaloguj się ponownie.") — set by
+  // AccountSettingsPage via navigate("/login", { state: { message } }) after a forced logout.
+  const location = useLocation();
+  const redirectMessage = (location.state as { message?: string } | null)?.message ?? null;
   const setSession = useAuthStore((s) => s.setSession);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,6 +60,12 @@ export function LoginPage() {
           <h1 className="font-display text-3xl font-bold tracking-[0.08em] text-gold">FIGHT CLUB</h1>
           <p className="mt-2 text-xs tracking-[0.05em] text-parchment-faint">PRZEGLĄDARKOWE MMO FANTASY</p>
         </div>
+
+        {redirectMessage && (
+          <p role="status" className="rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-gold-bright">
+            {redirectMessage}
+          </p>
+        )}
 
         <div className="space-y-1">
           <label className="text-sm text-parchment-dim" htmlFor="email">

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { RegisterSchema } from "@mmo/shared";
 import { registerRequest } from "../lib/authApi";
 import { ApiError } from "../lib/apiClient";
@@ -8,8 +8,12 @@ import { useAuthStore } from "../store/authStore";
 export function RegisterPage() {
   const navigate = useNavigate();
   const setSession = useAuthStore((s) => s.setSession);
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Prefilled (but still editable) from ?ref=CODE — see AccountSettingsPage's shareable referral
+  // link.
+  const [referralCode, setReferralCode] = useState(searchParams.get("ref") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,7 +21,12 @@ export function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    const parsed = RegisterSchema.safeParse({ email, password });
+    const trimmedReferralCode = referralCode.trim();
+    const parsed = RegisterSchema.safeParse({
+      email,
+      password,
+      ...(trimmedReferralCode ? { referralCode: trimmedReferralCode } : {}),
+    });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Nieprawidłowe dane");
       return;
@@ -86,6 +95,19 @@ export function RegisterPage() {
             required
           />
           <p className="text-xs text-parchment-faint">Min. 10 znaków, wielka i mała litera oraz cyfra.</p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm text-parchment-dim" htmlFor="referralCode">
+            Kod polecający (opcjonalnie)
+          </label>
+          <input
+            id="referralCode"
+            type="text"
+            value={referralCode}
+            onChange={(e) => setReferralCode(e.target.value)}
+            className="w-full rounded-lg border border-line-soft bg-ink px-3 py-2.5 text-parchment outline-none focus:border-gold"
+          />
         </div>
 
         {error && (

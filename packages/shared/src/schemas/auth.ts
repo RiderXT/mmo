@@ -14,6 +14,9 @@ export const PasswordSchema = z
 export const RegisterSchema = z.object({
   email: EmailSchema,
   password: PasswordSchema,
+  // Redeems another account's referralCode, see lib/referralRewards.ts. Silently ignored (no
+  // error) if unknown or self-referential, so a typo never blocks registration.
+  referralCode: z.string().trim().min(1).max(64).optional(),
 });
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 
@@ -28,6 +31,9 @@ export const AuthUserSchema = z.object({
   email: z.string(),
   role: RoleSchema,
   createdAt: z.string(),
+  // Set when account deletion is pending (GDPR-style, 30-day grace period) — frontend shows a
+  // blocking "cancel deletion" screen instead of the game while this is non-null.
+  deletionRequestedAt: z.string().nullable().optional(),
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 

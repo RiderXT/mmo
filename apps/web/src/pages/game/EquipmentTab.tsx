@@ -25,6 +25,7 @@ import {
   openChest,
   sellItem,
   discardItem,
+  useBuffItem,
   type InventoryItemDto,
 } from "../../lib/inventoryApi";
 import { readBook } from "../../lib/passiveSkillsApi";
@@ -61,6 +62,14 @@ const EQUIPPABLE_TYPES = new Set<string>([
 ]);
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
+
+// Polish labels for the "Użyto: +X% ..." toast after a personal buff item is consumed — see
+// useBuffItemMutation below.
+const BUFF_EFFECT_LABELS: Record<"buff_exp" | "buff_gold" | "buff_drop", string> = {
+  buff_exp: "exp",
+  buff_gold: "złota",
+  buff_drop: "szansy na łup",
+};
 
 export function EquipmentTab({ character }: { character: Character }) {
   const characterId = character.id;
@@ -186,6 +195,21 @@ export function EquipmentTab({ character }: { character: Character }) {
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się przeczytać książki"),
   });
 
+  const useBuffItemMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => useBuffItem(characterId, inventoryItemId),
+    onSuccess: (data) => {
+      invalidateInventory();
+      queryClient.invalidateQueries({ queryKey: ["character", characterId] });
+      setActionError(null);
+      const durationMinutes = Math.max(0, (new Date(data.until).getTime() - Date.now()) / 60000);
+      setChestResult(
+        `Użyto: +${Math.round((data.multiplier - 1) * 100)}% ${BUFF_EFFECT_LABELS[data.effect]} przez ${Math.round(durationMinutes)} min!`,
+      );
+      setTimeout(() => setChestResult(null), 5000);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się użyć przedmiotu"),
+  });
+
   // Tap-to-activate: assigns the first free active slot rather than letting the caller pick one,
   // so this path can never target an already-occupied slot.
   function handleActivate(item: InventoryItemDto) {
@@ -219,6 +243,7 @@ export function EquipmentTab({ character }: { character: Character }) {
         item.activeSlotIndex !== null &&
         (item.item.potionTrigger === "hp_below" || item.item.potionTrigger === "mana_below"),
       canRead: item.item.type === "book",
+      canUse: item.item.type === "consumable" && item.item.potionTrigger === "on_use",
       x,
       y,
     });
@@ -420,22 +445,24 @@ export function EquipmentTab({ character }: { character: Character }) {
             if (item) setThresholdTarget(item);
           }}
           onRead={(id) => readBookMutation.mutate(id)}
+          onUse={(id) => useBuffItemMutation.mutate(id)}
         />
       )}
 
-      {thresholdTarget && thresholdTarget.item.potionTrigger != null && thresholdTarget.item.potionTrigger !== "interval" && (
-        <PotionThresholdModal
-          itemName={thresholdTarget.item.name}
-          trigger={thresholdTarget.item.potionTrigger}
-          currentPct={thresholdTarget.potionThresholdOverridePct ?? thresholdTarget.item.potionThresholdPct ?? 0.3}
-          hasOverride={thresholdTarget.potionThresholdOverridePct != null}
-          onSave={(pct) => {
-            setPotionThresholdMutation.mutate({ inventoryItemId: thresholdTarget.id, thresholdPct: pct });
-            setThresholdTarget(null);
-          }}
-          onCancel={() => setThresholdTarget(null)}
-        />
-      )}
+      {thresholdTarget &&
+        (thresholdTarget.item.potionTrigger === "hp_below" || thresholdTarget.item.potionTrigger === "mana_below") && (
+          <PotionThresholdModal
+            itemName={thresholdTarget.item.name}
+            trigger={thresholdTarget.item.potionTrigger}
+            currentPct={thresholdTarget.potionThresholdOverridePct ?? thresholdTarget.item.potionThresholdPct ?? 0.3}
+            hasOverride={thresholdTarget.potionThresholdOverridePct != null}
+            onSave={(pct) => {
+              setPotionThresholdMutation.mutate({ inventoryItemId: thresholdTarget.id, thresholdPct: pct });
+              setThresholdTarget(null);
+            }}
+            onCancel={() => setThresholdTarget(null)}
+          />
+        )}
     </div>
   );
 }

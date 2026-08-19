@@ -58,6 +58,11 @@ export const ClearActiveSlotSchema = z.object({
 });
 export type ClearActiveSlotInput = z.infer<typeof ClearActiveSlotSchema>;
 
+export const UseBuffItemSchema = z.object({
+  inventoryItemId: z.string(),
+});
+export type UseBuffItemInput = z.infer<typeof UseBuffItemSchema>;
+
 // null clears the override (falls back to the item's admin-configured default).
 export const SetPotionThresholdSchema = z.object({
   inventoryItemId: z.string(),

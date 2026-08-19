@@ -121,8 +121,8 @@ export async function listFriends(userId: string) {
   const rows = await prisma.friendRequest.findMany({
     where: { OR: [{ requesterId: userId }, { addresseeId: userId }] },
     include: {
-      requester: { select: { id: true, lastSeenAt: true } },
-      addressee: { select: { id: true, lastSeenAt: true } },
+      requester: { select: { id: true, lastSeenAt: true, hideOnlineStatus: true } },
+      addressee: { select: { id: true, lastSeenAt: true, hideOnlineStatus: true } },
     },
   });
 
@@ -161,7 +161,7 @@ export async function listFriends(userId: string) {
         characterName: character?.name ?? null,
         characterLevel: character?.level ?? null,
         className: character?.class?.name ?? null,
-        online: isOnline(other.lastSeenAt),
+        online: other.hideOnlineStatus ? false : isOnline(other.lastSeenAt),
       });
     } else if (row.status === "pending" && row.addresseeId === userId) {
       incoming.push({

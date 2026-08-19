@@ -44,3 +44,13 @@ export async function revokeRefreshToken(presentedToken: string): Promise<void> 
     data: { revokedAt: new Date() },
   });
 }
+
+/** Used by changePassword/requestAccountDeletion to force every other session to re-authenticate
+ * — the access token already issued stays valid until its own short TTL expires, but the refresh
+ * chain is cut so it can't be renewed. */
+export async function revokeAllRefreshTokensForUser(userId: string): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}

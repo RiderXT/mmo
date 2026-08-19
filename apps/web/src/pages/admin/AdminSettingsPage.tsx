@@ -11,6 +11,7 @@ import { EventsAdminPage } from "./EventsAdminPage";
 import { NpcsAdminPage } from "./NpcsAdminPage";
 import { GatheringAdminPage } from "./GatheringAdminPage";
 import { PassiveSkillsAdminPage } from "./PassiveSkillsAdminPage";
+import { ReferralAdminPage } from "./ReferralAdminPage";
 
 const TABS = [
   { key: "general", label: "Ogólne", Component: SettingsAdminPage },
@@ -22,6 +23,7 @@ const TABS = [
   { key: "npcs", label: "NPC", Component: NpcsAdminPage },
   { key: "gathering", label: "Zbieractwo", Component: GatheringAdminPage },
   { key: "passive-skills", label: "Umiejętności pasywne", Component: PassiveSkillsAdminPage },
+  { key: "referral", label: "Polecenia", Component: ReferralAdminPage },
   { key: "testing", label: "Testowanie", Component: GrantAdminPage },
   { key: "balance", label: "Statystyki balansu", Component: BalanceStatsPage },
 ] as const;

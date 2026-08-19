@@ -1,4 +1,4 @@
-import type { EquipSlot, ItemType, StatKey } from "@mmo/shared";
+import type { EquipSlot, ItemType, PotionEffect, PotionTrigger, StatKey } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
 export interface InventoryItemDto {
@@ -32,9 +32,14 @@ export interface InventoryItemDto {
     sellPrice: number;
     gridWidth: number;
     // Potion behavior (only meaningful when type === "consumable") — drives the active-slot
-    // right-click "Ustaw próg użycia" entry, only offered for hp_below/mana_below triggers.
-    potionTrigger: "hp_below" | "mana_below" | "interval" | null;
+    // right-click "Ustaw próg użycia" entry (hp_below/mana_below triggers) and the "Użyj" entry
+    // (on_use trigger — see useBuffItem below).
+    potionTrigger: PotionTrigger | null;
     potionThresholdPct: number | null;
+    // Only meaningful when potionTrigger === "on_use" — which personal buff it grants and for
+    // how long. See useBuffItem.
+    potionEffect: PotionEffect | null;
+    potionDurationSec: number | null;
   };
 }
 
@@ -87,6 +92,20 @@ export const setActiveSlot = (characterId: string, inventoryItemId: string, slot
 
 export const clearActiveSlot = (characterId: string, inventoryItemId: string) =>
   apiFetch<void>(`/api/inventory/${characterId}/clear-active-slot`, {
+    method: "POST",
+    body: JSON.stringify({ inventoryItemId }),
+  });
+
+export interface UseBuffItemResultDto {
+  effect: "buff_exp" | "buff_gold" | "buff_drop";
+  multiplier: number;
+  until: string;
+}
+
+/** Consumes a potionTrigger "on_use" item for its personal exp/gold/drop multiplier — see the
+ * "Użyj" context-menu entry in EquipmentTab. */
+export const useBuffItem = (characterId: string, inventoryItemId: string) =>
+  apiFetch<UseBuffItemResultDto>(`/api/inventory/${characterId}/use-buff-item`, {
     method: "POST",
     body: JSON.stringify({ inventoryItemId }),
   });

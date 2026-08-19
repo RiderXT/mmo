@@ -5,6 +5,7 @@ import { clearStaleActiveExpeditionPointer } from "../expeditions/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import { getGatheringSettings } from "../settings/service.js";
 import { getPassiveSkillGatherBonus } from "../passiveSkills/service.js";
+import { getActivePersonalBuffMultipliers } from "../../lib/personalBuffs.js";
 import type { GatherKind, GatherPhase, GatherSessionDto, GatheringSettings, StartGatheringInput } from "@mmo/shared";
 
 export class GatheringError extends Error {
@@ -81,10 +82,14 @@ function rollPhaseSeconds(range: { minSeconds: number; maxSeconds: number }, spe
   return Math.max(1, Math.round(rolled * (1 - speedBonusPct)));
 }
 
-function rollDrops(drops: DropRow[], chanceBonusPct: number): { itemId: string; quantity: number }[] {
+function rollDrops(
+  drops: DropRow[],
+  chanceBonusPct: number,
+  dropChanceMultiplier: number,
+): { itemId: string; quantity: number }[] {
   const awarded: { itemId: string; quantity: number }[] = [];
   for (const drop of drops) {
-    const chance = Math.min(1, drop.dropChance + chanceBonusPct);
+    const chance = Math.min(1, (drop.dropChance + chanceBonusPct) * dropChanceMultiplier);
     if (Math.random() < chance) {
       awarded.push({ itemId: drop.itemId, quantity: randomInt(drop.minQty, drop.maxQty) });
     }
@@ -200,13 +205,14 @@ async function resolveOnePhase(
   speedBonusPct: number,
   chanceBonusPct: number,
   toolInventoryItemId: string | undefined,
+  dropChanceMultiplier: number,
 ): Promise<GatherSessionRow> {
   if (session.kind === "fishing") {
     const spot = await prisma.fishingSpot.findUniqueOrThrow({
       where: { id: session.fishingSpotId! },
       include: { drops: true },
     });
-    const awarded = rollDrops(spot.drops, chanceBonusPct);
+    const awarded = rollDrops(spot.drops, chanceBonusPct, dropChanceMultiplier);
     if (awarded.length > 0) {
       // allowPartial: a full bag must not crash the lazy phase-resolution loop (it would break
       // the whole "active gathering" fetch) — grant what fits, silently drop the rest.
@@ -240,7 +246,7 @@ async function resolveOnePhase(
   const mine = await prisma.mine.findUniqueOrThrow({ where: { id: session.mineId! }, include: { drops: true } });
 
   if (session.phase === "extracting") {
-    const awarded = rollDrops(mine.drops, chanceBonusPct);
+    const awarded = rollDrops(mine.drops, chanceBonusPct, dropChanceMultiplier);
     if (awarded.length > 0) {
       // allowPartial: a full bag must not crash the lazy phase-resolution loop (it would break
       // the whole "active gathering" fetch) — grant what fits, silently drop the rest.
@@ -296,13 +302,17 @@ async function resolveGatherSession(session: GatherSessionRow): Promise<GatherSe
   if (session.phaseEndsAt.getTime() > Date.now()) return session;
 
   const settings = await getGatheringSettings();
-  const [tool, baitBonusPct, skillBonus] = await Promise.all([
+  const [tool, baitBonusPct, skillBonus, character] = await Promise.all([
     getEquippedToolBonuses(session.characterId, session.kind === "fishing" ? "rod" : "pickaxe"),
     getBaitChanceBonusPct(session.characterId),
     getPassiveSkillGatherBonus(session.characterId, session.kind as GatherKind),
+    prisma.character.findUniqueOrThrow({ where: { id: session.characterId } }),
   ]);
   const speedBonusPct = (tool?.speedBonusPct ?? 0) + skillBonus.speedBonusPct;
   const chanceBonusPct = (tool?.chanceBonusPct ?? 0) + baitBonusPct + skillBonus.chanceBonusPct;
+  // Computed once up front (like the other bonuses above) rather than re-checked per cycle — a
+  // buff expiring mid-catch-up is an acceptable simplification, same as the tool bonus.
+  const dropChanceMultiplier = getActivePersonalBuffMultipliers(character).dropMultiplier;
 
   let current = session;
   let cycles = 0;
@@ -318,7 +328,14 @@ async function resolveGatherSession(session: GatherSessionRow): Promise<GatherSe
       });
       return null;
     }
-    current = await resolveOnePhase(current, settings, speedBonusPct, chanceBonusPct, tool?.toolInventoryItemId);
+    current = await resolveOnePhase(
+      current,
+      settings,
+      speedBonusPct,
+      chanceBonusPct,
+      tool?.toolInventoryItemId,
+      dropChanceMultiplier,
+    );
     cycles++;
   }
   return current;

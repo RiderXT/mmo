@@ -1,8 +1,9 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { PanelFrame } from "../components/common/PanelFrame";
 import { getCharacterProfile } from "../lib/profileApi";
+import { listCharacters } from "../lib/charactersApi";
 import { STAT_LABELS, COMBAT_STAT_TO_STAT_KEY, formatBreakdownValue, formatStatValue } from "../lib/statFormat";
 
 const CORE_LABELS = {
@@ -34,6 +35,10 @@ export function ProfilePage() {
     queryFn: () => getCharacterProfile(name!),
     enabled: !!name,
   });
+  // Shares the ["characters"] query key CharactersPage already uses, so react-query dedupes the
+  // fetch — used only to decide whether to show the "Ustawienia konta" link (own profile).
+  const myCharactersQuery = useQuery({ queryKey: ["characters"], queryFn: listCharacters });
+  const isOwnProfile = myCharactersQuery.data?.some((c) => c.name === name) ?? false;
 
   if (profileQuery.isLoading) {
     return (
@@ -64,6 +69,11 @@ export function ProfilePage() {
               </span>
             </div>
             <p className="mt-1 text-sm text-parchment-dim">{profile.className ?? "Bez klasy"}</p>
+            {isOwnProfile && (
+              <Link to="/account" className="mt-1 inline-block text-xs text-gold-bright hover:underline">
+                Ustawienia konta
+              </Link>
+            )}
           </div>
           <div className="text-right">
             <span

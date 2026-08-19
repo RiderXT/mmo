@@ -24,6 +24,19 @@ model User {
   // Bumped fire-and-forget on every authenticated request (see lib/authGuard.ts) — "online" on
   // the profile page is derived from this being within the last few minutes, not a stored flag.
   lastSeenAt        DateTime?
+  // When true, isOnline()-derived status (and, in the public profile, the raw lastSeenAt
+  // timestamp) is hidden from other players — see modules/profile, modules/friends.
+  hideOnlineStatus  Boolean  @default(false)
+  // Unique shareable referral code. Nullable (not @default-generated) so this addition doesn't
+  // require backfilling existing rows in one migration — new registrations get one assigned
+  // explicitly in registerUser; existing accounts get one lazily generated on first access to
+  // Account Settings (see modules/account/service.ts). Redeemed via RegisterSchema.referralCode.
+  referralCode      String?  @unique
+  // Set when the player requests account deletion (GDPR-style, 30-day grace period — see
+  // requestAccountDeletion/cancelAccountDeletion/loginUser in modules/auth/service.ts). Null =
+  // no deletion pending. The actual hard delete happens lazily on the next login attempt once
+  // this is more than 30 days in the past, not via a cron job.
+  deletionRequestedAt DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -32,8 +45,29 @@ model User {
   gameLogs          GameLog[]
   friendRequestsSent     FriendRequest[] @relation("FriendRequestsSent")
   friendRequestsReceived FriendRequest[] @relation("FriendRequestsReceived")
+  referralsMade     Referral[] @relation("ReferralsMade")
+  referralReceived  Referral?  @relation("ReferralReceived")
 
   @@index([role])
+}
+
+// A referral link between two accounts, created at registration when the new user redeemed
+// someone else's referralCode. Reward payout (gold/item to referrer and/or referred, per
+// admin-configured referral.settings — see settings/service.ts) is deferred until the referred
+// character reaches the configured level, tracked by rewardedAt staying null until then — see
+// lib/referralRewards.ts's tryPayReferralReward, called at registration (for requiredLevel<=1)
+// and on every level-up (expeditions/service.ts).
+model Referral {
+  id          String    @id @default(cuid())
+  referrerId  String
+  referredId  String    @unique
+  createdAt   DateTime  @default(now())
+  rewardedAt  DateTime?
+
+  referrer User @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred User @relation("ReferralReceived", fields: [referredId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
 }
 
 // Both a pending invite and an accepted friendship are rows here — "friend" = status "accepted",
@@ -95,6 +129,17 @@ model Character {
   // (expeditions/service.ts) and openChest (inventory/service.ts) respectively.
   monstersKilled     Int      @default(0)
   chestsOpened       Int      @default(0)
+  // Personal, time-limited multipliers granted by using a "buff_exp"/"buff_gold"/"buff_drop"
+  // item (potionTrigger "on_use", consumed instantly — see inventory/service.ts useBuffItem).
+  // These MULTIPLY with the global GameEvent multiplier, they don't replace it (see
+  // lib/personalBuffs.ts, expeditions/service.ts buildAndSimulate). Null/expired "*Until" = no
+  // active bonus. Using a new item of the same effect OVERWRITES the previous one (no stacking).
+  expBuffMultiplier  Float?
+  expBuffUntil       DateTime?
+  goldBuffMultiplier Float?
+  goldBuffUntil      DateTime?
+  dropBuffMultiplier Float?
+  dropBuffUntil      DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

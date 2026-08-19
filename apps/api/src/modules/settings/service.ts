@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
-import { GatheringSettingsSchema, type GatheringSettings } from "@mmo/shared";
+import { GatheringSettingsSchema, type GatheringSettings, ReferralSettingsSchema, type ReferralSettings } from "@mmo/shared";
 
 export const EXPEDITION_DURATION_KEY = "expedition.defaultDurationMinutes";
 const EXPEDITION_DURATION_DEFAULT = 30;
@@ -84,6 +84,48 @@ export async function setGatheringSettings(
     actorUserId,
     requestId,
     payload: { key: GATHERING_SETTINGS_KEY, ...validated },
+  });
+
+  return validated;
+}
+
+export const REFERRAL_SETTINGS_KEY = "referral.settings";
+// Rewards disabled until an admin explicitly configures them — see lib/referralRewards.ts.
+const REFERRAL_SETTINGS_DEFAULT: ReferralSettings = {
+  rewardKind: "none",
+  goldAmount: 0,
+  itemId: null,
+  itemQuantity: 1,
+  target: "both",
+  requiredLevel: 1,
+};
+
+export async function getReferralSettings(): Promise<ReferralSettings> {
+  const row = await prisma.settings.findUnique({ where: { key: REFERRAL_SETTINGS_KEY } });
+  if (!row) return REFERRAL_SETTINGS_DEFAULT;
+  const parsed = ReferralSettingsSchema.safeParse(JSON.parse(row.value));
+  return parsed.success ? parsed.data : REFERRAL_SETTINGS_DEFAULT;
+}
+
+export async function setReferralSettings(
+  input: ReferralSettings,
+  actorUserId: string,
+  requestId?: string,
+): Promise<ReferralSettings> {
+  const validated = ReferralSettingsSchema.parse(input);
+
+  await prisma.settings.upsert({
+    where: { key: REFERRAL_SETTINGS_KEY },
+    create: { key: REFERRAL_SETTINGS_KEY, value: JSON.stringify(validated) },
+    update: { value: JSON.stringify(validated) },
+  });
+
+  await logAction({
+    module: "admin:settings",
+    action: "update",
+    actorUserId,
+    requestId,
+    payload: { key: REFERRAL_SETTINGS_KEY, ...validated },
   });
 
   return validated;

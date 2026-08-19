@@ -250,6 +250,7 @@ export function simulateExpedition(
   expMultiplier = 1,
   goldMultiplier = 1,
   eventBonusDrop: EventBonusDrop | null = null,
+  dropChanceMultiplier = 1,
 ): SimulationOutcome {
   let hp = stats.maxHp;
   let mana = stats.maxMana;
@@ -473,14 +474,14 @@ export function simulateExpedition(
       expGained += expReward;
       goldGained += goldReward;
       for (const drop of currentMonster.drops) {
-        if (Math.random() < drop.dropChance) {
+        if (Math.random() < Math.min(1, drop.dropChance * dropChanceMultiplier)) {
           const qty = randomInt(drop.minQty, drop.maxQty);
           addLoot(drop.itemId, qty);
           events.push({ t, type: "loot", itemId: drop.itemId, quantity: qty });
         }
       }
       for (const zoneDrop of zone.drops) {
-        if (Math.random() < zoneDrop.dropChance) {
+        if (Math.random() < Math.min(1, zoneDrop.dropChance * dropChanceMultiplier)) {
           addLoot(zoneDrop.itemId, 1);
           events.push({ t, type: "loot", itemId: zoneDrop.itemId, quantity: 1 });
         }
@@ -488,7 +489,7 @@ export function simulateExpedition(
       // Event bonus drop (see docs/architecture.md "Etap 19") — same chance, same item, on
       // every kill in every zone while an event configures one, independent of that zone's own
       // drop table.
-      if (eventBonusDrop && Math.random() < eventBonusDrop.dropChance) {
+      if (eventBonusDrop && Math.random() < Math.min(1, eventBonusDrop.dropChance * dropChanceMultiplier)) {
         addLoot(eventBonusDrop.itemId, 1);
         events.push({ t, type: "loot", itemId: eventBonusDrop.itemId, quantity: 1 });
       }

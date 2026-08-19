@@ -358,6 +358,69 @@ export async function setPotionThresholdOverride(
   });
 }
 
+const BUFF_FIELDS_BY_EFFECT: Record<string, { multiplier: "expBuffMultiplier" | "goldBuffMultiplier" | "dropBuffMultiplier"; until: "expBuffUntil" | "goldBuffUntil" | "dropBuffUntil" }> = {
+  buff_exp: { multiplier: "expBuffMultiplier", until: "expBuffUntil" },
+  buff_gold: { multiplier: "goldBuffMultiplier", until: "goldBuffUntil" },
+  buff_drop: { multiplier: "dropBuffMultiplier", until: "dropBuffUntil" },
+};
+
+/** Consumes a "Użyj"-triggered item (Item.potionTrigger === "on_use") to grant a personal,
+ * time-limited exp/gold/drop multiplier — see lib/personalBuffs.ts. Unlike active-slot potions,
+ * this is consumed immediately on the player's decision, not carried into a specific expedition.
+ * Using a new item of the same effect OVERWRITES the previous one (no stacking/extending). */
+export async function useBuffItem(
+  input: { characterId: string; inventoryItemId: string },
+  userId: string,
+  requestId?: string,
+) {
+  await assertCharacterOwnership(input.characterId, userId);
+
+  const inventoryItem = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: true },
+  });
+  if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
+    throw new InventoryError("Nie znaleziono przedmiotu", 404);
+  }
+  const { item } = inventoryItem;
+  if (item.type !== "consumable" || item.potionTrigger !== "on_use" || !item.potionEffect) {
+    throw new InventoryError("Tego przedmiotu nie można użyć w ten sposób", 400);
+  }
+  const fields = BUFF_FIELDS_BY_EFFECT[item.potionEffect];
+  if (!fields) {
+    throw new InventoryError("Tego przedmiotu nie można użyć w ten sposób", 400);
+  }
+
+  const multiplier = 1 + (item.potionMagnitudePct ?? 0);
+  const until = new Date(Date.now() + (item.potionDurationSec ?? 0) * 1000);
+
+  await prisma.$transaction(async (tx) => {
+    if (inventoryItem.quantity <= 1) {
+      await tx.inventoryItem.delete({ where: { id: inventoryItem.id } });
+    } else {
+      await tx.inventoryItem.update({
+        where: { id: inventoryItem.id },
+        data: { quantity: inventoryItem.quantity - 1 },
+      });
+    }
+    await tx.character.update({
+      where: { id: input.characterId },
+      data: { [fields.multiplier]: multiplier, [fields.until]: until },
+    });
+  });
+
+  await logAction({
+    module: "inventory",
+    action: "use_buff_item",
+    actorUserId: userId,
+    actorCharacterId: input.characterId,
+    requestId,
+    payload: { inventoryItemId: input.inventoryItemId, effect: item.potionEffect, multiplier, until: until.toISOString() },
+  });
+
+  return { effect: item.potionEffect, multiplier, until: until.toISOString() };
+}
+
 export async function upgradeItem(
   input: { characterId: string; inventoryItemId: string },
   userId: string,

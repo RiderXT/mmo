@@ -3,6 +3,8 @@ import { logAction } from "../../lib/gameLog.js";
 import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import { hasActiveGatherSession } from "../../lib/gatherGuard.js";
 import { getActiveEventMultipliers } from "../../lib/gameEvents.js";
+import { getActivePersonalBuffMultipliers } from "../../lib/personalBuffs.js";
+import { tryPayReferralReward } from "../../lib/referralRewards.js";
 import { getExpeditionDurationMinutes } from "../settings/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import {
@@ -216,7 +218,14 @@ async function buildAndSimulate(
     );
   }
 
-  const { expMultiplier, goldMultiplier, bonusDrop } = await getActiveEventMultipliers();
+  const eventMultipliers = await getActiveEventMultipliers();
+  const personalBuffs = getActivePersonalBuffMultipliers(character);
+  // Personal item buffs MULTIPLY with the event multiplier, they don't replace it — see
+  // lib/personalBuffs.ts. The combined value is what gets stored on the Expedition below, so
+  // checkRewardPlausibility's anti-cheat margin (which scales off appliedExpMultiplier) stays
+  // correct automatically.
+  const expMultiplier = eventMultipliers.expMultiplier * personalBuffs.expMultiplier;
+  const goldMultiplier = eventMultipliers.goldMultiplier * personalBuffs.goldMultiplier;
   const outcome = simulateExpedition(
     simZone,
     stats,
@@ -225,7 +234,8 @@ async function buildAndSimulate(
     durationMinutes,
     expMultiplier,
     goldMultiplier,
-    bonusDrop,
+    eventMultipliers.bonusDrop,
+    personalBuffs.dropMultiplier,
   );
   return { character, zone, stats, outcome, expMultiplier, goldMultiplier };
 }
@@ -542,6 +552,10 @@ export async function applyExpeditionReward(
       requestId,
       payload: { expeditionId, overflowLoot },
     });
+  }
+
+  if (leveledUp) {
+    await tryPayReferralReward(character.id);
   }
 
   await logAction({

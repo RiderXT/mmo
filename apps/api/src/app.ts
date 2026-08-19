@@ -31,6 +31,7 @@ import { fishingSpotsRoutes } from "./modules/admin/fishingSpots/routes.js";
 import { passiveSkillsRoutes } from "./modules/passiveSkills/routes.js";
 import { adminPassiveSkillsRoutes } from "./modules/admin/passiveSkills/routes.js";
 import { minesRoutes } from "./modules/admin/mines/routes.js";
+import { accountRoutes } from "./modules/account/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -83,6 +84,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(minesRoutes, { prefix: "/api/admin/mines" });
   await app.register(passiveSkillsRoutes, { prefix: "/api/passive-skills" });
   await app.register(adminPassiveSkillsRoutes, { prefix: "/api/admin/passive-skills" });
+  await app.register(accountRoutes, { prefix: "/api/account" });
 
   return app;
 }
