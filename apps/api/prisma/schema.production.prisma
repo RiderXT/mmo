@@ -149,6 +149,7 @@ model Character {
   travelDestinationZone Zone?           @relation("CharacterTravelDestination", fields: [travelDestinationZoneId], references: [id])
   inventory   InventoryItem[]
   skills      CharacterSkill[]
+  skillNodes  CharacterSkillNode[]
   expeditions Expedition[]    @relation("CharacterExpeditions")
   gatherSession GatherSession?
   passiveSkills CharacterPassiveSkill[]
