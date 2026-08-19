@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PanelCorners } from "./PanelCorners";
+import { OrnateCorners } from "./OrnateCorners";
 
 /** Ornate "window" panel — titled header + gold corner ornaments. Uses the shared `panel`
  * token (tailwind.config.js) for its background — a near-neutral stone grey (oklch chroma
@@ -9,11 +10,16 @@ import { PanelCorners } from "./PanelCorners";
  *
  * `emphasis="secondary"` is for panels that are supporting detail rather than a primary "room"
  * of the screen (e.g. the selected-item stat readout) — thinner border, smaller/dimmer corners,
- * no heavy drop shadow, so it doesn't visually compete with the panels around it. */
+ * no heavy drop shadow, so it doesn't visually compete with the panels around it.
+ *
+ * `cornerStyle="ornate"` swaps in OrnateCorners (double-line bracket + curled tail) and an inset
+ * secondary rule, for a heavier nested picture-frame look — opt-in per surface (currently just
+ * the expedition map) rather than the app-wide default. */
 export function PanelFrame({
   title,
   headerRight,
   emphasis = "primary",
+  cornerStyle = "standard",
   className = "",
   bodyClassName = "",
   children,
@@ -24,18 +30,25 @@ export function PanelFrame({
    * regardless of whether this is present. */
   headerRight?: ReactNode;
   emphasis?: "primary" | "secondary";
+  cornerStyle?: "standard" | "ornate";
   className?: string;
   bodyClassName?: string;
   children: ReactNode;
 }) {
   const secondary = emphasis === "secondary";
+  const ornate = cornerStyle === "ornate";
   return (
     <div
       className={`relative border bg-panel ${
         secondary ? "border-gold/25 shadow-[0_4px_14px_rgba(0,0,0,0.35)]" : "border-gold/40 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
       } ${className}`}
     >
-      <PanelCorners size={secondary ? 13 : 20} colorClassName={secondary ? "text-gold/60" : "text-gold"} />
+      {ornate && <div className="pointer-events-none absolute inset-1 border border-gold/20" />}
+      {ornate ? (
+        <OrnateCorners size={secondary ? 24 : 36} colorClassName={secondary ? "text-gold/60" : "text-gold"} />
+      ) : (
+        <PanelCorners size={secondary ? 13 : 20} colorClassName={secondary ? "text-gold/60" : "text-gold"} />
+      )}
       <div
         className={`grid grid-cols-[1fr_auto_1fr] items-center border-b px-4 py-2.5 ${
           secondary ? "border-gold/20" : "border-gold/30"

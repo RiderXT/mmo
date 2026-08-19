@@ -12,7 +12,7 @@ export function ZoneInfoCard({ zone, eligible }: { zone: ZoneDto; eligible: bool
   const extraDrops = zone.drops.length - shownDrops.length;
 
   return (
-    <div className="mt-4 w-full border border-line-soft/60 bg-panel-raised/40 p-3">
+    <div className="w-full border border-line-soft/60 bg-panel-raised/40 p-3">
       <p className="font-display text-sm font-semibold text-gold-bright">{zone.name}</p>
       {zone.description && <p className="mt-1 text-xs text-parchment-faint">{zone.description}</p>}
 

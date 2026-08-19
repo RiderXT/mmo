@@ -353,7 +353,7 @@ export function ExpeditionPanel({
   // whatever's clicked on the map (for browsing zone info before committing), independent of
   // `currentZone` (where the character actually is, which gates the monster-picker/gathering).
   return (
-    <PanelFrame title="Mapa ekspedycji">
+    <PanelFrame title="Mapa ekspedycji" cornerStyle="ornate">
       {flaggedBanner}
       {durationQuery.data && (
         <p className="mt-1 text-xs text-parchment-faint">
@@ -364,7 +364,6 @@ export function ExpeditionPanel({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div>
           <ZoneMapPath zones={zones} character={character} selectedZoneId={selectedZoneId} onSelect={setSelectedZoneId} />
-          {selectedZone && <ZoneInfoCard zone={selectedZone} eligible={selectedEligible} />}
           <ActivePotionsSummary characterId={characterId} />
           {currentZone && !currentZone.isTown && (
             <button
@@ -385,29 +384,32 @@ export function ExpeditionPanel({
         </div>
 
         <div>
-          {!selectedZone ? (
-            <p className="text-sm text-parchment-faint">Wybierz krainę na mapie.</p>
-          ) : selectedZone.id !== character.currentZoneId ? (
-            <button
-              onClick={() => travelMutation.mutate(selectedZone.id)}
-              disabled={!selectedEligible || travelMutation.isPending}
-              className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Wyrusz do krainy
-            </button>
-          ) : selectedZone.isTown ? (
-            <p className="text-sm text-parchment-faint">
-              To miasto — zakupy u NPC znajdziesz w zakładce NPC w menu.
-            </p>
-          ) : selectedZone.monsters.length === 0 ? (
-            <p className="text-sm text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
-          ) : (
-            <MonsterAttackPanel
-              zone={selectedZone}
-              durationMinutes={durationQuery.data?.minutes ?? null}
-              onConfirm={(selectedMonsterIds) => setTacticsMonsterIds(selectedMonsterIds)}
-            />
-          )}
+          {selectedZone && <ZoneInfoCard zone={selectedZone} eligible={selectedEligible} />}
+          <div className={selectedZone ? "mt-4" : ""}>
+            {!selectedZone ? (
+              <p className="text-sm text-parchment-faint">Wybierz krainę na mapie.</p>
+            ) : selectedZone.id !== character.currentZoneId ? (
+              <button
+                onClick={() => travelMutation.mutate(selectedZone.id)}
+                disabled={!selectedEligible || travelMutation.isPending}
+                className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Wyrusz do krainy
+              </button>
+            ) : selectedZone.isTown ? (
+              <p className="text-sm text-parchment-faint">
+                To miasto — zakupy u NPC znajdziesz w zakładce NPC w menu.
+              </p>
+            ) : selectedZone.monsters.length === 0 ? (
+              <p className="text-sm text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
+            ) : (
+              <MonsterAttackPanel
+                zone={selectedZone}
+                durationMinutes={durationQuery.data?.minutes ?? null}
+                onConfirm={(selectedMonsterIds) => setTacticsMonsterIds(selectedMonsterIds)}
+              />
+            )}
+          </div>
         </div>
       </div>
 

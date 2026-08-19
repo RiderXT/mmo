@@ -2391,6 +2391,49 @@ Responsywność: `lg:grid-cols-[1.3fr_1fr]` potwierdzone jako collapsujące do j
 (`gridTemplateColumns` = pojedyncza wartość) na viewport 375px. Dane testowe (pozycja postaci,
 testowa ekspedycja) zresetowane po weryfikacji.
 
+### Mapa ekspedycji — dopracowanie ramki, zakładek poziomowych i układu (2026-08-19)
+
+Trzy poprawki do świeżo wdrożonej mapy ekspedycji, na podstawie tego samego zrzutu referencyjnego
+co wyżej: (1) wierniejsza ramka/narożniki, (2) podział długiego łańcucha krain na zakładki
+poziomowe, (3) karta informacyjna krainy przeniesiona z lewej (pod mapą) na prawą stronę.
+
+- **`common/OrnateCorners.tsx`** (nowy) — cięższy, bardziej ozdobny odpowiednik `PanelCorners`:
+  podwójna linia bracketu (pełna zewnętrzna + przygaszona wewnętrzna, offsetowana), zawinięty
+  "ogon" na końcach, diamentowy akcent w rogu — ten sam inline-SVG grammar (currentColor stroke,
+  ręcznie rysowane ścieżki, bez biblioteki ikon/emoji). `PanelFrame.tsx` dostał nowy prop
+  `cornerStyle?: "standard" | "ornate"` (domyślnie `"standard"` — bez zmian dla żadnego innego
+  panelu w grze) — gdy `"ornate"`, dokłada też wewnętrzną, przygaszoną linię (`inset-1 border
+  border-gold/20`) dla efektu zagnieżdżonej podwójnej ramki. Zastosowane WYŁĄCZNIE na
+  `<PanelFrame title="Mapa ekspedycji" cornerStyle="ornate">` — świadomie NIE zmieniono
+  współdzielonego `PanelCorners`/domyślnego wariantu, żeby nie zmieniać wyglądu każdego innego
+  panelu w grze (logowanie, cały panel admina, resztę ekranów gry) przy okazji dopasowywania
+  jednego konkretnego widoku do jednego konkretnego zrzutu.
+- **`ZoneMapPath.tsx`** — długi, jeden nieprzerwany łańcuch wszystkich krain zastąpiony
+  zakładkami przedziałów poziomowych (`BAND_SIZE = 30` → "1-30", "31-60", "61-90", ...),
+  liczonymi DYNAMICZNIE z faktycznego `maxLevel` istniejących krain (`Math.ceil(maxLevel / 30)`),
+  nie z twardo zakodowanej liczby krain — więc dalej działa poprawnie, gdy w adminie dojdą/znikną
+  krainy. Aktywna zakładka domyślnie = przedział zawierający `character.currentZoneId` (albo
+  pierwsza, gdy postać nigdzie jeszcze nie stoi). Przełączanie zakładek filtruje tylko WIDOCZNE
+  węzły ścieżki — nie czyści `selectedZoneId`, więc wybrana wcześniej kraina (i jej
+  `ZoneInfoCard`/panel akcji po prawej) zostaje na ekranie nawet po zmianie zakładki.
+- **`ExpeditionPanel.tsx`** — `ZoneInfoCard` przeniesiona z lewej kolumny (pod `ZoneMapPath`) na
+  górę prawej kolumny, nad dotychczasową zawartość tej kolumny (przycisk "Wyrusz do krainy" /
+  komunikat NPC / `MonsterAttackPanel` — ta sama logika warunkowa co wcześniej, bez zmian).
+  `ZoneInfoCard.tsx` straciła własny hardkodowany `mt-4` (który miał sens tylko w starej pozycji
+  pod mapą) — odstęp teraz kontroluje rodzic (`ExpeditionPanel`) w zależności od tego, czy karta
+  w ogóle jest renderowana.
+
+Zweryfikowane w przeglądarce (bezpośrednio na koncie admina, bez modyfikacji danych): 4 zakładki
+poziomowe wygenerowane poprawnie z realnych 10 krain (1-30/31-60/61-90/91-120), klik zakładki
+poprawnie filtruje widoczne węzły ścieżki (np. "31-60" pokazuje inny zestaw krain niż "1-30"),
+wybór krainy w jednej zakładce przetrwał przełączenie na inną zakładkę. `ZoneInfoCard` renderuje
+się teraz w prawej kolumnie (potwierdzone przez `getBoundingClientRect` — ta sama współrzędna X
+co przycisk "Wyrusz do krainy" pod nią, różna od lewej kolumny z mapą). Panel "Mapa ekspedycji"
+ma 4 narożniki `OrnateCorners` (`viewBox="0 0 36 36"`, potwierdzone w DOM) + wewnętrzną linię
+`inset-1` — żaden inny panel w grze nie zmienił wyglądu (zmiana opt-in per `cornerStyle` prop).
+Responsywność: układ mobilny (375px) nie rozjechał się po zmianach. `pnpm --filter web typecheck`
+czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
