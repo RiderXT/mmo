@@ -2109,6 +2109,52 @@ pokazuje wszystkie 6 umiejętności z przyciskiem "Odblokuj (koszt: 1)"; klikni�
 "Furia Bitewna" (punkty 10→9, przycisk znika). Wszystkie dane testowe (węzeł, testowe konta,
 postacie, odblokowania) usunięte po weryfikacji.
 
+## Nagrody za codzienne logowanie — per postać (post-drzewka-umiejętności)
+
+Nowy, w pełni od zera napisany moduł `dailyLogin`. Nagroda za codzienne logowanie jest przypisana
+do **postaci, nie do konta** — dwie postacie na tym samym koncie mają niezależne serie, dni cyklu
+i statusy odebrania.
+
+- **Model `CharacterDailyLoginReward`**: jeden wiersz na postać na kalendarzowy dzień w strefie
+  `Europe/Warsaw` (`periodKey` w formacie `YYYY-MM-DD`, `@@unique([characterId, periodKey])`).
+  Trzyma `cycleDay` (1-7), `streak` (licznik rosnący również po zawinięciu cyklu), typ i kwotę
+  nagrody zamrożone w momencie utworzenia wiersza (`rewardType`/`rewardAmount` — nagroda nie
+  zmienia się już po utworzeniu, nawet jeśli admin kiedyś zmieni tabelę) oraz `claimedAt`.
+- **Cykl**: pierwsze wejście postaci → dzień 1, seria 1. Kolejny dzień z rzędu → dzień+1
+  (zawija 7→1), seria+1. Pominięty dzień → reset do dnia 1, seria 1. Obliczane w
+  `nextCycleState()` przez różnicę dni między `periodKey` ostatniego wiersza a dzisiejszym
+  (parsowane jako północ UTC obu dat kalendarzowych, więc DST nie wpływa na wynik).
+  `ensureDailyLoginReward()` jest idempotentne w obrębie jednego dnia (unique constraint chroni
+  przed duplikatem przy równoczesnych żądaniach — `P2002` łapane i traktowane jako "już istnieje,
+  odczytaj ponownie") i wywoływane automatycznie przy pierwszym `GET` danego dnia — nie trzeba
+  osobno podpinać go pod przełączanie aktywnej postaci.
+- **Odbiór nagrody**: `claimDailyLoginReward()` — jeśli już odebrana, zwraca ten sam rekord bez
+  ponownego przyznawania (`goldGained`/`expGained` = 0). W przeciwnym razie w transakcji: atomowy
+  guard `updateMany({where:{id, claimedAt:null}})` (ten sam wzorzec co `flagSuspiciousExpedition`)
+  chroni przed podwójnym przyznaniem przy dwóch równoczesnych `claim`; złoto dolicza się wprost,
+  XP przechodzi przez `computeLevel` z przyznaniem `unspentStatPoints +4`/`unspentSkillPoints +1`
+  za każdy zdobyty poziom (identyczna formuła jak w `applyExpeditionReward`).
+- **Nagrody dzień 1-7** (stała tabela w kodzie, łatwa do przeniesienia do panelu admina później):
+  500 złota, 750 złota, 250 XP, 1000 złota, 500 XP, 1500 złota, 3000 złota.
+- **Endpointy**: `GET /api/daily-login/:characterId` (status + pełna tabela 7 nagród, tworzy
+  dzisiejszy wiersz jeśli nie istnieje), `POST /api/daily-login/:characterId/claim`.
+- **Frontend**: nowa zakładka "Nagrody dzienne" (`DailyLoginTab.tsx` → `DailyLoginPanel.tsx`) w
+  sekcji "Postać" nawigacji — pasek 7 dni z podświetlonym bieżącym dniem, licznik serii, przycisk
+  "Odbierz" (wyszarzony na "Odebrano" po kliknięciu), komunikat z dokładną przyznaną nagrodą.
+
+Zweryfikowane: `pnpm -r typecheck` czysto (api + web). Skryptem bezpośrednio przez
+`ensureDailyLoginReward`/`claimDailyLoginReward`: pierwsze wejście → dzień1/seria1/500 złota;
+drugie wywołanie tego samego dnia nie tworzy duplikatu; symulowany poprzedni dzień → dzień2/
+seria2/750 złota; symulowana 3-dniowa przerwa → reset do dnia1/seria1; symulowany dzień7 →
+zawinięcie do dnia1 z serią rosnącą do 11 (nie resetującą się); odbiór złota przyznaje dokładną
+kwotę i jest w pełni idempotentny (drugie wywołanie: 0 przyznane, stan bez zmian); odbiór XP na
+postaci tuż przed progiem awansu poprawnie podnosi poziom i przyznaje punkty staty/umiejętności;
+`getDailyLoginStatus` zwraca 7-elementową tabelę; obcy użytkownik dostaje 404 przy próbie
+odczytu/odbioru cudzej postaci. W przeglądarce: świeże konto testowe, zakładka "Nagrody dzienne"
+pokazuje poprawnie 7 dni z podświetlonym dniem 1. i przyciskiem "Odbierz (500 złota)"; kliknięcie
+natychmiast podnosi złoto postaci w nagłówku z 0 do 500 i zmienia przycisk na "Odebrano" z
+komunikatem potwierdzającym. Dane testowe (konto, postać, wiersze nagród) usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

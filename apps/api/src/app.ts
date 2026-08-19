@@ -32,6 +32,7 @@ import { passiveSkillsRoutes } from "./modules/passiveSkills/routes.js";
 import { adminPassiveSkillsRoutes } from "./modules/admin/passiveSkills/routes.js";
 import { minesRoutes } from "./modules/admin/mines/routes.js";
 import { accountRoutes } from "./modules/account/routes.js";
+import { dailyLoginRoutes } from "./modules/dailyLogin/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -85,6 +86,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(passiveSkillsRoutes, { prefix: "/api/passive-skills" });
   await app.register(adminPassiveSkillsRoutes, { prefix: "/api/admin/passive-skills" });
   await app.register(accountRoutes, { prefix: "/api/account" });
+  await app.register(dailyLoginRoutes, { prefix: "/api/daily-login" });
 
   return app;
 }

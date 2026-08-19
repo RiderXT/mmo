@@ -150,6 +150,7 @@ model Character {
   inventory   InventoryItem[]
   skills      CharacterSkill[]
   skillNodes  CharacterSkillNode[]
+  dailyLoginRewards CharacterDailyLoginReward[]
   expeditions Expedition[]    @relation("CharacterExpeditions")
   gatherSession GatherSession?
   passiveSkills CharacterPassiveSkill[]
@@ -237,6 +238,25 @@ model CharacterSkillNode {
   node      SkillTreeNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@unique([characterId, nodeId])
+}
+
+// One row per character per calendar day (Europe/Warsaw) — the daily-login reward cycle is
+// tracked per CHARACTER, not per account, so two characters on the same user get independent
+// streaks/cycles (see modules/dailyLogin).
+model CharacterDailyLoginReward {
+  id           String    @id @default(cuid())
+  characterId  String
+  periodKey    String // "YYYY-MM-DD" in Europe/Warsaw
+  cycleDay     Int // 1-7, position within the repeating reward cycle
+  streak       Int // consecutive-day counter — keeps growing past day 7, resets only on a skipped day
+  rewardType   String // "gold" | "exp"
+  rewardAmount Int
+  claimedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, periodKey])
 }
 
 // Character-wide passive/profession skills (e.g. "Górnictwo") — unlike ClassSkill these are not

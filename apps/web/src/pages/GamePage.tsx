@@ -9,8 +9,9 @@ import { ExpeditionsTab } from "./game/ExpeditionsTab";
 import { AnvilTab } from "./game/AnvilTab";
 import { NpcTab } from "./game/NpcTab";
 import { SkillsTab } from "./game/SkillsTab";
+import { DailyLoginTab } from "./game/DailyLoginTab";
 
-type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc" | "skills";
+type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc" | "skills" | "daily-login";
 
 export function GamePage() {
   const { tab } = useParams<{ tab?: string }>();
@@ -53,6 +54,7 @@ export function GamePage() {
           {activeTab === "anvil" && <AnvilTab character={character} />}
           {activeTab === "npc" && <NpcTab character={character} />}
           {activeTab === "skills" && <SkillsTab character={character} />}
+          {activeTab === "daily-login" && <DailyLoginTab character={character} />}
         </div>
       )}
     </AppShell>

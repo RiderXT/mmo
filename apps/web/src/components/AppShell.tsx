@@ -186,6 +186,12 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
           label="Umiejętności"
           onNavigate={onNavigate}
         />
+        <TabNavLink
+          tab="daily-login"
+          icon="/icons/nav/postac.png"
+          label="Nagrody dzienne"
+          onNavigate={onNavigate}
+        />
         {characterName && (
           <NavLink to={`/profile/${encodeURIComponent(characterName)}`} className={navLinkClass} onClick={onNavigate}>
             {({ isActive }) => (
