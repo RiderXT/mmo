@@ -2456,6 +2456,63 @@ serwera na VPS** — szablon jest kopiowany tylko raz przy pierwszym wdrożeniu 
 krok 9); istniejącą, żywą konfigurację nginx/Caddy trzeba ręcznie dopisać na serwerze i przeładować
 (`sudo nginx -t && sudo systemctl reload nginx`, albo dla Caddy `sudo systemctl reload caddy`).
 
+### Kowadło: sloty materiałów w stylu eq + opcjonalne katalizatory (2026-08-20)
+
+User poprosił o zamianę tekstowej listy "Wymagane materiały" na kwadraty jak w eq (auto-wypełniane,
+czerwona poświata + liczba X/Y gdy brakuje), plus możliwość dołożenia opcjonalnych "ulepszaczy"
+(np. +5% szansy powodzenia). Ustalone z userem przed implementacją (AskUserQuestion): (1) nowy
+dedykowany `Item.type = "catalyst"` (jak rod/pickaxe/bait/book, nie nadpisywanie "consumable");
+(2) na start tylko efekt "+% szansy powodzenia" — drugi pomysł usera ("+% szansy na poprawienie
+bonusowego statu") świadomie odłożony, wymagałby osobnej decyzji co dokładnie znaczy "poprawienie";
+(3) siatka 4 kwadratów łącznie — pierwsze auto-zajęte przez wymagane materiały, reszta wolna na
+katalizatory.
+
+**Schemat** (`schema.prisma` + `schema.production.prisma`, addytywnie): `Item.catalystSuccessChanceBonusPct
+Float?` — sensowne tylko gdy `type === "catalyst"`. `packages/shared`: `"catalyst"` dodane do
+`ItemTypeSchema`; `CreateItemSchema` += `catalystSuccessChanceBonusPct` (wzorem `baitChanceBonusPct`);
+nowy `ANVIL_SLOT_COUNT = 4` (eksportowany, używany przez klienta do układu slotów I przez
+`UpgradeItemSchema` do walidacji długości tablicy); `UpgradeItemSchema` += `catalystInventoryItemIds:
+string[]` (max 4, domyślnie `[]`).
+
+**Backend** (`modules/inventory/service.ts` `upgradeItem`): pobiera i waliduje każdy
+`catalystInventoryItemId` (należy do postaci, `item.type === "catalyst"`, brak duplikatów w
+tablicy → 400), sumuje `catalystSuccessChanceBonusPct` wszystkich, `chance = min(1, baseChance +
+catalystBonusPct)`. Katalizatory konsumowane W TEJ SAMEJ transakcji co materiały/złoto —
+**niezależnie od wyniku losowania** (ta sama filozofia co materiały: "zawsze zużywane przy próbie,
+wygrana czy przegrana"), po 1 sztuce z każdego wskazanego stacka (delete-if-zero, jak materiały).
+`modules/admin/items/service.ts`: nowa `catalystData()` (wzorem `bookData`/`gatherData`),
+dołożona do `createItem` ORAZ `updateItem` (przy okazji zauważony i zgłoszony osobnym zadaniem
+w tle nie-związany bug: `updateItem` już wcześniej brakowało `...bookData(input)`, więc edycja
+istniejącego itemu typu "book" cicho gubiła zmiany w polach książki — NIE naprawione tutaj,
+świadomie zostawione jako osobne zadanie, żeby nie mieszać z tym PR-em).
+
+**Frontend**:
+- **`components/inventory/AnvilRequirementSlots.tsx`** (nowy) — `MaterialSlotBox` (nieinteraktywny
+  kwadrat 56px: grafika/ikona itemu + odznaka `owned/required` w rogu, czerwona ramka+poświata gdy
+  za mało) i `CatalystSlotBox` (drop target dnd-kit `type: "catalyst-slot"` + `index`; pusty = kreskowana
+  ramka z podpisem "Ulepszacz", pełny = renderuje prawdziwy `ItemBox` bez podwójnej ramki, klik usuwa).
+- **`ItemTypeIcon.tsx`** += ręcznie rysowany glif "catalyst" (fasetowany kamień + iskra "+") —
+  zgodnie z zakazem emoji/generycznych ikon z `craft-floor.md`, ta sama gramatyka co reszta typów.
+- **`AnvilTab.tsx`** — `selectedCatalystIds: (string | null)[]` (stan lokalny, reset na zmianę
+  wybranego przedmiotu ORAZ po każdej próbie ulepszenia, bo katalizatory i tak są zużywane).
+  `handleDragEnd` rozgałęziony wg `over.data.current.type`: `"anvil"` (tylko `UPGRADABLE_TYPES`,
+  jak dawniej) vs `"catalyst-slot"` (tylko `type === "catalyst"`, wg indeksu). Klik na katalizator
+  w siatce "Ekwipunek do wyboru" (`handlePickerSelect`) trafia do pierwszego wolnego slotu zamiast
+  ustawiać go jako cel ulepszenia. Siatka "Ekwipunek do wyboru" rozszerzona o `type === "catalyst"`
+  (wcześniej tylko `UPGRADABLE_TYPES`) — item w slocie katalizatora jest z niej wykluczony (jak
+  dotychczas wybrany przedmiot na kowadle), więc nie ma dwóch draggable tego samego id naraz.
+  Szansa powodzenia pokazuje rozbicie "(baza X% + Y% z katalizatorów)" gdy `catalystBonusPct > 0`.
+
+Zweryfikowane bezpośrednio w przeglądarce (konto testowe, dane sprzątnięte po teście, w tym
+tymczasowa flaga `isTown` użyta tylko żeby dotrzeć do zablokowanego ekranu Kowadła — przy okazji
+zgłoszone osobnym zadaniem w tle: `seed.ts` w ogóle nie tworzy żadnej krainy `isTown:true`, więc
+Kowadło/NPC są dziś nieosiągalne na świeżo zasianej bazie): kliknięcie katalizatora w siatce
+poprawnie trafia do pierwszego wolnego kwadratu; kwadrat materiału poprawnie pokazuje `7/2`;
+kliknięcie umieszczonego katalizatora usuwa go i zwraca do siatki; pełne ulepszenie z katalizatorem
+faktycznie zmniejszyło ilość katalizatora o 1, materiału o wymaganą ilość, złota o koszt, podniosło
+przedmiot do +1, i wyczyściło sloty katalizatorów po próbie. `pnpm -r typecheck` czysto dla
+`shared`/`api`/`web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

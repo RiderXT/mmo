@@ -79,6 +79,9 @@ export const CreateItemSchema = z
     // chance (0..1) that a read succeeds.
     bookSkillTypeId: z.string().nullable().optional(),
     bookSuccessChance: z.number().min(0).max(1).nullable().optional(),
+    // Only meaningful for type === "catalyst". Flat % added to an anvil upgrade's success chance
+    // when placed in one of the anvil's free (non-material) slots — see AnvilTab.
+    catalystSuccessChanceBonusPct: z.number().min(0).max(1).nullable().optional(),
     // Gold for selling one unit via the inventory context menu. 0 = not sellable.
     sellPrice: z.number().int().min(0).max(999999).default(1),
     // Grid cells occupied vertically when unequipped (see apps/web/src/lib/inventoryGrid.ts).

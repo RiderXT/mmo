@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Character, EquipSlot, ItemType } from "@mmo/shared";
-import { defaultUpgradeSuccessChance, defaultUpgradeGoldCost } from "@mmo/shared";
+import { defaultUpgradeSuccessChance, defaultUpgradeGoldCost, ANVIL_SLOT_COUNT } from "@mmo/shared";
 import { GridSlot } from "../../components/inventory/GridSlot";
 import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { AnvilSlotBox } from "../../components/inventory/AnvilSlotBox";
+import { MaterialSlotBox, CatalystSlotBox } from "../../components/inventory/AnvilRequirementSlots";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemTypeIcon } from "../../components/inventory/ItemTypeIcon";
 import { TabDropButton } from "../../components/inventory/TabDropButton";
@@ -61,10 +62,18 @@ export function AnvilTab({ character }: { character: Character }) {
   const characterId = character.id;
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // One entry per free anvil slot (see catalystSlotCount below) — null = empty. Reset whenever
+  // the item being upgraded changes, and after any attempt (win or lose consumes them, same as
+  // materials/gold — see upgradeItem on the server).
+  const [selectedCatalystIds, setSelectedCatalystIds] = useState<(string | null)[]>([]);
   const [activeTab, setActiveTab] = useState(0);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  useEffect(() => {
+    setSelectedCatalystIds([]);
+  }, [selectedId]);
 
   const zonesQuery = useQuery({ queryKey: ["player-zones"], queryFn: listPlayerZones });
   const inventoryQuery = useQuery({
@@ -85,9 +94,11 @@ export function AnvilTab({ character }: { character: Character }) {
   }, [inventoryQuery.data]);
 
   const upgradeMutation = useMutation({
-    mutationFn: (inventoryItemId: string) => upgradeItem(characterId, inventoryItemId),
+    mutationFn: ({ inventoryItemId, catalystIds }: { inventoryItemId: string; catalystIds: string[] }) =>
+      upgradeItem(characterId, inventoryItemId, catalystIds),
     onSuccess: (result) => {
       setError(null);
+      setSelectedCatalystIds([]);
       setResultMessage(
         result.success
           ? `Sukces! Przedmiot ulepszony do +${result.newLevel}.`
@@ -110,12 +121,52 @@ export function AnvilTab({ character }: { character: Character }) {
     setError(null);
   }
 
+  function setCatalystAt(index: number, inventoryItemId: string) {
+    setSelectedCatalystIds((prev) => {
+      const next = [...prev];
+      // Moving an already-placed catalyst to a different slot, not duplicating it.
+      for (let i = 0; i < next.length; i++) if (next[i] === inventoryItemId) next[i] = null;
+      while (next.length <= index) next.push(null);
+      next[index] = inventoryItemId;
+      return next;
+    });
+  }
+
+  function removeCatalystAt(index: number) {
+    setSelectedCatalystIds((prev) => {
+      const next = [...prev];
+      next[index] = null;
+      return next;
+    });
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over || over.data.current?.type !== "anvil") return;
+    if (!over) return;
     const inventoryItem = active.data.current?.inventoryItem as InventoryItemDto | undefined;
     if (!inventoryItem) return;
-    selectItem(inventoryItem.id);
+    const overData = over.data.current as { type?: string; index?: number } | undefined;
+    if (overData?.type === "anvil") {
+      if (!UPGRADABLE_TYPES.has(inventoryItem.item.type)) return;
+      selectItem(inventoryItem.id);
+    } else if (overData?.type === "catalyst-slot" && overData.index !== undefined) {
+      if (inventoryItem.item.type !== "catalyst") return;
+      setCatalystAt(overData.index, inventoryItem.id);
+    }
+  }
+
+  /** Clicking a catalyst in the picker grid drops it in the first free catalyst slot instead of
+   * selecting it as an upgrade target (only drag does that, via handleDragEnd's "anvil" branch —
+   * catalysts don't have an upgrade path of their own). */
+  function handlePickerSelect(item: InventoryItemDto, catalystSlotCount: number) {
+    if (item.item.type === "catalyst") {
+      const emptyIndex = Array.from({ length: catalystSlotCount }, (_, i) => i).find(
+        (i) => (selectedCatalystIds[i] ?? null) === null,
+      );
+      if (emptyIndex !== undefined) setCatalystAt(emptyIndex, item.id);
+      return;
+    }
+    selectItem(item.id);
   }
 
   const currentZone = zonesQuery.data?.find((z) => z.id === character.currentZoneId);
@@ -138,8 +189,12 @@ export function AnvilTab({ character }: { character: Character }) {
     // stays worn while it's being evaluated on the anvil, so it keeps rendering in its doll slot
     // too (as a static echo, not a second draggable — see equip-slot rendering below).
     if (item.equippedSlot) byEquipSlot.set(item.equippedSlot, item);
-    else if (item.id === selectedId) continue;
-    else if (item.activeSlotIndex === null && UPGRADABLE_TYPES.has(item.item.type)) byGridSlot.set(item.slotIndex!, item);
+    else if (item.id === selectedId || selectedCatalystIds.includes(item.id)) continue;
+    else if (
+      item.activeSlotIndex === null &&
+      (UPGRADABLE_TYPES.has(item.item.type) || item.item.type === "catalyst")
+    )
+      byGridSlot.set(item.slotIndex!, item);
   }
   const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
     let count = 0;
@@ -153,12 +208,19 @@ export function AnvilTab({ character }: { character: Character }) {
   const selectedCatalogItem = selected ? itemFor(selected.itemId) : undefined;
   const targetLevel = selected ? selected.upgradeLevel + 1 : null;
   const levelConfig = selectedCatalogItem?.upgradeLevelConfigs.find((c) => c.targetLevel === targetLevel);
-  const chance = targetLevel !== null ? (levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel)) : null;
+  const baseChance = targetLevel !== null ? (levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel)) : null;
+  const catalystBonusPct = selectedCatalystIds.reduce((sum, id) => {
+    if (!id) return sum;
+    const catalystItem = items.find((i) => i.id === id);
+    return sum + (catalystItem?.item.catalystSuccessChanceBonusPct ?? 0);
+  }, 0);
+  const chance = baseChance !== null ? Math.min(1, baseChance + catalystBonusPct) : null;
   const goldCost = targetLevel !== null ? (levelConfig?.goldCost ?? defaultUpgradeGoldCost(targetLevel)) : null;
   const hasEnoughGold = goldCost !== null && character.gold >= goldCost;
   const requirements = selectedCatalogItem?.upgradeRequirements.filter((r) => r.targetLevel === targetLevel) ?? [];
   const hasPath = requirements.length > 0;
   const hasAllMaterials = requirements.every((r) => (ownedQtyByItemId.get(r.requiredItemId) ?? 0) >= r.requiredQty);
+  const catalystSlotCount = Math.max(0, ANVIL_SLOT_COUNT - requirements.length);
   const isGatherTool = selected?.item.type === "rod" || selected?.item.type === "pickaxe";
   const gatherSuccessRequired = gatheringSettingsQuery.data?.successesPerToolUpgrade;
   const hasEnoughGatherSuccesses =
@@ -258,7 +320,7 @@ export function AnvilTab({ character }: { character: Character }) {
                     inventoryItem={cell.item}
                     tall={cell.height === 2}
                     selected={cell.item.id === selectedId}
-                    onSelect={() => selectItem(cell.item!.id)}
+                    onSelect={() => handlePickerSelect(cell.item!, catalystSlotCount)}
                     gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}
                   />
                 )}
@@ -352,38 +414,44 @@ export function AnvilTab({ character }: { character: Character }) {
                   </p>
                   <p className="mt-1 text-sm text-parchment-dim">
                     Szansa powodzenia: <span className="font-medium text-gold-bright">{Math.round((chance ?? 0) * 100)}%</span>
+                    {catalystBonusPct > 0 && (
+                      <span className="ml-1 text-xs text-rarity-epic">
+                        (baza {Math.round((baseChance ?? 0) * 100)}% + {Math.round(catalystBonusPct * 100)}% z
+                        katalizatorów)
+                      </span>
+                    )}
                   </p>
                   <p className="mt-1 text-xs text-parchment-faint">
-                    Przy porażce przedmiot zostaje zniszczony, a złoto i materiały przepadają.
+                    Przy porażce przedmiot zostaje zniszczony, a złoto, materiały i katalizatory przepadają.
                   </p>
 
                   <p className="mt-4 text-[10px] font-bold uppercase tracking-wide text-parchment-faint">
                     Wymagane materiały
                   </p>
-                  <ul className="mt-1.5 space-y-1.5 text-sm">
-                    {requirements.map((r) => {
-                      const owned = ownedQtyByItemId.get(r.requiredItemId) ?? 0;
-                      const ok = owned >= r.requiredQty;
-                      const materialType = itemFor(r.requiredItemId)?.type ?? "material";
-                      return (
-                        <li
-                          key={r.requiredItemId}
-                          className={`flex items-center gap-2 border px-2 py-1.5 ${
-                            ok ? "border-line-soft bg-panel-raised" : "border-red-500/50 bg-red-500/10"
-                          }`}
-                        >
-                          <ItemTypeIcon
-                            type={materialType}
-                            className={`h-5 w-5 shrink-0 ${ok ? "text-parchment-dim" : "text-red-400"}`}
-                          />
-                          <span className={ok ? "text-parchment-dim" : "text-red-400"}>{r.requiredItem.name}</span>
-                          <span className={`ml-auto font-medium tabular-nums ${ok ? "text-parchment" : "text-red-400"}`}>
-                            {owned} / {r.requiredQty}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <div className="mt-1.5 grid grid-cols-4 gap-2">
+                    {requirements.map((r) => (
+                      <MaterialSlotBox
+                        key={r.requiredItemId}
+                        item={itemFor(r.requiredItemId)}
+                        owned={ownedQtyByItemId.get(r.requiredItemId) ?? 0}
+                        required={r.requiredQty}
+                      />
+                    ))}
+                    {Array.from({ length: catalystSlotCount }, (_, i) => (
+                      <CatalystSlotBox
+                        key={`catalyst-${i}`}
+                        index={i}
+                        inventoryItem={items.find((it) => it.id === selectedCatalystIds[i]) ?? null}
+                        onRemove={() => removeCatalystAt(i)}
+                      />
+                    ))}
+                  </div>
+                  {catalystSlotCount > 0 && (
+                    <p className="mt-1.5 text-xs text-parchment-faint">
+                      Puste kwadraty — przeciągnij tam ulepszacz z ekwipunku, żeby zwiększyć szansę powodzenia
+                      (opcjonalne).
+                    </p>
+                  )}
 
                   {isGatherTool && gatherSuccessRequired !== undefined && (
                     <p className={`mt-3 text-sm ${hasEnoughGatherSuccesses ? "text-parchment-dim" : "text-red-400"}`}>
@@ -393,7 +461,12 @@ export function AnvilTab({ character }: { character: Character }) {
                   )}
 
                   <button
-                    onClick={() => upgradeMutation.mutate(selected.id)}
+                    onClick={() =>
+                      upgradeMutation.mutate({
+                        inventoryItemId: selected.id,
+                        catalystIds: selectedCatalystIds.filter((id): id is string => !!id),
+                      })
+                    }
                     disabled={upgradeMutation.isPending || !hasAllMaterials || !hasEnoughGold || !hasEnoughGatherSuccesses}
                     className="mt-4 w-full rounded-md bg-gold px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
                   >

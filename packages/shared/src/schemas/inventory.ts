@@ -27,8 +27,17 @@ export const UnequipItemSchema = z.object({
 });
 export type UnequipItemInput = z.infer<typeof UnequipItemSchema>;
 
+// Total squares in the anvil's "Wymagane materiały" grid — required materials auto-fill the
+// first N, whatever's left (ANVIL_SLOT_COUNT - requirements.length) is free for optional
+// catalysts. Shared so the client's slot layout and the server's array-length validation agree.
+export const ANVIL_SLOT_COUNT = 4;
+
 export const UpgradeItemSchema = z.object({
   inventoryItemId: z.string(),
+  // Optional catalyst items (Item.type === "catalyst") placed in the anvil's free slots — each
+  // grants its own flat success-chance bonus, all consumed alongside materials/gold on the
+  // attempt (win or lose). Distinct inventoryItem ids, one per occupied slot.
+  catalystInventoryItemIds: z.array(z.string()).max(ANVIL_SLOT_COUNT).default([]),
 });
 export type UpgradeItemInput = z.infer<typeof UpgradeItemSchema>;
 

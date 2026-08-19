@@ -422,11 +422,25 @@ export async function useBuffItem(
 }
 
 export async function upgradeItem(
-  input: { characterId: string; inventoryItemId: string },
+  input: { characterId: string; inventoryItemId: string; catalystInventoryItemIds: string[] },
   userId: string,
   requestId?: string,
 ) {
   const owner = await assertCharacterOwnership(input.characterId, userId);
+
+  if (new Set(input.catalystInventoryItemIds).size !== input.catalystInventoryItemIds.length) {
+    throw new InventoryError("Ten sam katalizator nie może zajmować dwóch slotów", 400);
+  }
+  const catalysts = await Promise.all(
+    input.catalystInventoryItemIds.map(async (id) => {
+      const catalyst = await prisma.inventoryItem.findUnique({ where: { id }, include: { item: true } });
+      if (!catalyst || catalyst.characterId !== input.characterId || catalyst.item.type !== "catalyst") {
+        throw new InventoryError("Nieprawidłowy katalizator", 400);
+      }
+      return catalyst;
+    }),
+  );
+  const catalystBonusPct = catalysts.reduce((sum, c) => sum + (c.item.catalystSuccessChanceBonusPct ?? 0), 0);
 
   const inventoryItem = await prisma.inventoryItem.findUnique({
     where: { id: input.inventoryItemId },
@@ -473,7 +487,8 @@ export async function upgradeItem(
   const levelConfig = await prisma.itemUpgradeLevelConfig.findUnique({
     where: { itemId_targetLevel: { itemId: inventoryItem.itemId, targetLevel } },
   });
-  const chance = levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel);
+  const baseChance = levelConfig?.successChance ?? defaultUpgradeSuccessChance(targetLevel);
+  const chance = Math.min(1, baseChance + catalystBonusPct);
   const goldCost = levelConfig?.goldCost ?? defaultUpgradeGoldCost(targetLevel);
   if (owner.gold < goldCost) {
     throw new InventoryError("Za mało złota na ulepszenie", 409);
@@ -507,6 +522,16 @@ export async function upgradeItem(
       }
     }
 
+    // Catalysts are consumed alongside materials/gold on the attempt itself, win or lose — same
+    // philosophy as the required materials above (see the comment near `success` below).
+    for (const catalyst of catalysts) {
+      if (catalyst.quantity <= 1) {
+        await tx.inventoryItem.delete({ where: { id: catalyst.id } });
+      } else {
+        await tx.inventoryItem.update({ where: { id: catalyst.id }, data: { quantity: { decrement: 1 } } });
+      }
+    }
+
     if (success) {
       await tx.inventoryItem.update({
         where: { id: inventoryItem.id },
@@ -527,13 +552,23 @@ export async function upgradeItem(
     actorUserId: userId,
     actorCharacterId: input.characterId,
     requestId,
-    payload: { inventoryItemId: input.inventoryItemId, targetLevel, chance, goldCost, success },
+    payload: {
+      inventoryItemId: input.inventoryItemId,
+      targetLevel,
+      baseChance,
+      catalystBonusPct,
+      chance,
+      goldCost,
+      success,
+      catalystItemIds: catalysts.map((c) => c.itemId),
+    },
   });
 
   return {
     success,
     newLevel: success ? targetLevel : inventoryItem.upgradeLevel,
     chance,
+    catalystBonusPct,
     goldCost,
     itemDestroyed: !success,
   };

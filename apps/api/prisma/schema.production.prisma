@@ -441,6 +441,10 @@ model Item {
   // up, and the chance (0..1) that a read succeeds — see modules/passiveSkills.
   bookSkillTypeId     String?
   bookSuccessChance   Float?
+  // Only meaningful when type === "catalyst" — optional item placed in a free anvil slot
+  // (alongside the auto-filled required materials) that adds this flat % to the upgrade's
+  // success chance when consumed — see modules/inventory upgradeItem.
+  catalystSuccessChanceBonusPct Float?
   // Gold received for selling one unit via the inventory context menu. 0 = not sellable.
   sellPrice           Int      @default(1)
   // Uploaded artwork path (e.g. "/uploads/items/xxx.png"), served statically by the API — see

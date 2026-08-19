@@ -102,6 +102,7 @@ export interface ItemDto {
   baitChanceBonusPct: number | null;
   bookSkillTypeId: string | null;
   bookSuccessChance: number | null;
+  catalystSuccessChanceBonusPct: number | null;
   imageUrl: string | null;
 }
 

@@ -58,6 +58,7 @@ function emptyForm(): CreateItemInput {
     baitChanceBonusPct: null,
     bookSkillTypeId: null,
     bookSuccessChance: null,
+    catalystSuccessChanceBonusPct: null,
   };
 }
 
@@ -96,6 +97,7 @@ function fromDto(item: ItemDto): CreateItemInput {
     baitChanceBonusPct: item.baitChanceBonusPct,
     bookSkillTypeId: item.bookSkillTypeId,
     bookSuccessChance: item.bookSuccessChance,
+    catalystSuccessChanceBonusPct: item.catalystSuccessChanceBonusPct,
     potion:
       item.type === "consumable" && item.potionTrigger && item.potionEffect
         ? {
@@ -420,6 +422,8 @@ export function ItemsAdminPage() {
                     baitChanceBonusPct: type === "bait" ? form.baitChanceBonusPct : null,
                     bookSkillTypeId: type === "book" ? form.bookSkillTypeId : null,
                     bookSuccessChance: type === "book" ? form.bookSuccessChance : null,
+                    catalystSuccessChanceBonusPct:
+                      type === "catalyst" ? form.catalystSuccessChanceBonusPct : null,
                   });
                 }}
               >
@@ -1001,6 +1005,32 @@ export function ItemsAdminPage() {
                   />
                 </Field>
               </div>
+            </div>
+          )}
+
+          {form.type === "catalyst" && (
+            <div className="border border-rarity-uncommon/40 bg-rarity-uncommon/10 p-3">
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
+                Opcjonalny ulepszacz — gracz może go dołożyć do wolnego slotu na kowadle obok
+                wymaganych materiałów. Zużywany razem z materiałami przy próbie ulepszenia,
+                niezależnie od wyniku.
+              </p>
+              <Field label="Bonus do szansy powodzenia ulepszenia (0–1)">
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={1}
+                  className={inputClass}
+                  value={form.catalystSuccessChanceBonusPct ?? ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      catalystSuccessChanceBonusPct: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
+                />
+              </Field>
             </div>
           )}
 

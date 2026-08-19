@@ -44,6 +44,7 @@ const TYPE_COLORS: Record<string, string> = {
   material: "border-rarity-common/50 bg-rarity-common/10",
   quest: "border-rarity-epic/50 bg-rarity-epic/10",
   chest: "border-gold-bright/50 bg-gold-bright/10",
+  catalyst: "border-rarity-epic/50 bg-rarity-epic/10",
 };
 
 export function ItemBox({

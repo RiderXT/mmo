@@ -43,6 +43,8 @@ export interface InventoryItemDto {
     // how long. See useBuffItem.
     potionEffect: PotionEffect | null;
     potionDurationSec: number | null;
+    // Only meaningful when type === "catalyst" — see AnvilTab's catalyst slots / upgradeItem.
+    catalystSuccessChanceBonusPct: number | null;
   };
 }
 
@@ -71,14 +73,15 @@ export interface UpgradeItemResultDto {
   success: boolean;
   newLevel: number;
   chance: number;
+  catalystBonusPct: number;
   goldCost: number;
   itemDestroyed: boolean;
 }
 
-export const upgradeItem = (characterId: string, inventoryItemId: string) =>
+export const upgradeItem = (characterId: string, inventoryItemId: string, catalystInventoryItemIds: string[] = []) =>
   apiFetch<UpgradeItemResultDto>(`/api/inventory/${characterId}/upgrade`, {
     method: "POST",
-    body: JSON.stringify({ inventoryItemId }),
+    body: JSON.stringify({ inventoryItemId, catalystInventoryItemIds }),
   });
 
 export const openChest = (characterId: string, inventoryItemId: string) =>
