@@ -13,7 +13,11 @@ export class ProfileError extends Error {
   }
 }
 
-const TOTAL_EQUIP_SLOTS = EquipSlotSchema.options.length;
+// "Narzędzia zbieractwa" (rod/pickaxe) are shown as their own section in EquipmentTab, separate
+// from the main gear doll — the profile's "EKWIPUNEK — X/Y SLOTÓW" stat should match that same
+// grouping and only count the 8 traditional gear slots, not the 2 gathering-tool slots.
+const CORE_EQUIP_SLOTS = EquipSlotSchema.options.filter((slot) => slot !== "rod" && slot !== "pickaxe");
+const TOTAL_EQUIP_SLOTS = CORE_EQUIP_SLOTS.length;
 
 /** Public, read-only character sheet — unlike getCharacter/getCharacterCombatStats this has no
  * ownership check: any authenticated player can view any character's profile (needed so Ranking
@@ -35,7 +39,7 @@ export async function getCharacterProfile(characterName: string) {
 
   const [{ core, equipmentStats, passiveSkills }, equippedCount, skills] = await Promise.all([
     gatherCombatBuild(characterId),
-    prisma.inventoryItem.count({ where: { characterId, equippedSlot: { not: null } } }),
+    prisma.inventoryItem.count({ where: { characterId, equippedSlot: { in: CORE_EQUIP_SLOTS } } }),
     prisma.characterSkill.findMany({
       where: { characterId, level: { gt: 0 } },
       include: { classSkill: { select: { name: true, maxLevel: true } } },
