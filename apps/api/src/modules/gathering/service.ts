@@ -203,8 +203,12 @@ async function resolveOnePhase(
     });
     const awarded = rollDrops(spot.drops, chanceBonusPct);
     if (awarded.length > 0) {
+      // allowPartial: a full bag must not crash the lazy phase-resolution loop (it would break
+      // the whole "active gathering" fetch) — grant what fits, silently drop the rest.
       await prisma.$transaction(async (tx) => {
-        for (const a of awarded) await addLootToInventory(tx, session.characterId, a.itemId, a.quantity);
+        for (const a of awarded) {
+          await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
+        }
       });
     }
     const range = {
@@ -227,8 +231,12 @@ async function resolveOnePhase(
   if (session.phase === "extracting") {
     const awarded = rollDrops(mine.drops, chanceBonusPct);
     if (awarded.length > 0) {
+      // allowPartial: a full bag must not crash the lazy phase-resolution loop (it would break
+      // the whole "active gathering" fetch) — grant what fits, silently drop the rest.
       await prisma.$transaction(async (tx) => {
-        for (const a of awarded) await addLootToInventory(tx, session.characterId, a.itemId, a.quantity);
+        for (const a of awarded) {
+          await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
+        }
       });
     }
     // Search phase is deliberately NOT sped up by the pickaxe — only extraction is "work",

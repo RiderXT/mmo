@@ -172,10 +172,21 @@ export async function equipItem(
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.inventoryItem.updateMany({
+    // Whatever was previously worn in this slot must go back to a real grid cell — it must NOT
+    // just have equippedSlot cleared, or it ends up with equippedSlot: null AND slotIndex: null,
+    // invisible in both the doll and the grid (this was a real bug: equipping a second weapon
+    // made the first one vanish instead of returning to the backpack).
+    const previouslyEquipped = await tx.inventoryItem.findFirst({
       where: { characterId: input.characterId, equippedSlot: input.equipSlot },
-      data: { equippedSlot: null },
+      include: { item: { select: { gridWidth: true } } },
     });
+    if (previouslyEquipped && previouslyEquipped.id !== inventoryItem.id) {
+      const freeSlot = await findNextFreeSlotIndex(tx, input.characterId, previouslyEquipped.item.gridWidth);
+      await tx.inventoryItem.update({
+        where: { id: previouslyEquipped.id },
+        data: { equippedSlot: null, slotIndex: freeSlot },
+      });
+    }
     await tx.inventoryItem.update({
       where: { id: inventoryItem.id },
       // Free the grid cell(s) it was sitting in — an equipped item no longer occupies a slot.
@@ -245,10 +256,20 @@ export async function setActiveSlot(
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.inventoryItem.updateMany({
+    // Same fix as equipItem: whatever previously sat in this active slot must go back to a real
+    // grid cell, not just have activeSlotIndex cleared (else it ends up invisible: activeSlotIndex
+    // null AND slotIndex null).
+    const previouslyActive = await tx.inventoryItem.findFirst({
       where: { characterId: input.characterId, activeSlotIndex: input.slotIndex },
-      data: { activeSlotIndex: null },
+      include: { item: { select: { gridWidth: true } } },
     });
+    if (previouslyActive && previouslyActive.id !== inventoryItem.id) {
+      const freeSlot = await findNextFreeSlotIndex(tx, input.characterId, previouslyActive.item.gridWidth);
+      await tx.inventoryItem.update({
+        where: { id: previouslyActive.id },
+        data: { activeSlotIndex: null, slotIndex: freeSlot },
+      });
+    }
     await tx.inventoryItem.update({
       where: { id: inventoryItem.id },
       // Free the grid cell — an active-slotted item no longer occupies one.
@@ -632,15 +653,40 @@ async function findNextFreeSlotIndex(
   throw new InventoryError("Ekwipunek jest pełny", 409);
 }
 
-/** Adds looted item(s) to a character's inventory: stacks where possible, otherwise creates new slots with freshly-rolled stats. Must run inside the same transaction as the reward grant it belongs to. */
+/** Adds looted item(s) to a character's inventory: stacks where possible, otherwise creates new
+ * slots with freshly-rolled stats. Must run inside the same transaction as the reward grant it
+ * belongs to.
+ *
+ * By default (allowPartial: false) a full inventory throws InventoryError(409) and — since this
+ * always runs inside the caller's transaction — the whole transaction rolls back atomically. That
+ * is the right behavior for a deliberate player action (buying from an NPC, opening a chest):
+ * nothing is granted, nothing is consumed, the player just sees "ekwipunek jest pełny" and keeps
+ * what they had.
+ *
+ * Pass allowPartial: true for background/passive rewards (expedition claim, gathering) where the
+ * rest of the reward (exp, gold, other loot rows) must NOT be lost just because the bag is full —
+ * this grants as much as fits and reports the rest as `overflow` instead of throwing. */
 export async function addLootToInventory(
   tx: Prisma.TransactionClient,
   characterId: string,
   itemId: string,
   quantity: number,
-): Promise<void> {
+  options: { allowPartial?: boolean } = {},
+): Promise<{ granted: number; overflow: number }> {
   const item = await tx.item.findUnique({ where: { id: itemId } });
-  if (!item || quantity <= 0) return;
+  if (!item || quantity <= 0) return { granted: 0, overflow: 0 };
+
+  const allowPartial = options.allowPartial ?? false;
+  async function nextFreeSlot(width: number): Promise<number | null> {
+    try {
+      return await findNextFreeSlotIndex(tx, characterId, width);
+    } catch (err) {
+      if (allowPartial && err instanceof InventoryError && err.statusCode === 409) return null;
+      throw err;
+    }
+  }
+
+  let granted = 0;
 
   if (item.stackable) {
     let remaining = quantity;
@@ -656,20 +702,24 @@ export async function addLootToInventory(
       const add = Math.min(room, remaining);
       await tx.inventoryItem.update({ where: { id: stack.id }, data: { quantity: stack.quantity + add } });
       remaining -= add;
+      granted += add;
     }
 
     while (remaining > 0) {
-      const slotIndex = await findNextFreeSlotIndex(tx, characterId, item.gridWidth);
+      const slotIndex = await nextFreeSlot(item.gridWidth);
+      if (slotIndex === null) break;
       const add = Math.min(item.maxStack, remaining);
       await tx.inventoryItem.create({
         data: { characterId, itemId, slotIndex, quantity: add, rolledStats: JSON.stringify({}) },
       });
       remaining -= add;
+      granted += add;
     }
   } else {
     const possibleStatRanges = JSON.parse(item.possibleStatRanges) as StatRange[];
     for (let i = 0; i < quantity; i++) {
-      const slotIndex = await findNextFreeSlotIndex(tx, characterId, item.gridWidth);
+      const slotIndex = await nextFreeSlot(item.gridWidth);
+      if (slotIndex === null) break;
       await tx.inventoryItem.create({
         data: {
           characterId,
@@ -679,6 +729,9 @@ export async function addLootToInventory(
           rolledStats: JSON.stringify(rollItemStats(possibleStatRanges)),
         },
       });
+      granted += 1;
     }
   }
+
+  return { granted, overflow: quantity - granted };
 }

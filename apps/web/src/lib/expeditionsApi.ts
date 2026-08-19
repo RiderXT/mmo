@@ -28,6 +28,9 @@ export interface ExpeditionClaimResult {
   };
   leveledUp: boolean;
   newLevel: number;
+  // Loot that couldn't fit in the backpack (full inventory) — dropped, not lost with the rest of
+  // the reward. See addLootToInventory's allowPartial mode.
+  overflowLoot: ExpeditionLoot[];
 }
 
 export const getActiveExpedition = (characterId: string) =>

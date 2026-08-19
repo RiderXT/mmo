@@ -41,7 +41,7 @@ function emptyForm(): CreateItemInput {
     upgradeRequirements: [],
     upgradeLevelConfigs: [],
     chestLoot: [],
-    sellPrice: 0,
+    sellPrice: 1,
     gridWidth: 1,
     gatherSpeedBonusPctMax: null,
     gatherChanceBonusPctMax: null,

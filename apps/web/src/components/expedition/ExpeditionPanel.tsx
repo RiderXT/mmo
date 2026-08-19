@@ -221,6 +221,19 @@ export function ExpeditionPanel({
         ) : (
           <p className="mt-2 text-sm text-parchment-faint">Brak przedmiotów tym razem.</p>
         )}
+        {claimResult.overflowLoot.length > 0 && (
+          <div className="mt-2 rounded-md border border-red-500/40 bg-red-500/5 px-3 py-2 text-sm text-red-400">
+            <p className="font-medium">Ekwipunek był pełny — zgubiono część łupu:</p>
+            <ul className="mt-1 space-y-1">
+              {claimResult.overflowLoot.map((l) => (
+                <li key={l.itemId} className="flex items-center gap-1.5">
+                  <ItemTypeIcon type={itemFor(l.itemId)?.type ?? "material"} className="h-4 w-4 shrink-0" />
+                  {itemNameFor(l.itemId)} ×{l.quantity}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <button
           onClick={() => setClaimResult(null)}
           className="mt-3 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"

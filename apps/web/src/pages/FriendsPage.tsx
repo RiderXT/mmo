@@ -138,7 +138,7 @@ export function FriendsPage() {
                 <div className="flex items-center gap-2">
                   <span className={`h-1.5 w-1.5 rounded-full ${f.online ? "bg-rarity-uncommon" : "bg-parchment-faint"}`} />
                   {f.characterId && f.characterName ? (
-                    <Link to={`/profile/${f.characterId}`} className="text-parchment hover:text-gold-bright">
+                    <Link to={`/profile/${encodeURIComponent(f.characterName)}`} className="text-parchment hover:text-gold-bright">
                       {f.characterName}
                     </Link>
                   ) : (

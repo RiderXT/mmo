@@ -32,5 +32,5 @@ export interface CharacterProfileDto {
   chestsOpened: number;
 }
 
-export const getCharacterProfile = (characterId: string) =>
-  apiFetch<CharacterProfileDto>(`/api/profile/${characterId}`);
+export const getCharacterProfile = (characterName: string) =>
+  apiFetch<CharacterProfileDto>(`/api/profile/${encodeURIComponent(characterName)}`);

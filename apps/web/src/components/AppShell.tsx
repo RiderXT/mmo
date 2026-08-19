@@ -154,6 +154,7 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
   const currentZone = zonesQuery.data?.find((z) => z.id === characterQuery.data?.currentZoneId);
   const inTown = currentZone?.isTown ?? false;
+  const characterName = characterQuery.data?.name;
 
   return (
     <>
@@ -177,14 +178,16 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
           label="Ekspedycje"
           onNavigate={onNavigate}
         />
-        <NavLink to={`/profile/${characterId}`} className={navLinkClass} onClick={onNavigate}>
-          {({ isActive }) => (
-            <>
-              <NavIconImg src="/icons/nav/postac.png" alt="" active={isActive} />
-              Profil
-            </>
-          )}
-        </NavLink>
+        {characterName && (
+          <NavLink to={`/profile/${encodeURIComponent(characterName)}`} className={navLinkClass} onClick={onNavigate}>
+            {({ isActive }) => (
+              <>
+                <NavIconImg src="/icons/nav/postac.png" alt="" active={isActive} />
+                Profil
+              </>
+            )}
+          </NavLink>
+        )}
       </div>
 
       <SectionTitle>Miasto</SectionTitle>

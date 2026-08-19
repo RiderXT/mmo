@@ -76,7 +76,7 @@ export const CreateItemSchema = z
     // Only meaningful for type === "bait". Flat % bonus while carried in an active slot.
     baitChanceBonusPct: z.number().min(0).max(1).nullable().optional(),
     // Gold for selling one unit via the inventory context menu. 0 = not sellable.
-    sellPrice: z.number().int().min(0).max(999999).default(0),
+    sellPrice: z.number().int().min(0).max(999999).default(1),
     // Grid cells occupied vertically when unequipped (see apps/web/src/lib/inventoryGrid.ts).
     gridWidth: z.number().int().min(1).max(3).default(1),
   })

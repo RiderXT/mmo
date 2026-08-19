@@ -17,10 +17,13 @@ const TOTAL_EQUIP_SLOTS = EquipSlotSchema.options.length;
 
 /** Public, read-only character sheet — unlike getCharacter/getCharacterCombatStats this has no
  * ownership check: any authenticated player can view any character's profile (needed so Ranking
- * and Znajomi can link out to other players' characters). */
-export async function getCharacterProfile(characterId: string) {
+ * and Znajomi can link out to other players' characters).
+ *
+ * Looked up by Character.name (already @unique in schema.prisma) rather than id, so profile URLs
+ * read as /profile/<nazwa-postaci> instead of a bare cuid. */
+export async function getCharacterProfile(characterName: string) {
   const character = await prisma.character.findUnique({
-    where: { id: characterId },
+    where: { name: characterName },
     include: {
       user: { select: { lastSeenAt: true } },
       class: { select: { id: true, name: true } },
@@ -28,6 +31,7 @@ export async function getCharacterProfile(characterId: string) {
     },
   });
   if (!character) throw new ProfileError("Nie znaleziono postaci", 404);
+  const characterId = character.id;
 
   const [{ core, equipmentStats, passiveSkills }, equippedCount, skills] = await Promise.all([
     gatherCombatBuild(characterId),

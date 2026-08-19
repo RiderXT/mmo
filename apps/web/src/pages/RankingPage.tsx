@@ -62,7 +62,7 @@ export function RankingPage() {
                   <td className="px-2 py-1.5">
                     <div className="flex items-center gap-1.5">
                       <span className={`h-1.5 w-1.5 rounded-full ${entry.online ? "bg-rarity-uncommon" : "bg-parchment-faint"}`} />
-                      <Link to={`/profile/${entry.id}`} className="text-parchment hover:text-gold-bright">
+                      <Link to={`/profile/${encodeURIComponent(entry.name)}`} className="text-parchment hover:text-gold-bright">
                         {entry.name}
                       </Link>
                     </div>

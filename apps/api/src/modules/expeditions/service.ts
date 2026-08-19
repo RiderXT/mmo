@@ -505,9 +505,16 @@ export async function applyExpeditionReward(
   const leveledUp = newLevel > character.level;
   const levelsGained = Math.max(0, newLevel - character.level);
 
+  // Background reward — a full bag must not swallow the exp/gold/rest-of-loot too, so overflow is
+  // dropped and reported instead of aborting the whole transaction (see addLootToInventory).
+  const overflowLoot: { itemId: string; quantity: number }[] = [];
+
   await prisma.$transaction(async (tx) => {
     for (const loot of result.loot) {
-      await addLootToInventory(tx, character.id, loot.itemId, loot.quantity);
+      const { overflow } = await addLootToInventory(tx, character.id, loot.itemId, loot.quantity, {
+        allowPartial: true,
+      });
+      if (overflow > 0) overflowLoot.push({ itemId: loot.itemId, quantity: overflow });
     }
     await tx.character.update({
       where: { id: character.id },
@@ -525,6 +532,18 @@ export async function applyExpeditionReward(
     });
   });
 
+  if (overflowLoot.length > 0) {
+    await logAction({
+      module: "expeditions",
+      level: "warn",
+      action: "loot_overflow",
+      actorUserId: userId,
+      actorCharacterId: character.id,
+      requestId,
+      payload: { expeditionId, overflowLoot },
+    });
+  }
+
   await logAction({
     module: "expeditions",
     action,
@@ -534,7 +553,7 @@ export async function applyExpeditionReward(
     payload: { expeditionId, ...result, leveledUp, newLevel, levelsGained },
   });
 
-  return { result, leveledUp, newLevel };
+  return { result, leveledUp, newLevel, overflowLoot };
 }
 
 export async function claimExpedition(expeditionId: string, userId: string, requestId?: string) {

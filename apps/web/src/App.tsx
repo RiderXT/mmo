@@ -49,7 +49,7 @@ export function App() {
         }
       />
       <Route
-        path="/profile/:characterId"
+        path="/profile/:name"
         element={
           <ProtectedRoute>
             <ProfilePage />

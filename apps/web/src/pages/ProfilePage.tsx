@@ -28,11 +28,11 @@ function formatDate(iso: string) {
 }
 
 export function ProfilePage() {
-  const { characterId } = useParams<{ characterId: string }>();
+  const { name } = useParams<{ name: string }>();
   const profileQuery = useQuery({
-    queryKey: ["profile", characterId],
-    queryFn: () => getCharacterProfile(characterId!),
-    enabled: !!characterId,
+    queryKey: ["profile", name],
+    queryFn: () => getCharacterProfile(name!),
+    enabled: !!name,
   });
 
   if (profileQuery.isLoading) {

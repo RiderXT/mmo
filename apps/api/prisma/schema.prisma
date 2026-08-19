@@ -278,7 +278,7 @@ model Item {
   // active slot (InventoryItem.activeSlotIndex) — NOT consumed, unlike potions.
   baitChanceBonusPct  Float?
   // Gold received for selling one unit via the inventory context menu. 0 = not sellable.
-  sellPrice           Int      @default(0)
+  sellPrice           Int      @default(1)
   // How many grid cells this item occupies vertically when placed unequipped (see
   // apps/web/src/lib/inventoryGrid.ts — despite the field name, cells stack downward, not
   // sideways). weapon/armor are seeded at 2; everything else is 1.
