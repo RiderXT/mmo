@@ -1,6 +1,7 @@
 import { useState, type FocusEvent, type MouseEvent, type ReactNode } from "react";
 import type { StatKey } from "@mmo/shared";
 import { STAT_LABELS, STAT_FORMAT, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
+import { SocketCorners } from "./SocketCorners";
 
 const TOOLTIP_WIDTH = 224; // w-56
 const TOOLTIP_GAP = 8;
@@ -76,6 +77,7 @@ export function ItemTooltip({
             classMismatch ? "border-red-500/50 bg-[oklch(23%_0.03_25_/_0.92)]" : "border-gold/25 bg-[oklch(23%_0.006_45_/_0.88)]"
           }`}
         >
+          {!classMismatch && <SocketCorners size={12} />}
           <p className={`font-display text-sm font-semibold ${classMismatch ? "text-red-400" : "text-gold-bright"}`}>
             {name}
             {upgradeLevel > 0 && <span> +{upgradeLevel}</span>}

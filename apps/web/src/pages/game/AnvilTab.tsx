@@ -8,6 +8,7 @@ import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { AnvilSlotBox } from "../../components/inventory/AnvilSlotBox";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemTypeIcon } from "../../components/inventory/ItemTypeIcon";
+import { TabDropButton } from "../../components/inventory/TabDropButton";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { interpolateUpgrade } from "../../lib/statMath";
 import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
@@ -237,16 +238,15 @@ export function AnvilTab({ character }: { character: Character }) {
             <p className="text-xs font-medium text-parchment-dim">Przeciągnij na kowadło albo kliknij</p>
             <div className="flex gap-1">
               {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
-                <button
+                <TabDropButton
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
-                    activeTab === tab ? "bg-gold text-ink" : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
-                  } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
+                  tab={tab}
+                  active={activeTab === tab}
+                  label={TAB_LABELS[tab]}
                   title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
-                >
-                  {TAB_LABELS[tab]}
-                </button>
+                  count={tabItemCounts[tab]}
+                  onSelect={() => setActiveTab(tab)}
+                />
               ))}
             </div>
           </div>

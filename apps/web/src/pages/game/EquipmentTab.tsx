@@ -7,6 +7,7 @@ import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { ActiveItemSlotBox } from "../../components/inventory/ActiveItemSlotBox";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
+import { TabDropButton } from "../../components/inventory/TabDropButton";
 import { PotionThresholdModal } from "../../components/inventory/PotionThresholdModal";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
@@ -245,7 +246,7 @@ export function EquipmentTab({ character }: { character: Character }) {
     const inventoryItem = active.data.current?.inventoryItem as InventoryItemDto | undefined;
     if (!inventoryItem) return;
 
-    const overType = over.data.current?.type as "grid" | "equip" | "active" | undefined;
+    const overType = over.data.current?.type as "grid" | "equip" | "active" | "tab" | undefined;
 
     if (overType === "grid") {
       const toSlotIndex = over.data.current?.slotIndex as number;
@@ -308,6 +309,7 @@ export function EquipmentTab({ character }: { character: Character }) {
           <PanelFrame title="Ekwipunek" bodyClassName="flex flex-col items-center gap-4">
             <div className="grid grid-cols-[auto_auto_auto_auto] gap-3">
               {renderEquipSlot("helmet", "col-start-3 row-start-1")}
+              {renderEquipSlot("rod", "col-start-4 row-start-1")}
               {renderEquipSlot("necklace", "col-start-1 row-start-2")}
               {renderEquipSlot("shield", "col-start-2 row-start-2")}
               {renderEquipSlot("armor", "col-start-3 row-start-2 row-span-2")}
@@ -315,21 +317,13 @@ export function EquipmentTab({ character }: { character: Character }) {
               {renderEquipSlot("ring", "col-start-1 row-start-3")}
               {renderEquipSlot("earrings", "col-start-2 row-start-3")}
               {renderEquipSlot("boots", "col-start-3 row-start-4")}
+              {renderEquipSlot("pickaxe", "col-start-4 row-start-4")}
             </div>
 
             <div className="text-center">
               <div className="font-display text-base font-bold text-parchment">{character.name}</div>
               <div className="text-xs text-gold">
                 {classQuery.data?.name ?? "…"} · lvl. {character.level}
-              </div>
-            </div>
-
-            <div className="flex flex-col items-center">
-              <p className="mb-2 text-xs font-medium text-parchment-dim">
-                Narzędzia zbieractwa (wędka do łowienia, kilof do kopalni)
-              </p>
-              <div className="flex justify-center gap-3">
-                {TOOL_EQUIP_SLOTS.map((slot) => renderEquipSlot(slot, ""))}
               </div>
             </div>
 
@@ -356,32 +350,17 @@ export function EquipmentTab({ character }: { character: Character }) {
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-medium text-parchment-dim">Przeciągnij, by przenieść</p>
               <div className="flex gap-1">
-                {Array.from({ length: INVENTORY_TABS }, (_, tab) => {
-                  const tabLabel = `Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`;
-                  return (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`relative flex h-6 w-6 items-center justify-center rounded text-xs font-medium transition ${
-                        activeTab === tab
-                          ? "bg-gold text-ink"
-                          : "bg-panel-raised text-parchment-dim hover:bg-line-soft"
-                      } ${tabItemCounts[tab] > 0 ? "" : "opacity-60"}`}
-                      title={tabLabel}
-                      aria-label={tabLabel}
-                    >
-                      {TAB_LABELS[tab]}
-                      {tabItemCounts[tab] > 0 && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute -right-1.5 -top-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full border border-line-soft bg-ink px-0.5 text-[9px] font-semibold leading-none text-gold-bright"
-                        >
-                          {tabItemCounts[tab]}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                {Array.from({ length: INVENTORY_TABS }, (_, tab) => (
+                  <TabDropButton
+                    key={tab}
+                    tab={tab}
+                    active={activeTab === tab}
+                    label={TAB_LABELS[tab]}
+                    title={`Zakładka ${tab + 1} (${tabItemCounts[tab]} przedmiotów)`}
+                    count={tabItemCounts[tab]}
+                    onSelect={() => setActiveTab(tab)}
+                  />
+                ))}
               </div>
             </div>
             {tabItemCounts[activeTab] === 0 && (

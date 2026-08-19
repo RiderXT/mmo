@@ -40,7 +40,7 @@ export function EquipSlotBox({
           tall ? "h-[7.5rem]" : "h-14"
         } ${
           isOver
-            ? "border-gold-bright bg-gold/10 shadow-[inset_0_1px_4px_rgba(0,0,0,0.45),0_0_8px_oklch(76%_0.09_85_/_0.35)]"
+            ? "border-gold-bright bg-gold/30 shadow-[inset_0_1px_4px_rgba(0,0,0,0.45),0_0_16px_oklch(76%_0.09_85_/_0.7)]"
             : "border-line-soft"
         }`}
       >
