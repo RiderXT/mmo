@@ -192,6 +192,7 @@ model ClassSkill {
   // from levels. baseManaCost replaces the old global 10+5*level formula for active skills.
   unlockCost   Int  @default(1)
   baseManaCost Int? // active only, BASE mana cost (nodes with effect "cost" reduce it)
+  category     String @default("combat") // "combat" | "survival" | "tactics" — groups skills into UI tabs
 
   class           CharacterClass   @relation(fields: [classId], references: [id], onDelete: Cascade)
   characterSkills CharacterSkill[]
@@ -200,18 +201,24 @@ model ClassSkill {
   @@unique([classId, name])
 }
 
-// A single, freely-orderable upgrade unlockable within a ClassSkill's tree — no prerequisites
-// between nodes (player picks priority order), see modules/characters/service.ts unlockNode.
+// An upgrade unlockable within a ClassSkill's own tree (own node list, not spanning multiple
+// skills). requiresNodeId (nullable, within the SAME classSkillId) gates the node behind a
+// specific sibling being invested first — NULL means it's a branch root, available as soon as
+// the parent ClassSkill itself is unlocked. See modules/characters/service.ts unlockNode.
 model SkillTreeNode {
-  id           String @id @default(cuid())
-  classSkillId String
-  name         String
-  description  String @default("")
-  effect       String // "magnitude" | "cost" | "cooldown" — cost/cooldown only meaningful for kind=active
-  magnitudePct Float // e.g. 0.1 = +10% power (magnitude) or -10% cost/cooldown (cost/cooldown)
-  pointCost    Int    @default(1)
+  id             String  @id @default(cuid())
+  classSkillId   String
+  name           String
+  description    String  @default("")
+  effect         String // "magnitude" | "cost" | "cooldown" — cost/cooldown only meaningful for kind=active
+  magnitudePct   Float // PER LEVEL: e.g. 0.1 = +10% power (magnitude) or -10% cost/cooldown, multiplied by invested level
+  pointCost      Int     @default(1) // flat cost per level invested (not progressive)
+  maxLevel       Int     @default(1)
+  requiresNodeId String?
 
   classSkill       ClassSkill           @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
+  requires         SkillTreeNode?       @relation("NodePrerequisite", fields: [requiresNodeId], references: [id], onDelete: SetNull)
+  requiredBy       SkillTreeNode[]      @relation("NodePrerequisite")
   characterUnlocks CharacterSkillNode[]
 
   @@unique([classSkillId, name])
@@ -233,6 +240,7 @@ model CharacterSkillNode {
   id          String @id @default(cuid())
   characterId String
   nodeId      String
+  level       Int    @default(1) // existing pre-leveling rows meant "unlocked" — level 1 preserves that exactly
 
   character Character     @relation(fields: [characterId], references: [id], onDelete: Cascade)
   node      SkillTreeNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)

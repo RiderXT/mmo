@@ -193,6 +193,9 @@ export async function unlockSkill(
   return characterSkill;
 }
 
+/** Invests one more level into a node — callable repeatedly on the same node up to its
+ * maxLevel. The first call (no existing CharacterSkillNode row) creates it at level 1; every
+ * later call increments level by one, each costing the same flat pointCost. */
 export async function unlockNode(
   characterId: string,
   userId: string,
@@ -201,7 +204,10 @@ export async function unlockNode(
 ) {
   const character = await assertOwnership(characterId, userId);
 
-  const node = await prisma.skillTreeNode.findUnique({ where: { id: nodeId }, include: { classSkill: true } });
+  const node = await prisma.skillTreeNode.findUnique({
+    where: { id: nodeId },
+    include: { classSkill: true, requires: true },
+  });
   if (!node || node.classSkill.classId !== character.classId) {
     throw new CharacterError("Ten węzeł nie należy do klasy tej postaci", 400);
   }
@@ -213,11 +219,20 @@ export async function unlockNode(
     throw new CharacterError("Najpierw odblokuj umiejętność, do której należy ten węzeł", 400);
   }
 
+  if (node.requiresNodeId) {
+    const requiredProgress = await prisma.characterSkillNode.findUnique({
+      where: { characterId_nodeId: { characterId, nodeId: node.requiresNodeId } },
+    });
+    if (!requiredProgress || requiredProgress.level < 1) {
+      throw new CharacterError(`Najpierw odblokuj węzeł: ${node.requires!.name}`, 400);
+    }
+  }
+
   const existingNode = await prisma.characterSkillNode.findUnique({
     where: { characterId_nodeId: { characterId, nodeId } },
   });
-  if (existingNode) {
-    throw new CharacterError("Ten węzeł jest już odblokowany", 400);
+  if (existingNode && existingNode.level >= node.maxLevel) {
+    throw new CharacterError("Węzeł jest już na maksymalnym poziomie", 400);
   }
   if (character.unspentSkillPoints < node.pointCost) {
     throw new CharacterError("Brak niewydanych punktów umiejętności", 400);
@@ -228,7 +243,11 @@ export async function unlockNode(
       where: { id: characterId },
       data: { unspentSkillPoints: character.unspentSkillPoints - node.pointCost },
     }),
-    prisma.characterSkillNode.create({ data: { characterId, nodeId } }),
+    prisma.characterSkillNode.upsert({
+      where: { characterId_nodeId: { characterId, nodeId } },
+      create: { characterId, nodeId, level: 1 },
+      update: { level: { increment: 1 } },
+    }),
   ]);
 
   await logAction({
@@ -237,7 +256,7 @@ export async function unlockNode(
     actorUserId: userId,
     actorCharacterId: characterId,
     requestId,
-    payload: { nodeId, classSkillId: node.classSkillId, cost: node.pointCost },
+    payload: { nodeId, classSkillId: node.classSkillId, cost: node.pointCost, newLevel: characterSkillNode.level },
   });
 
   return characterSkillNode;

@@ -60,6 +60,7 @@ export interface CharacterSkillNodeDto {
   id: string;
   characterId: string;
   nodeId: string;
+  level: number;
 }
 
 export const unlockNode = (characterId: string, nodeId: string) =>

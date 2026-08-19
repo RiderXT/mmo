@@ -80,6 +80,10 @@ export type SkillKind = z.infer<typeof SkillKindSchema>;
 export const SkillEffectTypeSchema = z.enum(["damage", "heal"]);
 export type SkillEffectType = z.infer<typeof SkillEffectTypeSchema>;
 
+// Groups ClassSkill entries into player-facing skill-tree tabs (see SkillsPanel.tsx).
+export const SkillCategorySchema = z.enum(["combat", "survival", "tactics"]);
+export type SkillCategory = z.infer<typeof SkillCategorySchema>;
+
 // "on_use" is consumed immediately on player action (see ItemContextMenu "Użyj"/inventory
 // useBuffItem), not during simulated combat like the other triggers — no threshold/interval.
 export const PotionTriggerSchema = z.enum(["hp_below", "mana_below", "interval", "on_use"]);

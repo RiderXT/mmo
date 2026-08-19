@@ -18,6 +18,7 @@ import type {
   CreateMineInput,
   CreatePassiveSkillTypeInput,
   GatherKind,
+  SkillCategory,
 } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
@@ -110,6 +111,8 @@ export interface SkillTreeNodeDto {
   effect: "magnitude" | "cost" | "cooldown";
   magnitudePct: number;
   pointCost: number;
+  maxLevel: number;
+  requiresNodeId: string | null;
 }
 
 export interface ClassSkillDto {
@@ -124,6 +127,7 @@ export interface ClassSkillDto {
   effectType: SkillEffectType | null;
   cooldownSeconds: number | null;
   baseManaCost: number | null;
+  category: SkillCategory;
   nodes: SkillTreeNodeDto[];
 }
 

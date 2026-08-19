@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prismaClient.js";
 import { logAction } from "../../../lib/gameLog.js";
 import type { CreateCharacterClassInput, ClassSkillInput, SkillTreeNodeInput } from "@mmo/shared";
@@ -27,16 +28,35 @@ function skillData(skill: ClassSkillInput) {
     effectType: skill.effectType ?? null,
     cooldownSeconds: skill.cooldownSeconds ?? null,
     baseManaCost: skill.baseManaCost ?? null,
+    category: skill.category,
   };
 }
 
+// requiresNodeId is deliberately excluded here — it references another node that may be created
+// in the very same batch, so it's resolved in a second pass once every node in the skill has an
+// id (see resolveNodeRequirements below).
 function nodeData(node: SkillTreeNodeInput) {
   return {
     description: node.description,
     effect: node.effect,
     magnitudePct: node.magnitudePct,
     pointCost: node.pointCost,
+    maxLevel: node.maxLevel,
   };
+}
+
+/** Second pass, run after every node of a skill has been upserted: resolves each node's
+ * requiresNodeName (a name within the same skill) to the sibling's freshly-known id. */
+async function resolveNodeRequirements(
+  tx: Prisma.TransactionClient,
+  nodes: SkillTreeNodeInput[],
+  nameToId: Map<string, string>,
+) {
+  for (const node of nodes) {
+    const nodeId = nameToId.get(node.name)!;
+    const requiresNodeId = node.requiresNodeName ? (nameToId.get(node.requiresNodeName) ?? null) : null;
+    await tx.skillTreeNode.update({ where: { id: nodeId }, data: { requiresNodeId } });
+  }
 }
 
 async function assertStarterItemsExist(input: CreateCharacterClassInput) {
@@ -70,24 +90,35 @@ export async function createCharacterClass(
   }
   await assertStarterItemsExist(input);
 
-  const characterClass = await prisma.characterClass.create({
-    data: {
-      name: input.name,
-      description: input.description,
-      primaryStat: input.primaryStat,
-      startingGold: input.startingGold,
-      skills: {
-        create: input.skills.map((s) => ({
-          name: s.name,
-          ...skillData(s),
-          nodes: { create: s.nodes.map((n) => ({ name: n.name, ...nodeData(n) })) },
-        })),
+  const characterClass = await prisma.$transaction(async (tx) => {
+    const created = await tx.characterClass.create({
+      data: {
+        name: input.name,
+        description: input.description,
+        primaryStat: input.primaryStat,
+        startingGold: input.startingGold,
+        skills: {
+          create: input.skills.map((s) => ({
+            name: s.name,
+            ...skillData(s),
+            nodes: { create: s.nodes.map((n) => ({ name: n.name, ...nodeData(n) })) },
+          })),
+        },
+        starterItems: {
+          create: input.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
+        },
       },
-      starterItems: {
-        create: input.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
-      },
-    },
-    include: classInclude,
+      include: { skills: { include: { nodes: true } } },
+    });
+
+    for (const skill of input.skills) {
+      if (!skill.nodes.some((n) => n.requiresNodeName)) continue;
+      const createdSkill = created.skills.find((s) => s.name === skill.name)!;
+      const nameToId = new Map(createdSkill.nodes.map((n) => [n.name, n.id]));
+      await resolveNodeRequirements(tx, skill.nodes, nameToId);
+    }
+
+    return tx.characterClass.findUniqueOrThrow({ where: { id: created.id }, include: classInclude });
   });
 
   await logAction({
@@ -148,6 +179,20 @@ export async function updateCharacterClass(
         409,
       );
     }
+    // Exclude nodes that are themselves also being removed in this same request — deleting a
+    // dependent pair together is fine, only a SURVIVING node left pointing at a removed one isn't.
+    const requiredByOthers = await prisma.skillTreeNode.count({
+      where: {
+        requiresNodeId: { in: nodesToRemove.map((n) => n.id) },
+        id: { notIn: nodesToRemove.map((n) => n.id) },
+      },
+    });
+    if (requiredByOthers > 0) {
+      throw new ClassError(
+        `Nie można usunąć węzła w umiejętności "${skill.name}" — jest wymagany przez inny węzeł`,
+        409,
+      );
+    }
     nodeRemovalsBySkillId.set(existingSkill.id, nodesToRemove.map((n) => n.id));
   }
 
@@ -166,12 +211,17 @@ export async function updateCharacterClass(
       if (nodesToRemove?.length) {
         await tx.skillTreeNode.deleteMany({ where: { id: { in: nodesToRemove } } });
       }
+      const nameToId = new Map<string, string>();
       for (const node of skill.nodes) {
-        await tx.skillTreeNode.upsert({
+        const upserted = await tx.skillTreeNode.upsert({
           where: { classSkillId_name: { classSkillId: classSkill.id, name: node.name } },
           create: { classSkillId: classSkill.id, name: node.name, ...nodeData(node) },
           update: nodeData(node),
         });
+        nameToId.set(node.name, upserted.id);
+      }
+      if (skill.nodes.some((n) => n.requiresNodeName)) {
+        await resolveNodeRequirements(tx, skill.nodes, nameToId);
       }
     }
     await tx.classStarterItem.deleteMany({ where: { classId: id } });

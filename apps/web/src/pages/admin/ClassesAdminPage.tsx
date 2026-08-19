@@ -6,7 +6,9 @@ import {
   SkillKindSchema,
   SkillEffectTypeSchema,
   StatKeySchema,
+  SkillCategorySchema,
   type CreateCharacterClassInput,
+  type SkillCategory,
 } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
@@ -19,6 +21,12 @@ const CORE_STATS = CoreStatKeySchema.options;
 const SKILL_KINDS = SkillKindSchema.options;
 const EFFECT_TYPES = SkillEffectTypeSchema.options;
 const TARGET_STATS = StatKeySchema.options;
+const SKILL_CATEGORIES = SkillCategorySchema.options;
+const CATEGORY_LABELS: Record<SkillCategory, string> = {
+  combat: "Walka",
+  survival: "Przetrwanie",
+  tactics: "Taktyka",
+};
 
 function emptySkill() {
   return {
@@ -32,6 +40,7 @@ function emptySkill() {
     effectType: undefined,
     cooldownSeconds: undefined,
     baseManaCost: undefined,
+    category: "combat" as const,
     nodes: [],
   };
 }
@@ -43,6 +52,8 @@ function emptyNode() {
     effect: "magnitude" as const,
     magnitudePct: 0.1,
     pointCost: 1,
+    maxLevel: 1,
+    requiresNodeName: null,
   };
 }
 
@@ -65,25 +76,31 @@ function fromDto(cls: ClassDto): CreateCharacterClassInput {
     name: cls.name,
     description: cls.description,
     primaryStat: cls.primaryStat,
-    skills: cls.skills.map((s) => ({
-      name: s.name,
-      description: s.description,
-      kind: s.kind,
-      scalingStat: s.scalingStat,
-      scalingFactor: s.scalingFactor,
-      unlockCost: s.unlockCost,
-      targetStat: s.targetStat ?? undefined,
-      effectType: s.effectType ?? undefined,
-      cooldownSeconds: s.cooldownSeconds ?? undefined,
-      baseManaCost: s.baseManaCost ?? undefined,
-      nodes: s.nodes.map((n) => ({
-        name: n.name,
-        description: n.description,
-        effect: n.effect,
-        magnitudePct: n.magnitudePct,
-        pointCost: n.pointCost,
-      })),
-    })),
+    skills: cls.skills.map((s) => {
+      const nodeNameById = new Map(s.nodes.map((n) => [n.id, n.name]));
+      return {
+        name: s.name,
+        description: s.description,
+        kind: s.kind,
+        scalingStat: s.scalingStat,
+        scalingFactor: s.scalingFactor,
+        unlockCost: s.unlockCost,
+        targetStat: s.targetStat ?? undefined,
+        effectType: s.effectType ?? undefined,
+        cooldownSeconds: s.cooldownSeconds ?? undefined,
+        baseManaCost: s.baseManaCost ?? undefined,
+        category: s.category,
+        nodes: s.nodes.map((n) => ({
+          name: n.name,
+          description: n.description,
+          effect: n.effect,
+          magnitudePct: n.magnitudePct,
+          pointCost: n.pointCost,
+          maxLevel: n.maxLevel,
+          requiresNodeName: n.requiresNodeId ? (nodeNameById.get(n.requiresNodeId) ?? null) : null,
+        })),
+      };
+    }),
     startingGold: cls.startingGold,
     starterItems: cls.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
   };
@@ -339,7 +356,7 @@ export function ClassesAdminPage() {
             <div className="space-y-3">
               {form.skills.map((skill, idx) => (
                 <div key={`${idx}-${skill.name}`} className=" border border-line p-3">
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-4">
                     <input
                       placeholder="nazwa"
                       className={inputClass}
@@ -365,6 +382,17 @@ export function ClassesAdminPage() {
                       {CORE_STATS.map((s) => (
                         <option key={s} value={s}>
                           skaluje: {s}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className={inputClass}
+                      value={skill.category}
+                      onChange={(e) => updateSkill(idx, { category: e.target.value as SkillCategory })}
+                    >
+                      {SKILL_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {CATEGORY_LABELS[c]}
                         </option>
                       ))}
                     </select>
@@ -508,6 +536,37 @@ export function ClassesAdminPage() {
                                 value={node.pointCost}
                                 onChange={(e) => updateNode(idx, nodeIdx, { pointCost: Number(e.target.value) })}
                               />
+                            </label>
+                          </div>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                              maks. poziom
+                              <input
+                                type="number"
+                                min={1}
+                                className={inputClass}
+                                value={node.maxLevel}
+                                onChange={(e) => updateNode(idx, nodeIdx, { maxLevel: Number(e.target.value) })}
+                              />
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                              wymaga węzła
+                              <select
+                                className={inputClass}
+                                value={node.requiresNodeName ?? ""}
+                                onChange={(e) =>
+                                  updateNode(idx, nodeIdx, { requiresNodeName: e.target.value || null })
+                                }
+                              >
+                                <option value="">— brak (korzeń) —</option>
+                                {skill.nodes
+                                  .filter((n, i) => i !== nodeIdx && n.name)
+                                  .map((n, i) => (
+                                    <option key={`${i}-${n.name}`} value={n.name}>
+                                      {n.name}
+                                    </option>
+                                  ))}
+                              </select>
                             </label>
                           </div>
                           <input

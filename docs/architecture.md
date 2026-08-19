@@ -2155,6 +2155,75 @@ pokazuje poprawnie 7 dni z podświetlonym dniem 1. i przyciskiem "Odbierz (500 z
 natychmiast podnosi złoto postaci w nagłówku z 0 do 500 i zmienia przycisk na "Odebrano" z
 komunikatem potwierdzającym. Dane testowe (konto, postać, wiersze nagród) usunięte po weryfikacji.
 
+## Drzewko umiejętności: zależności między węzłami, levelowanie, kategorie (post-daily-login)
+
+Rozszerzenie świeżo wdrożonego drzewka umiejętności (patrz sekcja "Drzewka umiejętności
+klasowych..." wyżej) o trzy zmiany, na podstawie wizualnego mockupu dostarczonego przez
+użytkownika: (1) węzły mogą wymagać wcześniejszego odblokowania innego węzła (kłódka, dopóki
+"rodzic" w gałęzi nieaktywny) — ODWRACA wcześniejszą decyzję "dowolna kolejność"; (2) węzły
+levelują się wielokrotnie (Lv 1, Lv 2, ...) zamiast jednorazowego odblokowania — ODWRACA
+wcześniejszą decyzję "jednorazowe odblokowanie"; (3) umiejętności grupowane w zakładki kategorii
+(Walka/Przetrwanie/Taktyka). Świadome uproszczenie: zależności działają WEWNĄTRZ jednej
+umiejętności (jej własnej listy węzłów), nie rozpięte na wielu umiejętnościach jak zbiegający się
+węzeł na mockupie — pełny graf wielo-umiejętnościowy wymagałby osobnego algorytmu układu i nie
+został zaimplementowany. Ikony węzłów dobierane są heurystycznie (emoji wg `targetStat`/
+`effectType`/`effect`) — brak nowego pola "ikona" w bazie.
+
+- **Schemat (addytywnie, bez migracji)**: `ClassSkill.category: String @default("combat")`.
+  `SkillTreeNode` += `maxLevel: Int @default(1)`, `requiresNodeId: String?` (self-relacja
+  `"NodePrerequisite"`, `onDelete: SetNull` jako siatka bezpieczeństwa na poziomie bazy — realna
+  ochrona to guard aplikacyjny, patrz niżej). `CharacterSkillNode` += `level: Int @default(1)` —
+  istniejące wiersze (dawne "odblokowany") zachowują się identycznie jako "poziom 1". `magnitudePct`/
+  `pointCost` na węźle reinterpretowane jako WARTOŚĆ ZA POZIOM (nie zmienia się schemat, tylko
+  formuła w kodzie).
+- **`packages/shared`**: nowy `SkillCategorySchema`. `SkillTreeNodeInputSchema` += `maxLevel`,
+  `requiresNodeName` (referencja po nazwie węzła w TEJ SAMEJ umiejętności, rozwiązywana na `id`
+  po stronie serwera). `ClassSkillInputSchema` += `category`, nowy `.refine` wykrywający
+  self-referencję, nieznaną nazwę i CYKL w łańcuchu `requiresNodeName` (przechodzi po `s.nodes`,
+  400 zanim cokolwiek trafi do bazy).
+- **`admin/classes/service.ts`**: węzły upsertowane jak dotąd po `classSkillId_name`, potem DRUGI
+  przebieg (`resolveNodeRequirements`) mapuje `requiresNodeName` → `requiresNodeId` po świeżo
+  poznanych id (konieczne, bo węzeł może wymagać innego węzła tworzonego w tej samej transakcji).
+  Guard usuwania węzła rozszerzony: oprócz istniejącego "gracze już go odblokowali" doszedł
+  "jest wymagany przez inny węzeł" (`skillTreeNode.count({requiresNodeId:{in:removed}, id:{notIn:
+  removed}})` — **wyklucza węzły usuwane W TEJ SAMEJ turze**, żeby legalne usunięcie powiązanej
+  pary naraz nie było fałszywie blokowane).
+- **`characters/service.ts`'s `unlockNode`**: teraz "zainwestuj kolejny poziom", wywoływalne
+  wielokrotnie na tym samym węźle. Nowy check: jeśli `requiresNodeId` ustawiony, wymagany węzeł
+  musi mieć `level >= 1` u tej postaci, inaczej 400 z nazwą brakującego węzła. Pierwsza inwestycja
+  tworzy `CharacterSkillNode` na poziomie 1, kolejne `update({level:{increment:1}})` aż do
+  `maxLevel` (płaski koszt `pointCost` za każdy poziom, bez progresji).
+- **`expeditions/service.ts`**: `gatherCombatBuild`'s `unlockedNodeIds: Set` → `nodeLevels: Map<
+  nodeId, level>`; `sumNodePct` mnoży `magnitudePct * level` zamiast liczyć samą obecność w
+  zbiorze — węzeł na poziomie 3 z `magnitudePct=0.1` daje teraz +30%, nie +10%.
+- **Frontend**: `SkillsPanel.tsx` przebudowany z płaskiej listy na wizualne drzewko — zakładki
+  kategorii, gałęzie umiejętności ułożone jako kolumny obok siebie, węzły w wierszach wg
+  głębokości łańcucha zależności (BFS, dowolna długość), każdy z ikoną, odznaką `Lv X/maxLevel`,
+  kłódką i pionowym łącznikiem CSS do wiersza wyżej; klik wybiera węzeł/umiejętność do panelu
+  szczegółów u dołu (efekt bazowy vs. aktualny przy bieżącym poziomie, przycisk "Odblokuj"/
+  "Ulepsz"); licznik "Punkty umiejętności" przeniesiony na sam dół panelu. `ClassesAdminPage.tsx`
+  — nowy select kategorii per umiejętność, w edytorze węzła nowe pole "maks. poziom" i select
+  "wymaga węzła" (opcje = pozostałe węzły tej samej umiejętności).
+
+Zweryfikowane: `pnpm -r typecheck` czysto. Skryptem: cykliczna zależność (A wymaga B, B wymaga A)
+odrzucona przez Zod przed zapisem; łańcuch A(korzeń)→B(wymaga A)→C(wymaga B) poprawnie rozwiązany
+na `requiresNodeId`; inwestycja w B przed A odrzucona, po A — B dostępne, C nadal zablokowane bez
+B; wielokrotne wywołanie na tym samym węźle levelinguje do `maxLevel(3)`, czwarta próba odrzucona;
+`gatherCombatBuild` z węzłem na poziomie 3 (+10%/poziom) i drugim na poziomie 1 daje dokładnie
+`magnitudeMultiplier=1.4`; usunięcie węzła wymaganego przez inny (osobno) poprawnie odrzucone
+(zarówno przez Zod przy normalnym zapisie, jak i przez guard serwisu przy wywołaniu z pominięciem
+Zod), a usunięcie POWIĄZANEJ PARY naraz (oba usuwane jednocześnie) przechodzi bez blokady —
+wykryto i naprawiono błąd, w którym guard początkowo fałszywie blokował tę drugą, poprawną
+sytuację. W przeglądarce (panel admina): dodanie pary węzłów z zależnością i `maxLevel`, zapis,
+ponowna edycja pokazuje poprawnie odtworzone `requiresNodeName`/`maxLevel`; próba zapisu z
+osieroconą referencją (usunięty węzeł nadal wymagany przez inny) poprawnie odrzucona przed
+wysłaniem do serwera, baza nienaruszona. Jako gracz: zakładka Umiejętności pokazuje zakładki
+kategorii i wizualne drzewko z ikonami/kłódkami; odblokowanie umiejętności odsłania jej węzeł
+korzeniowy; inwestycja w węzeł korzeniowy poprawnie odblokowuje zależny węzeł potomny (kłódka
+znika); kolejne kliknięcia "Ulepsz" levelują węzeł (Lv 1→2/3) z widocznym wzrostem efektu w
+panelu szczegółów (+10%→+20% mocy). Wszystkie dane testowe (węzły, konta, postacie) usunięte po
+weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

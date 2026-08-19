@@ -34,17 +34,18 @@ export class ExpeditionError extends Error {
 
 export { computeLevel };
 
-// Sums a skill's unlocked tree-node percentages for one effect type — the foundation for every
-// "base * (1 +/- sum)" formula below. `unlockedNodeIds` is the character's full unlocked-node
-// set (fetched once per gatherCombatBuild call), not scoped to a single skill.
+// Sums a skill's tree-node percentages for one effect type, each weighted by the character's
+// invested level (magnitudePct is PER LEVEL) — the foundation for every "base * (1 +/- sum)"
+// formula below. `nodeLevels` is the character's full node->level map (fetched once per
+// gatherCombatBuild call), not scoped to a single skill; a node absent from the map contributes 0.
 function sumNodePct(
   classSkill: { nodes: { id: string; effect: string; magnitudePct: number }[] },
-  unlockedNodeIds: Set<string>,
+  nodeLevels: Map<string, number>,
   effect: "magnitude" | "cost" | "cooldown",
 ): number {
   return classSkill.nodes
-    .filter((n) => n.effect === effect && unlockedNodeIds.has(n.id))
-    .reduce((sum, n) => sum + n.magnitudePct, 0);
+    .filter((n) => n.effect === effect)
+    .reduce((sum, n) => sum + n.magnitudePct * (nodeLevels.get(n.id) ?? 0), 0);
 }
 
 export async function assertCharacterOwnership(characterId: string, userId: string) {
@@ -73,7 +74,7 @@ export async function gatherCombatBuild(characterId: string) {
       include: { item: true },
     }),
   ]);
-  const unlockedNodeIds = new Set(characterSkillNodes.map((n) => n.nodeId));
+  const nodeLevels = new Map(characterSkillNodes.map((n) => [n.nodeId, n.level]));
 
   const core: CharacterCoreStats = {
     strength: character.strength,
@@ -97,16 +98,16 @@ export async function gatherCombatBuild(characterId: string) {
       scalingStat: cs.classSkill.scalingStat as CoreStatKey,
       scalingFactor: cs.classSkill.scalingFactor,
       targetStat: cs.classSkill.targetStat as StatKey,
-      magnitudeMultiplier: 1 + sumNodePct(cs.classSkill, unlockedNodeIds, "magnitude"),
+      magnitudeMultiplier: 1 + sumNodePct(cs.classSkill, nodeLevels, "magnitude"),
     }));
 
   const activeSkills: ActiveSkillDef[] = characterSkills
     .filter((cs) => cs.classSkill.kind === "active" && cs.unlocked && cs.classSkill.effectType && cs.classSkill.cooldownSeconds)
     .map((cs) => {
-      const magnitudeMultiplier = 1 + sumNodePct(cs.classSkill, unlockedNodeIds, "magnitude");
-      const costMultiplier = Math.max(0, 1 - sumNodePct(cs.classSkill, unlockedNodeIds, "cost"));
+      const magnitudeMultiplier = 1 + sumNodePct(cs.classSkill, nodeLevels, "magnitude");
+      const costMultiplier = Math.max(0, 1 - sumNodePct(cs.classSkill, nodeLevels, "cost"));
       // 10% floor — tree nodes can shorten a cooldown a lot, but never to 0s.
-      const cooldownMultiplier = Math.max(0.1, 1 - sumNodePct(cs.classSkill, unlockedNodeIds, "cooldown"));
+      const cooldownMultiplier = Math.max(0.1, 1 - sumNodePct(cs.classSkill, nodeLevels, "cooldown"));
       return {
         id: cs.classSkillId,
         name: cs.classSkill.name,
