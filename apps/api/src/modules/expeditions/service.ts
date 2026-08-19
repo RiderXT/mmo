@@ -34,7 +34,18 @@ export class ExpeditionError extends Error {
 
 export { computeLevel };
 
-const ACTIVE_SKILL_MANA_COST = (level: number) => 10 + 5 * level;
+// Sums a skill's unlocked tree-node percentages for one effect type — the foundation for every
+// "base * (1 +/- sum)" formula below. `unlockedNodeIds` is the character's full unlocked-node
+// set (fetched once per gatherCombatBuild call), not scoped to a single skill.
+function sumNodePct(
+  classSkill: { nodes: { id: string; effect: string; magnitudePct: number }[] },
+  unlockedNodeIds: Set<string>,
+  effect: "magnitude" | "cost" | "cooldown",
+): number {
+  return classSkill.nodes
+    .filter((n) => n.effect === effect && unlockedNodeIds.has(n.id))
+    .reduce((sum, n) => sum + n.magnitudePct, 0);
+}
 
 export async function assertCharacterOwnership(characterId: string, userId: string) {
   const character = await prisma.character.findUnique({ where: { id: characterId } });
@@ -46,18 +57,23 @@ export async function assertCharacterOwnership(characterId: string, userId: stri
 
 /** Gathers the character's full combat build (base stats, equipped item stats, passive/active skills, active-slot potions) — shared by the expedition simulation, the standalone combat-stats readout, and the public profile page (modules/profile). */
 export async function gatherCombatBuild(characterId: string) {
-  const [character, equipped, characterSkills, activePotionItems] = await Promise.all([
+  const [character, equipped, characterSkills, characterSkillNodes, activePotionItems] = await Promise.all([
     prisma.character.findUniqueOrThrow({ where: { id: characterId } }),
     prisma.inventoryItem.findMany({
       where: { characterId, equippedSlot: { not: null } },
       include: { item: true },
     }),
-    prisma.characterSkill.findMany({ where: { characterId }, include: { classSkill: true } }),
+    prisma.characterSkill.findMany({
+      where: { characterId },
+      include: { classSkill: { include: { nodes: true } } },
+    }),
+    prisma.characterSkillNode.findMany({ where: { characterId } }),
     prisma.inventoryItem.findMany({
       where: { characterId, activeSlotIndex: { not: null } },
       include: { item: true },
     }),
   ]);
+  const unlockedNodeIds = new Set(characterSkillNodes.map((n) => n.nodeId));
 
   const core: CharacterCoreStats = {
     strength: character.strength,
@@ -76,24 +92,30 @@ export async function gatherCombatBuild(characterId: string) {
   }));
 
   const passiveSkills: PassiveSkillBonus[] = characterSkills
-    .filter((cs) => cs.classSkill.kind === "passive" && cs.level > 0 && cs.classSkill.targetStat)
+    .filter((cs) => cs.classSkill.kind === "passive" && cs.unlocked && cs.classSkill.targetStat)
     .map((cs) => ({
       scalingStat: cs.classSkill.scalingStat as CoreStatKey,
       scalingFactor: cs.classSkill.scalingFactor,
       targetStat: cs.classSkill.targetStat as StatKey,
-      level: cs.level,
+      magnitudeMultiplier: 1 + sumNodePct(cs.classSkill, unlockedNodeIds, "magnitude"),
     }));
 
   const activeSkills: ActiveSkillDef[] = characterSkills
-    .filter((cs) => cs.classSkill.kind === "active" && cs.level > 0 && cs.classSkill.effectType && cs.classSkill.cooldownSeconds)
-    .map((cs) => ({
-      id: cs.classSkillId,
-      name: cs.classSkill.name,
-      power: cs.classSkill.scalingFactor * core[cs.classSkill.scalingStat as CoreStatKey] * cs.level,
-      manaCost: ACTIVE_SKILL_MANA_COST(cs.level),
-      effectType: cs.classSkill.effectType as "damage" | "heal",
-      cooldownSeconds: cs.classSkill.cooldownSeconds!,
-    }));
+    .filter((cs) => cs.classSkill.kind === "active" && cs.unlocked && cs.classSkill.effectType && cs.classSkill.cooldownSeconds)
+    .map((cs) => {
+      const magnitudeMultiplier = 1 + sumNodePct(cs.classSkill, unlockedNodeIds, "magnitude");
+      const costMultiplier = Math.max(0, 1 - sumNodePct(cs.classSkill, unlockedNodeIds, "cost"));
+      // 10% floor — tree nodes can shorten a cooldown a lot, but never to 0s.
+      const cooldownMultiplier = Math.max(0.1, 1 - sumNodePct(cs.classSkill, unlockedNodeIds, "cooldown"));
+      return {
+        id: cs.classSkillId,
+        name: cs.classSkill.name,
+        power: cs.classSkill.scalingFactor * core[cs.classSkill.scalingStat as CoreStatKey] * magnitudeMultiplier,
+        manaCost: Math.max(1, Math.round((cs.classSkill.baseManaCost ?? 15) * costMultiplier)),
+        effectType: cs.classSkill.effectType as "damage" | "heal",
+        cooldownSeconds: Math.max(1, Math.round(cs.classSkill.cooldownSeconds! * cooldownMultiplier)),
+      };
+    });
 
   const potions: PotionSlot[] = activePotionItems
     .filter((inv) => inv.item.type === "consumable" && inv.item.potionTrigger)

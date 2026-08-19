@@ -38,6 +38,14 @@ export async function getCharacterSkills(characterId: string, userId: string) {
   return prisma.characterSkill.findMany({ where: { characterId } });
 }
 
+export async function getCharacterSkillNodes(characterId: string, userId: string) {
+  const character = await prisma.character.findUnique({ where: { id: characterId } });
+  if (!character || character.userId !== userId) {
+    throw new CharacterError("Nie znaleziono postaci", 404);
+  }
+  return prisma.characterSkillNode.findMany({ where: { characterId } });
+}
+
 async function assertOwnership(characterId: string, userId: string) {
   const character = await prisma.character.findUnique({ where: { id: characterId } });
   if (!character || character.userId !== userId) {
@@ -138,16 +146,13 @@ export async function allocateStat(
   return updated;
 }
 
-export async function allocateSkill(
+export async function unlockSkill(
   characterId: string,
   userId: string,
   classSkillId: string,
   requestId?: string,
 ) {
   const character = await assertOwnership(characterId, userId);
-  if (character.unspentSkillPoints < 1) {
-    throw new CharacterError("Brak niewydanych punktów umiejętności", 400);
-  }
 
   const classSkill = await prisma.classSkill.findUnique({ where: { id: classSkillId } });
   if (!classSkill || classSkill.classId !== character.classId) {
@@ -157,31 +162,83 @@ export async function allocateSkill(
   const existing = await prisma.characterSkill.findUnique({
     where: { characterId_classSkillId: { characterId, classSkillId } },
   });
-  const currentLevel = existing?.level ?? 0;
-  if (currentLevel >= classSkill.maxLevel) {
-    throw new CharacterError("Umiejętność jest już na maksymalnym poziomie", 400);
+  if (existing?.unlocked) {
+    throw new CharacterError("Umiejętność jest już odblokowana", 400);
+  }
+  if (character.unspentSkillPoints < classSkill.unlockCost) {
+    throw new CharacterError("Brak niewydanych punktów umiejętności", 400);
   }
 
   const [, characterSkill] = await prisma.$transaction([
     prisma.character.update({
       where: { id: characterId },
-      data: { unspentSkillPoints: character.unspentSkillPoints - 1 },
+      data: { unspentSkillPoints: character.unspentSkillPoints - classSkill.unlockCost },
     }),
     prisma.characterSkill.upsert({
       where: { characterId_classSkillId: { characterId, classSkillId } },
-      create: { characterId, classSkillId, level: 1 },
-      update: { level: currentLevel + 1 },
+      create: { characterId, classSkillId, unlocked: true },
+      update: { unlocked: true },
     }),
   ]);
 
   await logAction({
     module: "characters",
-    action: "allocate_skill",
+    action: "unlock_skill",
     actorUserId: userId,
     actorCharacterId: characterId,
     requestId,
-    payload: { classSkillId, newLevel: characterSkill.level },
+    payload: { classSkillId, cost: classSkill.unlockCost },
   });
 
   return characterSkill;
+}
+
+export async function unlockNode(
+  characterId: string,
+  userId: string,
+  nodeId: string,
+  requestId?: string,
+) {
+  const character = await assertOwnership(characterId, userId);
+
+  const node = await prisma.skillTreeNode.findUnique({ where: { id: nodeId }, include: { classSkill: true } });
+  if (!node || node.classSkill.classId !== character.classId) {
+    throw new CharacterError("Ten węzeł nie należy do klasy tej postaci", 400);
+  }
+
+  const parentSkill = await prisma.characterSkill.findUnique({
+    where: { characterId_classSkillId: { characterId, classSkillId: node.classSkillId } },
+  });
+  if (!parentSkill?.unlocked) {
+    throw new CharacterError("Najpierw odblokuj umiejętność, do której należy ten węzeł", 400);
+  }
+
+  const existingNode = await prisma.characterSkillNode.findUnique({
+    where: { characterId_nodeId: { characterId, nodeId } },
+  });
+  if (existingNode) {
+    throw new CharacterError("Ten węzeł jest już odblokowany", 400);
+  }
+  if (character.unspentSkillPoints < node.pointCost) {
+    throw new CharacterError("Brak niewydanych punktów umiejętności", 400);
+  }
+
+  const [, characterSkillNode] = await prisma.$transaction([
+    prisma.character.update({
+      where: { id: characterId },
+      data: { unspentSkillPoints: character.unspentSkillPoints - node.pointCost },
+    }),
+    prisma.characterSkillNode.create({ data: { characterId, nodeId } }),
+  ]);
+
+  await logAction({
+    module: "characters",
+    action: "unlock_node",
+    actorUserId: userId,
+    actorCharacterId: characterId,
+    requestId,
+    payload: { nodeId, classSkillId: node.classSkillId, cost: node.pointCost },
+  });
+
+  return characterSkillNode;
 }

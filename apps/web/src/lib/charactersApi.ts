@@ -44,14 +44,29 @@ export interface CharacterSkillDto {
   id: string;
   characterId: string;
   classSkillId: string;
-  level: number;
+  unlocked: boolean;
 }
 
-export const allocateSkill = (characterId: string, classSkillId: string) =>
-  apiFetch<CharacterSkillDto>(`/api/characters/${characterId}/allocate-skill`, {
+export const unlockSkill = (characterId: string, classSkillId: string) =>
+  apiFetch<CharacterSkillDto>(`/api/characters/${characterId}/unlock-skill`, {
     method: "POST",
     body: JSON.stringify({ classSkillId }),
   });
 
 export const getCharacterSkills = (characterId: string) =>
   apiFetch<CharacterSkillDto[]>(`/api/characters/${characterId}/skills`);
+
+export interface CharacterSkillNodeDto {
+  id: string;
+  characterId: string;
+  nodeId: string;
+}
+
+export const unlockNode = (characterId: string, nodeId: string) =>
+  apiFetch<CharacterSkillNodeDto>(`/api/characters/${characterId}/unlock-node`, {
+    method: "POST",
+    body: JSON.stringify({ nodeId }),
+  });
+
+export const listCharacterSkillNodes = (characterId: string) =>
+  apiFetch<CharacterSkillNodeDto[]>(`/api/characters/${characterId}/skill-nodes`);

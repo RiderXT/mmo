@@ -2046,6 +2046,69 @@ cyklu; zakładka Umiejętności → Umiejętności pasywne pokazuje realnie rosn
 → Edytuj "Rybak" pokazuje wszystkie 4 nowe pola z poprawnymi wartościami z seeda. Dane testowe
 (testowe łowisko, testowa wędka, postęp XP testowej postaci) usunięte po weryfikacji.
 
+## Drzewka umiejętności klasowych zamiast levelowania 1-10 (post-zbieractwo)
+
+Dotychczasowy model umiejętności klasowych (`ClassSkill`/`CharacterSkill`) polegał na levelowaniu
+0-10 za punkty umiejętności, z efektem liniowo skalującym się z poziomem
+(`scalingFactor * core[scalingStat] * level`). Zastąpiony drzewkiem: każda umiejętność ma teraz
+**stałą wartość bazową**, odblokowywaną raz za `unlockCost` punktów, a cały dalszy rozwój pochodzi
+z dowolnie zdefiniowanych przez admina **węzłów-upgrade'ów** (`SkillTreeNode`), które gracz
+odblokowuje w **dowolnej kolejności** za punkty umiejętności — bez wymaganej ścieżki i bez
+żadnego automatycznego darmowego odblokowania na jakimkolwiek poziomie postaci.
+
+- **Schemat (dwuetapowo, addytywnie)**: `ClassSkill` dostał `unlockCost` (koszt odblokowania
+  samej umiejętności) i `baseManaCost` (dla aktywnych — zastępuje starą globalną formułę
+  `10 + 5*level`); nowa relacja `nodes: SkillTreeNode[]`. Nowy model `SkillTreeNode`
+  (`classSkillId`, `name`, `description`, `effect: "magnitude"|"cost"|"cooldown"`,
+  `magnitudePct`, `pointCost`, `@@unique([classSkillId, name])`) — `cost`/`cooldown` mają sens
+  tylko przy `kind === "active"` (walidacja krzyżowa w `ClassSkillInputSchema`).
+  `CharacterSkill.level` zastąpiony `unlocked: Boolean`. Nowy `CharacterSkillNode`
+  (`characterId` + `nodeId`, `@@unique`) — join gracz→odblokowany węzeł. Etap A (addytywny,
+  `level`/`maxLevel` zachowane obok nowych pól) wdrożony `db push`; skrypt migracyjny
+  jednorazowo przeliczał istniejące `CharacterSkill.level > 0` na `unlocked: true` ze zwrotem
+  nadwyżki punktów (`unspentSkillPoints += level - 1`) — na dev.db nie było żadnych wykupionych
+  poziomów, więc migracja przetworzyła 0 rekordów. Etap B usunął `level`/`maxLevel` z obu plików
+  schematu (`--accept-data-loss` na jednej już niepotrzebnej kolumnie, NIE `--force-reset`).
+- **Efektywne wartości liczone przez sumowanie procentów odblokowanych węzłów danego typu**:
+  `magnitudeMultiplier = 1 + Σ(magnitude)`, `manaCost = round(baseManaCost * max(0, 1 -
+  Σ(cost)))`, `cooldownSeconds = round(cooldownSeconds * max(0.1, 1 - Σ(cooldown)))` (dolna
+  granica 10% — węzły nie potrafią zejść z cooldownu do 0s). Liczone w
+  `expeditions/service.ts`'s `gatherCombatBuild` (nowy helper `sumNodePct`, drugie równoległe
+  zapytanie o `CharacterSkillNode` obok `CharacterSkill`); `combat.ts`'s `PassiveSkillBonus.level`
+  zastąpione `magnitudeMultiplier`, formuła w obu miejscach (`computeDerivedStats`,
+  `computeDerivedStatsBreakdown`) zaktualizowana.
+- **Backend**: `characters/service.ts`'s `allocateSkill` zastąpiony przez `unlockSkill`
+  (jednorazowo, sprawdza `unspentSkillPoints >= unlockCost` i `!unlocked`) i `unlockNode`
+  (wymaga wcześniej odblokowanej rodzicielskiej umiejętności, sprawdza
+  `unspentSkillPoints >= pointCost`, brak duplikatu). Trasy: `/unlock-skill`, `/unlock-node`,
+  nowa `/skill-nodes` (lista odblokowanych węzłów postaci). `admin/classes/service.ts` — węzły
+  upsertowane po `classSkillId_name` w tej samej pętli co `classSkill`; usunięcie umiejętności
+  blokowane, gdy `unlocked: true` u jakiegokolwiek gracza (409, było `level:{gt:0}`); usunięcie
+  POJEDYNCZEGO węzła blokowane analogicznie, gdy jakiś `CharacterSkillNode` już na niego wskazuje.
+  `profile/service.ts`'s publiczny profil pokazuje teraz listę nazw odblokowanych umiejętności
+  bez liczby poziomu (nie ma już czego pokazywać).
+- **Frontend**: `SkillsPanel.tsx` przebudowany z płaskiej listy level/maxLevel na widok drzewka —
+  karta umiejętności z przyciskiem "Odblokuj (koszt: N)", a po odblokowaniu lista węzłów jako
+  osobne wiersze (`+X% mocy` / `-X% kosztu many` / `-X% czasu odnowienia`, przycisk "Odblokuj (N)"
+  albo ✓). `ClassesAdminPage.tsx` — pole "maks. poziom" zastąpione "koszt odblokowania (pkt)",
+  nowe pole "bazowy koszt many" (tylko active), zagnieżdżony edytor "Węzły drzewka" per
+  umiejętność (nazwa, opis, efekt, %, koszt pkt, usuń wiersz/węzeł).
+
+Zweryfikowane: `pnpm -r typecheck` czysto (api + web + shared) po każdej warstwie zmian. Skryptem
+bezpośrednio przez `unlockSkill`/`unlockNode`: odblokowanie odejmuje `unlockCost` i ustawia
+`unlocked`; próba odblokowania węzła przed umiejętnością odrzucona; dwa węzły (magnitude + cost)
+na tej samej aktywnej umiejętności poprawnie składają się w `gatherCombatBuild` (`power`/
+`manaCost` dokładnie zgodne z oczekiwaną formułą, różne od stanu bazowego); odblokowanie węzła
+magnitude na pasywnej umiejętności realnie podnosi `computeDerivedStats().attack` względem stanu
+bez węzła. W przeglądarce (panel admina, zalogowany jako `admin@mmo.local`): dodanie węzła do
+umiejętności klasy Mag, zapis, ponowne wejście w edycję pokazuje zapisany węzeł z poprawnymi
+polami; próba usunięcia węzła odblokowanego wcześniej przez testową postać poprawnie zwraca 409
+("gracze już go odblokowali"), po usunięciu odblokowania węzeł dający się usunąć bez błędu. Jako
+gracz (świeże konto testowe, postać Wojownika z 10 punktami): zakładka Umiejętności → drzewko
+pokazuje wszystkie 6 umiejętności z przyciskiem "Odblokuj (koszt: 1)"; kliknięcie odblokowuje
+"Furia Bitewna" (punkty 10→9, przycisk znika). Wszystkie dane testowe (węzeł, testowe konta,
+postacie, odblokowania) usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

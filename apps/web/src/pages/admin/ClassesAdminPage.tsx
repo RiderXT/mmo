@@ -27,12 +27,27 @@ function emptySkill() {
     kind: "passive" as const,
     scalingStat: "strength" as const,
     scalingFactor: 1,
-    maxLevel: 10,
+    unlockCost: 1,
     targetStat: "attack" as const,
     effectType: undefined,
     cooldownSeconds: undefined,
+    baseManaCost: undefined,
+    nodes: [],
   };
 }
+
+function emptyNode() {
+  return {
+    name: "",
+    description: "",
+    effect: "magnitude" as const,
+    magnitudePct: 0.1,
+    pointCost: 1,
+  };
+}
+
+type SkillFormValue = CreateCharacterClassInput["skills"][number];
+type NodeFormValue = SkillFormValue["nodes"][number];
 
 function emptyForm(): CreateCharacterClassInput {
   return {
@@ -56,10 +71,18 @@ function fromDto(cls: ClassDto): CreateCharacterClassInput {
       kind: s.kind,
       scalingStat: s.scalingStat,
       scalingFactor: s.scalingFactor,
-      maxLevel: s.maxLevel,
+      unlockCost: s.unlockCost,
       targetStat: s.targetStat ?? undefined,
       effectType: s.effectType ?? undefined,
       cooldownSeconds: s.cooldownSeconds ?? undefined,
+      baseManaCost: s.baseManaCost ?? undefined,
+      nodes: s.nodes.map((n) => ({
+        name: n.name,
+        description: n.description,
+        effect: n.effect,
+        magnitudePct: n.magnitudePct,
+        pointCost: n.pointCost,
+      })),
     })),
     startingGold: cls.startingGold,
     starterItems: cls.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
@@ -115,10 +138,17 @@ export function ClassesAdminPage() {
     saveMutation.mutate(parsed.data);
   }
 
-  function updateSkill(idx: number, patch: Partial<CreateCharacterClassInput["skills"][number]>) {
+  function updateSkill(idx: number, patch: Partial<SkillFormValue>) {
     const next = [...form.skills];
     next[idx] = { ...next[idx], ...patch };
     setForm({ ...form, skills: next });
+  }
+
+  function updateNode(skillIdx: number, nodeIdx: number, patch: Partial<NodeFormValue>) {
+    const skill = form.skills[skillIdx];
+    const nextNodes = [...skill.nodes];
+    nextNodes[nodeIdx] = { ...nextNodes[nodeIdx], ...patch };
+    updateSkill(skillIdx, { nodes: nextNodes });
   }
 
   return (
@@ -359,12 +389,13 @@ export function ClassesAdminPage() {
                       />
                     </label>
                     <label className="flex items-center gap-2 text-xs text-parchment-dim">
-                      maks. poziom
+                      koszt odblokowania (pkt)
                       <input
                         type="number"
+                        min={0}
                         className={inputClass}
-                        value={skill.maxLevel}
-                        onChange={(e) => updateSkill(idx, { maxLevel: Number(e.target.value) })}
+                        value={skill.unlockCost}
+                        onChange={(e) => updateSkill(idx, { unlockCost: Number(e.target.value) })}
                       />
                     </label>
 
@@ -402,16 +433,99 @@ export function ClassesAdminPage() {
                   </div>
 
                   {skill.kind === "active" && (
-                    <label className="mt-2 flex items-center gap-2 text-xs text-parchment-dim">
-                      cooldown (s)
-                      <input
-                        type="number"
-                        className={`${inputClass} w-24`}
-                        value={skill.cooldownSeconds ?? 30}
-                        onChange={(e) => updateSkill(idx, { cooldownSeconds: Number(e.target.value) })}
-                      />
-                    </label>
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                        cooldown (s)
+                        <input
+                          type="number"
+                          className={`${inputClass} w-24`}
+                          value={skill.cooldownSeconds ?? 30}
+                          onChange={(e) => updateSkill(idx, { cooldownSeconds: Number(e.target.value) })}
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                        bazowy koszt many
+                        <input
+                          type="number"
+                          min={0}
+                          className={`${inputClass} w-24`}
+                          value={skill.baseManaCost ?? 15}
+                          onChange={(e) => updateSkill(idx, { baseManaCost: Number(e.target.value) })}
+                        />
+                      </label>
+                    </div>
                   )}
+
+                  <div className="mt-3 border-t border-line-soft/40 pt-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-medium text-parchment-dim">Węzły drzewka ({skill.nodes.length})</p>
+                      <button
+                        onClick={() => updateSkill(idx, { nodes: [...skill.nodes, emptyNode()] })}
+                        className="text-xs text-gold-bright hover:underline"
+                      >
+                        + Dodaj węzeł
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {skill.nodes.map((node, nodeIdx) => (
+                        <div key={`${nodeIdx}-${node.name}`} className="border border-line-soft/60 p-2">
+                          <div className="grid gap-2 sm:grid-cols-4">
+                            <input
+                              placeholder="nazwa węzła"
+                              className={inputClass}
+                              value={node.name}
+                              onChange={(e) => updateNode(idx, nodeIdx, { name: e.target.value })}
+                            />
+                            <select
+                              className={inputClass}
+                              value={node.effect}
+                              onChange={(e) => updateNode(idx, nodeIdx, { effect: e.target.value as NodeFormValue["effect"] })}
+                            >
+                              <option value="magnitude">moc (+X%)</option>
+                              <option value="cost" disabled={skill.kind !== "active"}>
+                                koszt many (-X%)
+                              </option>
+                              <option value="cooldown" disabled={skill.kind !== "active"}>
+                                odnowienie (-X%)
+                              </option>
+                            </select>
+                            <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                              %
+                              <input
+                                type="number"
+                                step="0.01"
+                                className={inputClass}
+                                value={node.magnitudePct}
+                                onChange={(e) => updateNode(idx, nodeIdx, { magnitudePct: Number(e.target.value) })}
+                              />
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                              koszt pkt
+                              <input
+                                type="number"
+                                min={1}
+                                className={inputClass}
+                                value={node.pointCost}
+                                onChange={(e) => updateNode(idx, nodeIdx, { pointCost: Number(e.target.value) })}
+                              />
+                            </label>
+                          </div>
+                          <input
+                            placeholder="opis węzła"
+                            className={`${inputClass} mt-2`}
+                            value={node.description}
+                            onChange={(e) => updateNode(idx, nodeIdx, { description: e.target.value })}
+                          />
+                          <button
+                            onClick={() => updateSkill(idx, { nodes: skill.nodes.filter((_, i) => i !== nodeIdx) })}
+                            className="mt-2 text-xs text-red-400 hover:underline"
+                          >
+                            Usuń węzeł
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
                   <button
                     onClick={() => setForm({ ...form, skills: form.skills.filter((_, i) => i !== idx) })}

@@ -102,6 +102,16 @@ export interface ItemDto {
   bookSuccessChance: number | null;
 }
 
+export interface SkillTreeNodeDto {
+  id: string;
+  classSkillId: string;
+  name: string;
+  description: string;
+  effect: "magnitude" | "cost" | "cooldown";
+  magnitudePct: number;
+  pointCost: number;
+}
+
 export interface ClassSkillDto {
   id: string;
   name: string;
@@ -109,10 +119,12 @@ export interface ClassSkillDto {
   kind: SkillKind;
   scalingStat: CoreStatKey;
   scalingFactor: number;
-  maxLevel: number;
+  unlockCost: number;
   targetStat: StatKey | null;
   effectType: SkillEffectType | null;
   cooldownSeconds: number | null;
+  baseManaCost: number | null;
+  nodes: SkillTreeNodeDto[];
 }
 
 export interface ClassDto {

@@ -180,9 +180,11 @@ export function ExpeditionPanel({
   const itemNameFor = (itemId: string) => itemFor(itemId)?.name ?? itemId;
   const zoneNameFor = (zoneId: string | null) => (zoneId ? zones.find((z) => z.id === zoneId)?.name ?? zoneId : "wioski");
 
-  const levelByClassSkillId = new Map(characterSkillsQuery.data?.map((s) => [s.classSkillId, s.level]) ?? []);
+  const unlockedClassSkillIds = new Set(
+    characterSkillsQuery.data?.filter((s) => s.unlocked).map((s) => s.classSkillId) ?? [],
+  );
   const activeSkillsForCooldown = (classQuery.data?.skills ?? [])
-    .filter((s) => s.kind === "active" && s.cooldownSeconds && (levelByClassSkillId.get(s.id) ?? 0) > 0)
+    .filter((s) => s.kind === "active" && s.cooldownSeconds && unlockedClassSkillIds.has(s.id))
     .map((s) => ({ name: s.name, cooldownSeconds: s.cooldownSeconds! }));
 
   // Non-blocking — a flagged expedition withholds only its own reward, it never stops the
@@ -447,7 +449,7 @@ export function ExpeditionPanel({
         {tacticsMonsterIds && currentZone && (
           <BattleTacticsModal
             activeSkills={(classQuery.data?.skills ?? []).filter(
-              (s) => s.kind === "active" && (levelByClassSkillId.get(s.id) ?? 0) > 0,
+              (s) => s.kind === "active" && unlockedClassSkillIds.has(s.id),
             )}
             onBack={() => {
               setTacticsMonsterIds(null);

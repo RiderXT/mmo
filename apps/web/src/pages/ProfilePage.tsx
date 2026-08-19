@@ -153,9 +153,7 @@ export function ProfilePage() {
               {profile.skills.map((s) => (
                 <li key={s.name} className="flex items-center justify-between">
                   <span className="text-parchment-dim">{s.name}</span>
-                  <span className="font-medium tabular-nums text-parchment">
-                    {s.level}/{s.maxLevel}
-                  </span>
+                  <span className="font-medium text-gold-bright">Odblokowana</span>
                 </li>
               ))}
             </ul>

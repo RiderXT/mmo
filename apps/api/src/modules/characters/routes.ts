@@ -1,14 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { CreateCharacterSchema, AllocateStatSchema, AllocateSkillSchema } from "@mmo/shared";
+import { CreateCharacterSchema, AllocateStatSchema, UnlockSkillSchema, UnlockNodeSchema } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
 import { getCharacterCombatStats, getCharacterCombatStatsBreakdown, ExpeditionError } from "../expeditions/service.js";
 import {
   listCharacters,
   getCharacter,
   getCharacterSkills,
+  getCharacterSkillNodes,
   createCharacter,
   allocateStat,
-  allocateSkill,
+  unlockSkill,
+  unlockNode,
   CharacterError,
 } from "./service.js";
 
@@ -54,6 +56,16 @@ export async function charactersRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.get("/:id/skill-nodes", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return reply.send(await getCharacterSkillNodes(id, request.user!.sub));
+    } catch (err) {
+      if (err instanceof CharacterError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
   app.post("/", { preHandler: requireAuth }, async (request, reply) => {
     const input = CreateCharacterSchema.parse(request.body);
     try {
@@ -77,12 +89,24 @@ export async function charactersRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/:id/allocate-skill", { preHandler: requireAuth }, async (request, reply) => {
+  app.post("/:id/unlock-skill", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { classSkillId } = AllocateSkillSchema.parse(request.body);
+    const { classSkillId } = UnlockSkillSchema.parse(request.body);
     try {
-      const characterSkill = await allocateSkill(id, request.user!.sub, classSkillId, request.id);
+      const characterSkill = await unlockSkill(id, request.user!.sub, classSkillId, request.id);
       return reply.send(characterSkill);
+    } catch (err) {
+      if (err instanceof CharacterError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:id/unlock-node", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { nodeId } = UnlockNodeSchema.parse(request.body);
+    try {
+      const characterSkillNode = await unlockNode(id, request.user!.sub, nodeId, request.id);
+      return reply.send(characterSkillNode);
     } catch (err) {
       if (err instanceof CharacterError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;

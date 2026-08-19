@@ -48,13 +48,14 @@ export interface PassiveSkillBonus {
   scalingStat: CoreStatKey;
   scalingFactor: number;
   targetStat: StatKey;
-  level: number;
+  // 1 + sum of unlocked "magnitude" tree-node percentages for this skill (see gatherCombatBuild).
+  magnitudeMultiplier: number;
 }
 
 export interface ActiveSkillDef {
   id: string;
   name: string;
-  power: number; // scalingFactor * coreStat * level, precomputed by the caller
+  power: number; // scalingFactor * coreStat * magnitudeMultiplier, precomputed by the caller
   manaCost: number;
   effectType: "damage" | "heal";
   cooldownSeconds: number;
@@ -112,7 +113,7 @@ export function computeDerivedStats(
   const sumPassive = (key: StatKey) =>
     passiveSkills
       .filter((p) => p.targetStat === key)
-      .reduce((sum, p) => sum + p.scalingFactor * core[p.scalingStat] * p.level, 0);
+      .reduce((sum, p) => sum + p.scalingFactor * core[p.scalingStat] * p.magnitudeMultiplier, 0);
   const bonus = (key: StatKey) => sumEquip(key) + sumPassive(key);
 
   return {
@@ -156,7 +157,7 @@ export function computeDerivedStatsBreakdown(
   const sumPassive = (key: StatKey) =>
     passiveSkills
       .filter((p) => p.targetStat === key)
-      .reduce((sum, p) => sum + p.scalingFactor * core[p.scalingStat] * p.level, 0);
+      .reduce((sum, p) => sum + p.scalingFactor * core[p.scalingStat] * p.magnitudeMultiplier, 0);
 
   return {
     maxHp: contribution(50 + core.vitality * 10, sumEquip("hp"), sumPassive("hp"), (v) => Math.max(1, Math.round(v))),

@@ -182,27 +182,60 @@ model ClassSkill {
   kind            String // "passive" | "active"
   scalingStat     String // CoreStatKey
   scalingFactor   Float   @default(1)
-  maxLevel        Int     @default(10)
   targetStat      String? // StatKey — passive only
   effectType      String? // "damage" | "heal" — active only
-  cooldownSeconds Int? // active only
+  cooldownSeconds Int? // active only, BASE cooldown (nodes with effect "cooldown" reduce it)
+  // Skill-tree redesign: the skill's own effect is now a FIXED base value, unlocked once for
+  // unlockCost points — all further growth comes from SkillTreeNode unlocks (any order), not
+  // from levels. baseManaCost replaces the old global 10+5*level formula for active skills.
+  unlockCost   Int  @default(1)
+  baseManaCost Int? // active only, BASE mana cost (nodes with effect "cost" reduce it)
 
   class           CharacterClass   @relation(fields: [classId], references: [id], onDelete: Cascade)
   characterSkills CharacterSkill[]
+  nodes           SkillTreeNode[]
 
   @@unique([classId, name])
 }
 
-model CharacterSkill {
+// A single, freely-orderable upgrade unlockable within a ClassSkill's tree — no prerequisites
+// between nodes (player picks priority order), see modules/characters/service.ts unlockNode.
+model SkillTreeNode {
   id           String @id @default(cuid())
+  classSkillId String
+  name         String
+  description  String @default("")
+  effect       String // "magnitude" | "cost" | "cooldown" — cost/cooldown only meaningful for kind=active
+  magnitudePct Float // e.g. 0.1 = +10% power (magnitude) or -10% cost/cooldown (cost/cooldown)
+  pointCost    Int    @default(1)
+
+  classSkill       ClassSkill           @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
+  characterUnlocks CharacterSkillNode[]
+
+  @@unique([classSkillId, name])
+}
+
+model CharacterSkill {
+  id           String  @id @default(cuid())
   characterId  String
   classSkillId String
-  level        Int    @default(0)
+  unlocked     Boolean @default(false)
 
   character  Character  @relation(fields: [characterId], references: [id], onDelete: Cascade)
   classSkill ClassSkill @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
 
   @@unique([characterId, classSkillId])
+}
+
+model CharacterSkillNode {
+  id          String @id @default(cuid())
+  characterId String
+  nodeId      String
+
+  character Character     @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  node      SkillTreeNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, nodeId])
 }
 
 // Character-wide passive/profession skills (e.g. "Górnictwo") — unlike ClassSkill these are not

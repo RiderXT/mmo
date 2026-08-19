@@ -45,8 +45,11 @@ export type Character = z.infer<typeof CharacterSchema>;
 export const AllocateStatSchema = z.object({ stat: CoreStatKeySchema });
 export type AllocateStatInput = z.infer<typeof AllocateStatSchema>;
 
-export const AllocateSkillSchema = z.object({ classSkillId: z.string() });
-export type AllocateSkillInput = z.infer<typeof AllocateSkillSchema>;
+export const UnlockSkillSchema = z.object({ classSkillId: z.string() });
+export type UnlockSkillInput = z.infer<typeof UnlockSkillSchema>;
+
+export const UnlockNodeSchema = z.object({ nodeId: z.string() });
+export type UnlockNodeInput = z.infer<typeof UnlockNodeSchema>;
 
 // Admin testing tool — grant exp/gold/items directly to a character, bypassing expeditions.
 export const AdminGrantItemSchema = z.object({

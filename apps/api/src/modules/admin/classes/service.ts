@@ -1,9 +1,9 @@
 import { prisma } from "../../../lib/prismaClient.js";
 import { logAction } from "../../../lib/gameLog.js";
-import type { CreateCharacterClassInput, ClassSkillInput } from "@mmo/shared";
+import type { CreateCharacterClassInput, ClassSkillInput, SkillTreeNodeInput } from "@mmo/shared";
 
 const classInclude = {
-  skills: true,
+  skills: { include: { nodes: true } },
   starterItems: { include: { item: { select: { id: true, name: true } } } },
 } as const;
 
@@ -22,10 +22,20 @@ function skillData(skill: ClassSkillInput) {
     kind: skill.kind,
     scalingStat: skill.scalingStat,
     scalingFactor: skill.scalingFactor,
-    maxLevel: skill.maxLevel,
+    unlockCost: skill.unlockCost,
     targetStat: skill.targetStat ?? null,
     effectType: skill.effectType ?? null,
     cooldownSeconds: skill.cooldownSeconds ?? null,
+    baseManaCost: skill.baseManaCost ?? null,
+  };
+}
+
+function nodeData(node: SkillTreeNodeInput) {
+  return {
+    description: node.description,
+    effect: node.effect,
+    magnitudePct: node.magnitudePct,
+    pointCost: node.pointCost,
   };
 }
 
@@ -66,7 +76,13 @@ export async function createCharacterClass(
       description: input.description,
       primaryStat: input.primaryStat,
       startingGold: input.startingGold,
-      skills: { create: input.skills.map((s) => ({ name: s.name, ...skillData(s) })) },
+      skills: {
+        create: input.skills.map((s) => ({
+          name: s.name,
+          ...skillData(s),
+          nodes: { create: s.nodes.map((n) => ({ name: n.name, ...nodeData(n) })) },
+        })),
+      },
       starterItems: {
         create: input.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
       },
@@ -105,13 +121,34 @@ export async function updateCharacterClass(
 
   const toRemove = existing.skills.filter((s) => !skillNames.has(s.name));
   for (const skill of toRemove) {
-    const invested = await prisma.characterSkill.count({ where: { classSkillId: skill.id, level: { gt: 0 } } });
+    const invested = await prisma.characterSkill.count({ where: { classSkillId: skill.id, unlocked: true } });
     if (invested > 0) {
       throw new ClassError(
-        `Nie można usunąć umiejętności "${skill.name}" — gracze zainwestowali już w nią punkty`,
+        `Nie można usunąć umiejętności "${skill.name}" — gracze już ją odblokowali`,
         409,
       );
     }
+  }
+
+  // Guard node deletions the same way as skill deletions, computed up front so a 409 aborts
+  // before any writes happen (see nested upsert loop below for the matching create/update side).
+  const nodeRemovalsBySkillId = new Map<string, string[]>();
+  for (const skill of input.skills) {
+    const existingSkill = existing.skills.find((s) => s.name === skill.name);
+    if (!existingSkill) continue;
+    const nodeNames = new Set(skill.nodes.map((n) => n.name));
+    const nodesToRemove = existingSkill.nodes.filter((n) => !nodeNames.has(n.name));
+    if (!nodesToRemove.length) continue;
+    const unlockedCount = await prisma.characterSkillNode.count({
+      where: { nodeId: { in: nodesToRemove.map((n) => n.id) } },
+    });
+    if (unlockedCount > 0) {
+      throw new ClassError(
+        `Nie można usunąć węzła w umiejętności "${skill.name}" — gracze już go odblokowali`,
+        409,
+      );
+    }
+    nodeRemovalsBySkillId.set(existingSkill.id, nodesToRemove.map((n) => n.id));
   }
 
   const characterClass = await prisma.$transaction(async (tx) => {
@@ -119,11 +156,23 @@ export async function updateCharacterClass(
       await tx.classSkill.deleteMany({ where: { id: { in: toRemove.map((s) => s.id) } } });
     }
     for (const skill of input.skills) {
-      await tx.classSkill.upsert({
+      const classSkill = await tx.classSkill.upsert({
         where: { classId_name: { classId: id, name: skill.name } },
         create: { classId: id, name: skill.name, ...skillData(skill) },
         update: skillData(skill),
       });
+
+      const nodesToRemove = nodeRemovalsBySkillId.get(classSkill.id);
+      if (nodesToRemove?.length) {
+        await tx.skillTreeNode.deleteMany({ where: { id: { in: nodesToRemove } } });
+      }
+      for (const node of skill.nodes) {
+        await tx.skillTreeNode.upsert({
+          where: { classSkillId_name: { classSkillId: classSkill.id, name: node.name } },
+          create: { classSkillId: classSkill.id, name: node.name, ...nodeData(node) },
+          update: nodeData(node),
+        });
+      }
     }
     await tx.classStarterItem.deleteMany({ where: { classId: id } });
     return tx.characterClass.update({

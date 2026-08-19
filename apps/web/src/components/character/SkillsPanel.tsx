@@ -2,9 +2,16 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Character } from "@mmo/shared";
 import { getPlayerClass } from "../../lib/classesApi";
-import { allocateSkill, getCharacterSkills } from "../../lib/charactersApi";
+import { unlockSkill, unlockNode, getCharacterSkills, listCharacterSkillNodes } from "../../lib/charactersApi";
 import { ApiError } from "../../lib/apiClient";
 import { PanelFrame } from "../common/PanelFrame";
+
+function formatNodeEffect(effect: "magnitude" | "cost" | "cooldown", magnitudePct: number): string {
+  const pct = Math.round(magnitudePct * 100);
+  if (effect === "magnitude") return `+${pct}% mocy`;
+  if (effect === "cost") return `-${pct}% kosztu many`;
+  return `-${pct}% czasu odnowienia`;
+}
 
 export function SkillsPanel({ character }: { character: Character }) {
   const queryClient = useQueryClient();
@@ -21,20 +28,40 @@ export function SkillsPanel({ character }: { character: Character }) {
     queryFn: () => getCharacterSkills(character.id),
   });
 
-  const mutation = useMutation({
-    mutationFn: (classSkillId: string) => allocateSkill(character.id, classSkillId),
+  const nodesQuery = useQuery({
+    queryKey: ["character-skill-nodes", character.id],
+    queryFn: () => listCharacterSkillNodes(character.id),
+  });
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["character-skills", character.id] });
+    queryClient.invalidateQueries({ queryKey: ["character-skill-nodes", character.id] });
+    queryClient.invalidateQueries({ queryKey: ["character", character.id] });
+    queryClient.invalidateQueries({ queryKey: ["combat-stats", character.id] });
+  };
+
+  const unlockSkillMutation = useMutation({
+    mutationFn: (classSkillId: string) => unlockSkill(character.id, classSkillId),
     onSuccess: () => {
       setError(null);
-      queryClient.invalidateQueries({ queryKey: ["character-skills", character.id] });
-      queryClient.invalidateQueries({ queryKey: ["character", character.id] });
-      queryClient.invalidateQueries({ queryKey: ["combat-stats", character.id] });
+      invalidateAll();
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się przydzielić punktu"),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się odblokować umiejętności"),
+  });
+
+  const unlockNodeMutation = useMutation({
+    mutationFn: (nodeId: string) => unlockNode(character.id, nodeId),
+    onSuccess: () => {
+      setError(null);
+      invalidateAll();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się odblokować węzła"),
   });
 
   if (!character.classId || !classQuery.data) return null;
 
-  const levelByClassSkillId = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s.level]) ?? []);
+  const unlockedByClassSkillId = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s.unlocked]) ?? []);
+  const unlockedNodeIds = new Set(nodesQuery.data?.map((n) => n.nodeId) ?? []);
 
   return (
     <PanelFrame
@@ -45,30 +72,58 @@ export function SkillsPanel({ character }: { character: Character }) {
         </span>
       }
     >
-      <div className="space-y-1">
+      <div className="space-y-3">
         {classQuery.data.skills.map((skill) => {
-          const level = levelByClassSkillId.get(skill.id) ?? 0;
-          const maxed = level >= skill.maxLevel;
+          const unlocked = unlockedByClassSkillId.get(skill.id) ?? false;
           return (
-            <div key={skill.id} className="flex items-center justify-between text-sm">
-              <div>
-                <span className="text-parchment-dim">{skill.name}</span>
-                <span className="ml-2 text-xs text-parchment-faint">
-                  {skill.kind === "active" ? `aktywna, cd ${skill.cooldownSeconds}s` : "pasywna"}
-                </span>
+            <div key={skill.id} className="rounded-md border border-line-soft/60 p-2">
+              <div className="flex items-center justify-between text-sm">
+                <div>
+                  <span className="text-parchment-dim">{skill.name}</span>
+                  <span className="ml-2 text-xs text-parchment-faint">
+                    {skill.kind === "active" ? `aktywna, cd ${skill.cooldownSeconds}s` : "pasywna"}
+                  </span>
+                </div>
+                {!unlocked && (
+                  <button
+                    onClick={() => unlockSkillMutation.mutate(skill.id)}
+                    disabled={character.unspentSkillPoints < skill.unlockCost || unlockSkillMutation.isPending}
+                    className="rounded-md bg-gold px-3 py-1 text-xs font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    Odblokuj (koszt: {skill.unlockCost})
+                  </button>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="tabular-nums text-parchment">
-                  {level}/{skill.maxLevel}
-                </span>
-                <button
-                  onClick={() => mutation.mutate(skill.id)}
-                  disabled={character.unspentSkillPoints < 1 || maxed || mutation.isPending}
-                  className="flex h-5 w-5 items-center justify-center rounded bg-gold text-xs text-ink hover:bg-gold-bright disabled:opacity-30"
-                >
-                  +
-                </button>
-              </div>
+
+              {unlocked && skill.nodes.length > 0 && (
+                <div className="mt-2 space-y-1.5 border-t border-line-soft/40 pt-2">
+                  {skill.nodes.map((node) => {
+                    const nodeUnlocked = unlockedNodeIds.has(node.id);
+                    return (
+                      <div key={node.id} className="flex items-center justify-between gap-2 text-xs">
+                        <div className="min-w-0">
+                          <span className={nodeUnlocked ? "text-gold-bright" : "text-parchment-dim"}>{node.name}</span>
+                          <span className="ml-2 text-parchment-faint">{formatNodeEffect(node.effect, node.magnitudePct)}</span>
+                          {node.description && (
+                            <span className="ml-2 text-parchment-faint">— {node.description}</span>
+                          )}
+                        </div>
+                        {nodeUnlocked ? (
+                          <span className="shrink-0 text-gold-bright">✓</span>
+                        ) : (
+                          <button
+                            onClick={() => unlockNodeMutation.mutate(node.id)}
+                            disabled={character.unspentSkillPoints < node.pointCost || unlockNodeMutation.isPending}
+                            className="shrink-0 rounded bg-gold px-2 py-0.5 font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-30"
+                          >
+                            Odblokuj ({node.pointCost})
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}

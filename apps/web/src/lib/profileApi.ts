@@ -27,7 +27,7 @@ export interface CharacterProfileDto {
   equippedCount: number;
   totalEquipSlots: number;
   equipmentBonuses: { stat: StatKey; value: number }[];
-  skills: { name: string; level: number; maxLevel: number }[];
+  skills: { name: string }[];
   monstersKilled: number;
   chestsOpened: number;
 }

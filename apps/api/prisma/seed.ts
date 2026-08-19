@@ -33,8 +33,8 @@ async function seedClasses() {
         { name: "Żelazna Skóra", kind: "passive", scalingStat: "vitality", scalingFactor: 0.4, targetStat: "defense" },
         { name: "Refleks Wojownika", kind: "passive", scalingStat: "dexterity", scalingFactor: 0.01, targetStat: "evasion" },
         { name: "Krytyczne Uderzenie", kind: "passive", scalingStat: "strength", scalingFactor: 0.005, targetStat: "critChance" },
-        { name: "Cios Mocy", kind: "active", scalingStat: "strength", scalingFactor: 2, effectType: "damage", cooldownSeconds: 30 },
-        { name: "Okrzyk Bojowy", kind: "active", scalingStat: "vitality", scalingFactor: 1, effectType: "heal", cooldownSeconds: 60 },
+        { name: "Cios Mocy", kind: "active", scalingStat: "strength", scalingFactor: 2, effectType: "damage", cooldownSeconds: 30, baseManaCost: 25 },
+        { name: "Okrzyk Bojowy", kind: "active", scalingStat: "vitality", scalingFactor: 1, effectType: "heal", cooldownSeconds: 60, baseManaCost: 40 },
       ],
     },
     {
@@ -46,8 +46,8 @@ async function seedClasses() {
         { name: "Wytrzymałość", kind: "passive", scalingStat: "vitality", scalingFactor: 2, targetStat: "hp" },
         { name: "Opancerzenie", kind: "passive", scalingStat: "vitality", scalingFactor: 0.01, targetStat: "damageReduction" },
         { name: "Kontratak", kind: "passive", scalingStat: "strength", scalingFactor: 0.3, targetStat: "attack" },
-        { name: "Uderzenie Tarczą", kind: "active", scalingStat: "vitality", scalingFactor: 1.5, effectType: "damage", cooldownSeconds: 45 },
-        { name: "Samoleczenie", kind: "active", scalingStat: "vitality", scalingFactor: 1.5, effectType: "heal", cooldownSeconds: 40 },
+        { name: "Uderzenie Tarczą", kind: "active", scalingStat: "vitality", scalingFactor: 1.5, effectType: "damage", cooldownSeconds: 45, baseManaCost: 30 },
+        { name: "Samoleczenie", kind: "active", scalingStat: "vitality", scalingFactor: 1.5, effectType: "heal", cooldownSeconds: 40, baseManaCost: 30 },
       ],
     },
     {
@@ -59,8 +59,8 @@ async function seedClasses() {
         { name: "Celność", kind: "passive", scalingStat: "dexterity", scalingFactor: 0.008, targetStat: "critChance" },
         { name: "Szybkie Ręce", kind: "passive", scalingStat: "dexterity", scalingFactor: 0.5, targetStat: "attackSpeed" },
         { name: "Skrytobójstwo", kind: "passive", scalingStat: "dexterity", scalingFactor: 0.05, targetStat: "critDamage" },
-        { name: "Cios w Plecy", kind: "active", scalingStat: "dexterity", scalingFactor: 2.5, effectType: "damage", cooldownSeconds: 25 },
-        { name: "Szybka Regeneracja", kind: "active", scalingStat: "dexterity", scalingFactor: 1, effectType: "heal", cooldownSeconds: 50 },
+        { name: "Cios w Plecy", kind: "active", scalingStat: "dexterity", scalingFactor: 2.5, effectType: "damage", cooldownSeconds: 25, baseManaCost: 20 },
+        { name: "Szybka Regeneracja", kind: "active", scalingStat: "dexterity", scalingFactor: 1, effectType: "heal", cooldownSeconds: 50, baseManaCost: 35 },
       ],
     },
     {
@@ -72,8 +72,8 @@ async function seedClasses() {
         { name: "Rezerwy Many", kind: "passive", scalingStat: "intelligence", scalingFactor: 3, targetStat: "maxMana" },
         { name: "Osłona Magiczna", kind: "passive", scalingStat: "intelligence", scalingFactor: 0.008, targetStat: "damageReduction" },
         { name: "Precyzja Zaklęć", kind: "passive", scalingStat: "intelligence", scalingFactor: 0.006, targetStat: "critChance" },
-        { name: "Ognista Kula", kind: "active", scalingStat: "intelligence", scalingFactor: 3, effectType: "damage", cooldownSeconds: 20 },
-        { name: "Uzdrowienie", kind: "active", scalingStat: "intelligence", scalingFactor: 2, effectType: "heal", cooldownSeconds: 35 },
+        { name: "Ognista Kula", kind: "active", scalingStat: "intelligence", scalingFactor: 3, effectType: "damage", cooldownSeconds: 20, baseManaCost: 20 },
+        { name: "Uzdrowienie", kind: "active", scalingStat: "intelligence", scalingFactor: 2, effectType: "heal", cooldownSeconds: 35, baseManaCost: 25 },
       ],
     },
   ] as const;
@@ -84,7 +84,7 @@ async function seedClasses() {
         name: cls.name,
         description: cls.description,
         primaryStat: cls.primaryStat,
-        skills: { create: cls.skills.map((s) => ({ ...s, maxLevel: 10 })) },
+        skills: { create: cls.skills.map((s) => ({ ...s })) },
       },
     });
   }
