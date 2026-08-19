@@ -36,13 +36,26 @@ const CENTER_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "boots"];
 const COL1_SLOTS: EquipSlot[] = ["necklace", "ring"];
 const COL2_SLOTS: EquipSlot[] = ["shield", "earrings"];
 const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon"];
+// Gathering tools — carried, not worn, so they get their own labeled row below the doll instead
+// of a spot in the humanoid silhouette (see "Narzędzia zbieractwa" below). Backend has supported
+// equipping these since the gathering system shipped (inventory/service.ts
+// EQUIPPABLE_SLOTS_BY_TYPE), but the doll never grew sockets for them — nothing in the UI could
+// actually populate equippedSlot "rod"/"pickaxe", so GatheringPanel's "Załóż wędkę" gate was
+// permanently unsatisfiable.
+const TOOL_EQUIP_SLOTS: EquipSlot[] = ["rod", "pickaxe"];
 // weapon/armor occupy 2 grid cells (Item.gridWidth) — size their equip socket to match instead of
 // cramming a tall item into a 1-cell box.
 const TALL_EQUIP_SLOTS = new Set<EquipSlot>(["weapon", "armor"]);
 // Item types with a rendered socket in this doll — drives the context menu's "Załóż" entry
 // (since dnd-kit drag alone is unreachable on mobile; see critique 2026-08-17) and the tooltip's
 // equipped-item stat comparison.
-const EQUIPPABLE_TYPES = new Set<string>([...COL1_SLOTS, ...COL2_SLOTS, ...CENTER_EQUIP_SLOTS, ...RIGHT_EQUIP_SLOTS]);
+const EQUIPPABLE_TYPES = new Set<string>([
+  ...COL1_SLOTS,
+  ...COL2_SLOTS,
+  ...CENTER_EQUIP_SLOTS,
+  ...RIGHT_EQUIP_SLOTS,
+  ...TOOL_EQUIP_SLOTS,
+]);
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
 
@@ -283,6 +296,15 @@ export function EquipmentTab({ character }: { character: Character }) {
               <div className="font-display text-base font-bold text-parchment">{character.name}</div>
               <div className="text-xs text-gold">
                 {classQuery.data?.name ?? "…"} · lvl. {character.level}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center">
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
+                Narzędzia zbieractwa (wędka do łowienia, kilof do kopalni)
+              </p>
+              <div className="flex justify-center gap-3">
+                {TOOL_EQUIP_SLOTS.map((slot) => renderEquipSlot(slot, ""))}
               </div>
             </div>
 
