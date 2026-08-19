@@ -14,6 +14,12 @@ your-domain.example.com {
 	handle /health {
 		reverse_proxy localhost:4000
 	}
+	# Uploaded item artwork (apps/api/uploads, served by @fastify/static) → Node process.
+	# Without this, /uploads/* falls through to the SPA's catch-all below and returns
+	# index.html instead of the image.
+	handle /uploads/* {
+		reverse_proxy localhost:4000
+	}
 
 	# Everything else → the built React app (static files)
 	handle {
@@ -31,6 +37,9 @@ your-domain.example.com {
 # 		reverse_proxy localhost:4000
 # 	}
 # 	handle /health {
+# 		reverse_proxy localhost:4000
+# 	}
+# 	handle /uploads/* {
 # 		reverse_proxy localhost:4000
 # 	}
 # 	handle {

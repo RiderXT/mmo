@@ -2434,6 +2434,28 @@ ma 4 narożniki `OrnateCorners` (`viewBox="0 0 36 36"`, potwierdzone w DOM) + we
 Responsywność: układ mobilny (375px) nie rozjechał się po zmianach. `pnpm --filter web typecheck`
 czysto.
 
+### Fix: obrazki itemów niewidoczne na produkcji — brakująca reguła `/uploads/` w nginx/Caddy (2026-08-19)
+
+Zgłoszenie usera: wgrany obrazek itemu (np. "Różdżka Wilków", "Mikstura Życia") nie wyświetlał się
+— inspekcja elementu pokazywała poprawny `src="/uploads/items/{id}-{timestamp}.png"`, ale otwarcie
+tego adresu przekierowywało na `/characters`. Lokalnie (dev) obrazki działają, bo `API_URL` jest
+tam zawsze absolutny (`http://localhost:4000`); na produkcji `VITE_API_URL` jest CELOWO puste
+(`docs/deployment.md` krok 6 — "zapytania idą pod ten sam adres co strona"), więc `<img src>`
+staje się względną ścieżką `/uploads/...`, którą musi obsłużyć reverse proxy. `deploy/mmo-api.service.example`
+serwuje te pliki poprawnie (`@fastify/static`, patrz `apps/api/src/app.ts`) — problem był wyłącznie
+w szablonach configów, które przekierowywały do backendu `/api/*` i `/health`, ale NIE `/uploads/*`
+(funkcja uploadu grafik itemów została dodana w tej sesji, długo po tym, jak te szablony powstały).
+Bez tej reguły `/uploads/*` trafiał w catch-all `try_files $uri /index.html` (nginx) / `handle {
+file_server }` (Caddy), serwer zwracał SPA zamiast pliku PNG, a router frontendowy przekierowywał
+nieznaną ścieżkę na `/characters` — dokładnie objaw zgłoszony przez usera.
+
+Naprawione w **szablonach** (`deploy/nginx-mmo.conf.example`, `deploy/Caddyfile.example`, w tym
+wariant "bez domeny" w Caddyfile) — dodana reguła `/uploads/` → `proxy_pass`/`reverse_proxy` do
+`127.0.0.1:4000`, identyczna jak dla `/api/`. **To NIE naprawia samo z siebie już działającego
+serwera na VPS** — szablon jest kopiowany tylko raz przy pierwszym wdrożeniu (`docs/deployment.md`
+krok 9); istniejącą, żywą konfigurację nginx/Caddy trzeba ręcznie dopisać na serwerze i przeładować
+(`sudo nginx -t && sudo systemctl reload nginx`, albo dla Caddy `sudo systemctl reload caddy`).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
