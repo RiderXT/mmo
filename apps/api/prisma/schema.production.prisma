@@ -106,6 +106,7 @@ model Character {
   skills      CharacterSkill[]
   expeditions Expedition[]    @relation("CharacterExpeditions")
   gatherSession GatherSession?
+  passiveSkills CharacterPassiveSkill[]
 
   @@index([userId])
   @@index([classId])
@@ -157,6 +158,41 @@ model CharacterSkill {
   classSkill ClassSkill @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
 
   @@unique([characterId, classSkillId])
+}
+
+// Character-wide passive/profession skills (e.g. "Górnictwo") — unlike ClassSkill these are not
+// class-specific and don't cost skill points: they level up only via reading a "book" item with a
+// per-read success chance (see Item.bookSkillTypeId/bookSuccessChance, modules/passiveSkills).
+model PassiveSkillType {
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  description         String   @default("")
+  maxLevel            Int      @default(100)
+  // Which gathering activity this skill boosts, if any — null = no mechanical effect (yet).
+  gatherKind          String? // "fishing" | "mining"
+  // Bonus added to that gather kind's success chance PER SKILL LEVEL (0..1 scale, same units as
+  // Item.gatherChanceBonusPctMax), stacking additively with the equipped tool's own bonus.
+  chanceBonusPerLevel Float    @default(0)
+  // Same idea for the phase-duration speed bonus (only applies to catching/extracting, mirroring
+  // how the tool's own speed bonus never speeds up the mining "searching" phase).
+  speedBonusPerLevel  Float    @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  characterSkills CharacterPassiveSkill[]
+  books           Item[]                   @relation("BookForPassiveSkill")
+}
+
+model CharacterPassiveSkill {
+  id          String @id @default(cuid())
+  characterId String
+  skillTypeId String
+  level       Int    @default(0)
+
+  character Character        @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  skillType PassiveSkillType @relation(fields: [skillTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, skillTypeId])
 }
 
 model Zone {
@@ -278,6 +314,10 @@ model Item {
   // Only meaningful when type === "bait". Flat % bonus to catch/mine chance while carried in an
   // active slot (InventoryItem.activeSlotIndex) — NOT consumed, unlike potions.
   baitChanceBonusPct  Float?
+  // Only meaningful when type === "book". Which passive skill reading this book attempts to level
+  // up, and the chance (0..1) that a read succeeds — see modules/passiveSkills.
+  bookSkillTypeId     String?
+  bookSuccessChance   Float?
   // Gold received for selling one unit via the inventory context menu. 0 = not sellable.
   sellPrice           Int      @default(1)
   // How many grid cells this item occupies vertically when placed unequipped (see
@@ -288,6 +328,7 @@ model Item {
   updatedAt           DateTime @updatedAt
 
   class               CharacterClass? @relation(fields: [classId], references: [id])
+  bookSkillType       PassiveSkillType? @relation("BookForPassiveSkill", fields: [bookSkillTypeId], references: [id], onDelete: SetNull)
   monsterDrops        MonsterDrop[]
   zoneDrops           ZoneDrop[]
   inventoryItems      InventoryItem[]
@@ -415,6 +456,11 @@ model InventoryItem {
   // settable) for "interval"-triggered potions since there's no threshold to override. Null =
   // use the item's own default (see gatherCombatBuild in expeditions/service.ts).
   potionThresholdOverridePct Float?
+  // Only meaningful for type rod/pickaxe: successful gathers performed with THIS specific tool
+  // instance since its last upgrade. Gates the anvil upgrade past
+  // gathering.settings.successesPerToolUpgrade (see modules/inventory/service.ts upgradeItem) and
+  // resets to 0 on a successful upgrade.
+  gatherSuccessCount Int @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

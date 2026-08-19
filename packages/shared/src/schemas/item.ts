@@ -75,6 +75,10 @@ export const CreateItemSchema = z
     gatherChanceBonusPctMax: z.number().min(0).max(1).nullable().optional(),
     // Only meaningful for type === "bait". Flat % bonus while carried in an active slot.
     baitChanceBonusPct: z.number().min(0).max(1).nullable().optional(),
+    // Only meaningful for type === "book". Which passive skill reading this book targets, and the
+    // chance (0..1) that a read succeeds.
+    bookSkillTypeId: z.string().nullable().optional(),
+    bookSuccessChance: z.number().min(0).max(1).nullable().optional(),
     // Gold for selling one unit via the inventory context menu. 0 = not sellable.
     sellPrice: z.number().int().min(0).max(999999).default(1),
     // Grid cells occupied vertically when unequipped (see apps/web/src/lib/inventoryGrid.ts).

@@ -17,6 +17,8 @@ export function ItemTooltip({
   stats,
   compareStats,
   classMismatch = false,
+  gatherSuccessCount,
+  gatherSuccessRequired,
   children,
 }: {
   name: string;
@@ -26,6 +28,10 @@ export function ItemTooltip({
   /** Class restriction display name, or null when the item is usable by any class. */
   className: string | null;
   stats: Partial<Record<StatKey, number>>;
+  /** Only for rod/pickaxe — successful gathers with this tool vs. how many are needed to unlock
+   * its next anvil upgrade. Provide both together, or neither. */
+  gatherSuccessCount?: number;
+  gatherSuccessRequired?: number;
   /** Stats of the item currently worn in the same equip slot — when provided, each stat row
    * grows a colored "(+N)"/"(-N)" delta against it. undefined disables the comparison entirely
    * (used outside the equipment doll, where there's no "currently worn" item to diff against). */
@@ -83,6 +89,11 @@ export function ItemTooltip({
                 : "Uniwersalny"}
           </p>
           <p className="text-parchment-faint">Od poziomu: {minLevel}</p>
+          {gatherSuccessCount !== undefined && gatherSuccessRequired !== undefined && (
+            <p className="text-parchment-faint">
+              Udane zbiórki: {gatherSuccessCount}/{gatherSuccessRequired}
+            </p>
+          )}
           {statKeys.length > 0 && (
             <div className="mt-2 space-y-0.5 border-t border-gold/20 pt-2">
               {statKeys.map((stat) => {

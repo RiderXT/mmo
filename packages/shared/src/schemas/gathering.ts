@@ -77,5 +77,9 @@ export const GatheringSettingsSchema = z.object({
   // Hard cap on how many phase-cycles a single lazy-resolve call will retroactively credit for
   // an unattended session — protects against unbounded AFK catch-up. See modules/gathering.
   maxCyclesPerResolve: z.number().int().min(1).max(10000),
+  // Successful gathers required (per rod/pickaxe instance, via InventoryItem.gatherSuccessCount)
+  // before the anvil will allow upgrading that tool to its next level. See upgradeItem in
+  // modules/inventory/service.ts.
+  successesPerToolUpgrade: z.number().int().min(1).max(100000).default(100),
 });
 export type GatheringSettings = z.infer<typeof GatheringSettingsSchema>;

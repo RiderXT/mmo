@@ -13,7 +13,15 @@ import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
-import { listItems, createItem, updateItem, deleteItem, listClasses, type ItemDto } from "../../lib/adminApi";
+import {
+  listItems,
+  createItem,
+  updateItem,
+  deleteItem,
+  listClasses,
+  listPassiveSkillTypes,
+  type ItemDto,
+} from "../../lib/adminApi";
 import { TYPE_LABELS, STAT_LABELS, statHint } from "../../lib/statFormat";
 
 const ITEM_TYPES = ItemTypeSchema.options;
@@ -46,6 +54,8 @@ function emptyForm(): CreateItemInput {
     gatherSpeedBonusPctMax: null,
     gatherChanceBonusPctMax: null,
     baitChanceBonusPct: null,
+    bookSkillTypeId: null,
+    bookSuccessChance: null,
   };
 }
 
@@ -82,6 +92,8 @@ function fromDto(item: ItemDto): CreateItemInput {
     gatherSpeedBonusPctMax: item.gatherSpeedBonusPctMax,
     gatherChanceBonusPctMax: item.gatherChanceBonusPctMax,
     baitChanceBonusPct: item.baitChanceBonusPct,
+    bookSkillTypeId: item.bookSkillTypeId,
+    bookSuccessChance: item.bookSuccessChance,
     potion:
       item.type === "consumable" && item.potionTrigger && item.potionEffect
         ? {
@@ -173,6 +185,7 @@ export function ItemsAdminPage() {
   const queryClient = useQueryClient();
   const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
   const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const passiveSkillsQuery = useQuery({ queryKey: ["admin-passive-skills"], queryFn: listPassiveSkillTypes });
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateItemInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
@@ -358,6 +371,8 @@ export function ItemsAdminPage() {
                     gatherSpeedBonusPctMax: type === "rod" || type === "pickaxe" ? form.gatherSpeedBonusPctMax : null,
                     gatherChanceBonusPctMax: type === "rod" || type === "pickaxe" ? form.gatherChanceBonusPctMax : null,
                     baitChanceBonusPct: type === "bait" ? form.baitChanceBonusPct : null,
+                    bookSkillTypeId: type === "book" ? form.bookSkillTypeId : null,
+                    bookSuccessChance: type === "book" ? form.bookSuccessChance : null,
                   });
                 }}
               >
@@ -901,6 +916,44 @@ export function ItemsAdminPage() {
                   }
                 />
               </Field>
+            </div>
+          )}
+
+          {form.type === "book" && (
+            <div className="border border-rarity-uncommon/40 bg-rarity-uncommon/10 p-3">
+              <p className="mb-2 text-xs font-medium text-parchment-dim">
+                Czytanie tej książki (prawy klik → Przeczytaj) zużywa jedną sztukę i ma podaną
+                szansę na podniesienie wybranej umiejętności pasywnej o 1 poziom.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Umiejętność pasywna">
+                  <select
+                    className={inputClass}
+                    value={form.bookSkillTypeId ?? ""}
+                    onChange={(e) => setForm({ ...form, bookSkillTypeId: e.target.value || null })}
+                  >
+                    <option value="">— wybierz —</option>
+                    {passiveSkillsQuery.data?.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Szansa powodzenia (0–1)">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={1}
+                    className={inputClass}
+                    value={form.bookSuccessChance ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, bookSuccessChance: e.target.value === "" ? null : Number(e.target.value) })
+                    }
+                  />
+                </Field>
+              </div>
             </div>
           )}
 

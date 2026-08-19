@@ -14,6 +14,9 @@ export interface InventoryItemDto {
   activeSlotIndex: number | null;
   // Player's per-slot override of item.potionThresholdPct — see setPotionThresholdOverride below.
   potionThresholdOverridePct: number | null;
+  // Only meaningful for type rod/pickaxe — successful gathers performed with this specific tool
+  // since its last upgrade. See gathering.settings.successesPerToolUpgrade / upgradeItem gating.
+  gatherSuccessCount: number;
   item: {
     id: string;
     name: string;

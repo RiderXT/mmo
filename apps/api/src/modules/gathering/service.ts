@@ -4,6 +4,7 @@ import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import { clearStaleActiveExpeditionPointer } from "../expeditions/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import { getGatheringSettings } from "../settings/service.js";
+import { getPassiveSkillGatherBonus } from "../passiveSkills/service.js";
 import type { GatherKind, GatherPhase, GatherSessionDto, GatheringSettings, StartGatheringInput } from "@mmo/shared";
 
 export class GatheringError extends Error {
@@ -45,11 +46,13 @@ function assertLevelAllowed(
 
 /** Equipped rod/pickaxe's gather bonuses, interpolated at its current upgrade level (0 at +0,
  * item.gatherXBonusPctMax at +9, same lerp shape as combat.ts's interpolateUpgrade) — null if no
- * such tool is equipped. */
+ * such tool is equipped. Also returns the tool's own InventoryItem id so a successful gather can
+ * increment ITS gatherSuccessCount (see modules/inventory/service.ts upgradeItem gating) without
+ * a second lookup. */
 async function getEquippedToolBonuses(
   characterId: string,
   slot: "rod" | "pickaxe",
-): Promise<{ speedBonusPct: number; chanceBonusPct: number } | null> {
+): Promise<{ speedBonusPct: number; chanceBonusPct: number; toolInventoryItemId: string } | null> {
   const inv = await prisma.inventoryItem.findFirst({
     where: { characterId, equippedSlot: slot },
     include: { item: true },
@@ -59,6 +62,7 @@ async function getEquippedToolBonuses(
   return {
     speedBonusPct: (inv.item.gatherSpeedBonusPctMax ?? 0) * t,
     chanceBonusPct: (inv.item.gatherChanceBonusPctMax ?? 0) * t,
+    toolInventoryItemId: inv.id,
   };
 }
 
@@ -195,6 +199,7 @@ async function resolveOnePhase(
   settings: GatheringSettings,
   speedBonusPct: number,
   chanceBonusPct: number,
+  toolInventoryItemId: string | undefined,
 ): Promise<GatherSessionRow> {
   if (session.kind === "fishing") {
     const spot = await prisma.fishingSpot.findUniqueOrThrow({
@@ -208,6 +213,12 @@ async function resolveOnePhase(
       await prisma.$transaction(async (tx) => {
         for (const a of awarded) {
           await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
+        }
+        if (toolInventoryItemId) {
+          await tx.inventoryItem.update({
+            where: { id: toolInventoryItemId },
+            data: { gatherSuccessCount: { increment: 1 } },
+          });
         }
       });
     }
@@ -236,6 +247,12 @@ async function resolveOnePhase(
       await prisma.$transaction(async (tx) => {
         for (const a of awarded) {
           await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
+        }
+        if (toolInventoryItemId) {
+          await tx.inventoryItem.update({
+            where: { id: toolInventoryItemId },
+            data: { gatherSuccessCount: { increment: 1 } },
+          });
         }
       });
     }
@@ -279,12 +296,13 @@ async function resolveGatherSession(session: GatherSessionRow): Promise<GatherSe
   if (session.phaseEndsAt.getTime() > Date.now()) return session;
 
   const settings = await getGatheringSettings();
-  const [tool, baitBonusPct] = await Promise.all([
+  const [tool, baitBonusPct, skillBonus] = await Promise.all([
     getEquippedToolBonuses(session.characterId, session.kind === "fishing" ? "rod" : "pickaxe"),
     getBaitChanceBonusPct(session.characterId),
+    getPassiveSkillGatherBonus(session.characterId, session.kind as GatherKind),
   ]);
-  const speedBonusPct = tool?.speedBonusPct ?? 0;
-  const chanceBonusPct = (tool?.chanceBonusPct ?? 0) + baitBonusPct;
+  const speedBonusPct = (tool?.speedBonusPct ?? 0) + skillBonus.speedBonusPct;
+  const chanceBonusPct = (tool?.chanceBonusPct ?? 0) + baitBonusPct + skillBonus.chanceBonusPct;
 
   let current = session;
   let cycles = 0;
@@ -300,7 +318,7 @@ async function resolveGatherSession(session: GatherSessionRow): Promise<GatherSe
       });
       return null;
     }
-    current = await resolveOnePhase(current, settings, speedBonusPct, chanceBonusPct);
+    current = await resolveOnePhase(current, settings, speedBonusPct, chanceBonusPct, tool?.toolInventoryItemId);
     cycles++;
   }
   return current;

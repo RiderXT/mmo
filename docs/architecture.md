@@ -1833,6 +1833,82 @@ gracza (przycisk zablokowany bez odpowiedniego narzędzia, auto-pętla z rosnąc
 postępu, "Zatrzymaj") potwierdzone na żywo. Dane testowe (postać, 4 itemy, łowisko, kopalnia)
 usunięte po weryfikacji.
 
+## Poprawki ekwipunku/ekspedycji + zakładka Umiejętności pasywnych (post-zbieractwo)
+
+**Trzy niezależne bugi znalezione i naprawione przy okazji zgłoszeń użytkownika:**
+
+- `equipItem`/`setActiveSlot` (`inventory/service.ts`) przy podmianie zawartości slotu ustawiały
+  poprzedniemu przedmiotowi `equippedSlot`/`activeSlotIndex: null`, ale nie nadawały mu realnego
+  `slotIndex` w gridzie — przedmiot stawał się jednocześnie niewidoczny w lalce I w plecaku
+  (`equippedSlot: null` ORAZ `slotIndex: null`). Poprawka: przed nadpisaniem slotu, poprzedni
+  zajmujący go item dostaje `findNextFreeSlotIndex`-owy wolny slot w gridzie. Zweryfikowane na
+  żywo (equip drugiej broni → pierwsza poprawnie wraca do plecaka) i w bazie.
+- `addLootToInventory` przy pełnym plecaku rzucała wyjątek, który wywalał całą transakcję nagrody
+  z ekspedycji/zbieractwa — exp, złoto i cała reszta łupu przepadały, a ekspedycja i tak zostawała
+  oznaczona jako `claimed` (idempotency-guard flip następuje PRZED transakcją nagrody). Nowy tryb
+  `allowPartial` (domyślnie wyłączony — `openChest`/kupno u NPC/admin-grant zachowują atomowe
+  niepowodzenie całości, co jest tam pożądane) przyznaje ile się zmieści i zwraca `overflow`;
+  `applyExpeditionReward` i `gathering/service.ts` włączają ten tryb i (dla ekspedycji) pokazują
+  graczowi `overflowLoot` w oknie z nagrodą.
+- Profil postaci liczył "X / 10 SLOTÓW ZAŁOŻONYCH" wliczając wędkę/kilof do tej samej puli co
+  broń/zbroję/hełm itd., mimo że `EquipmentTab` pokazuje narzędzia zbieractwa jako osobną sekcję
+  ("Narzędzia zbieractwa") oddzieloną od głównej lalki — myląco dawało np. "7/10" zamiast "7/8".
+  `profile/service.ts` liczy teraz tylko 8 tradycyjnych slotów gearu (`CORE_EQUIP_SLOTS =
+  EquipSlotSchema.options` minus `rod`/`pickaxe`).
+
+**URL profilu po nazwie postaci**: `/profile/:characterId` → `/profile/:nazwa-postaci` —
+`Character.name` jest już `@unique` w schemacie, więc żaden nowy constraint nie był potrzebny,
+tylko zmiana lookupu w `profile/service.ts` (`where: { name }` zamiast `where: { id }`) i
+`encodeURIComponent` przy budowaniu linków we wszystkich miejscach (`AppShell`, `RankingPage`,
+`FriendsPage`).
+
+**Nowa zakładka "Umiejętności"** — dwie pod-zakładki, oddzielny system niż `ClassSkill`
+(klasowe, kosztują punkty za poziom, mechanika combat-only):
+
+- **"Umiejętności postaci"** — istniejący `SkillsPanel` przeniesiony tu z `CharacterTab` (który
+  wraca do 2-kolumnowego gridu `VitalsPanel`+`StatsPanel`), bez zmian w logice.
+- **"Umiejętności pasywne"** — nowy koncept: umiejętności całej postaci (nie klasy), które NIE
+  kosztują punktów — rosną wyłącznie przez czytanie przedmiotu typu `book` (prawy klik → "Przeczytaj",
+  zużywa 1 sztukę, rzuca `Math.random() < item.bookSuccessChance`, sukces = `CharacterPassiveSkill.level
+  += 1`, blokowane po osiągnięciu `maxLevel` żeby nie marnować książki). Nowe modele
+  `PassiveSkillType` (katalog admina: nazwa, opis, `maxLevel`, opcjonalny `gatherKind` +
+  `chanceBonusPerLevel`/`speedBonusPerLevel`) i `CharacterPassiveSkill` (poziom per postać).
+  Umiejętność z ustawionym `gatherKind` realnie wpływa na grę: `gathering/service.ts`'s
+  `getPassiveSkillGatherBonus` sumuje `level × bonusPerLevel` po wszystkich pasujących
+  umiejętnościach i dolicza do bonusu łowienia/kopania **addytywnie z bonusem narzędzia**
+  (`getEquippedToolBonuses` zwraca teraz też `toolInventoryItemId`, żeby przy okazji dało się
+  zinkrementować licznik narzędzia bez dodatkowego zapytania — patrz niżej).
+
+**Dodatkowy licznik ulepszenia wędki/kilofa**: `InventoryItem.gatherSuccessCount` — inkrementowany
+w `gathering/service.ts`'s `resolveOnePhase` przy każdym udanym połowie/wydobyciu TYM konkretnym
+egzemplarzem narzędzia. `upgradeItem` (`inventory/service.ts`) dla `type === "rod"|"pickaxe"`
+blokuje ulepszenie dopóki licznik nie osiągnie `gathering.settings.successesPerToolUpgrade`
+(nowe pole ustawień, domyślnie 100, konfigurowalne w panelu admina razem z resztą progów
+zbieractwa) i zeruje licznik po udanym ulepszeniu. Frontend: `AnvilTab.tsx` — rod/pickaxe były
+dotąd całkowicie wykluczone z `UPGRADABLE_TYPES` (nie dało się ich w ogóle wybrać na kowadle) i
+lalka kowadła nie miała dla nich gniazd — dodane analogicznie do wcześniejszej poprawki w
+`EquipmentTab` (osobna sekcja "Narzędzia zbieractwa"), plus licznik i blokada przycisku "Ulepsz
+przedmiot" gdy `gatherSuccessCount` poniżej progu. `ItemTooltip`/`ItemBox` pokazują "Udane
+zbiórki: X/Y" dla rod/pickaxe wszędzie gdzie się pojawiają (ekwipunek, kowadło).
+
+Nowy typ `ItemTypeSchema`: `book` (świadomie osobny typ, nie wariant `consumable` jak potiony —
+potwierdzone z użytkownikiem). Nowe moduły backendu: `modules/passiveSkills` (gracz: `GET
+/api/passive-skills/:characterId`, `POST .../read-book`), `modules/admin/passiveSkills` (CRUD
+`PassiveSkillType`). Nowa strona admina `PassiveSkillsAdminPage.tsx` (mirror `EventsAdminPage.tsx`),
+nowy warunkowy panel w `ItemsAdminPage.tsx` dla `type === "book"` (wybór `PassiveSkillType` +
+szansa powodzenia), ikona `book` w `ItemTypeIcon.tsx`.
+
+Zweryfikowane: `pnpm -r typecheck`+`build` czysto. Skryptem przez `readBook` bezpośrednio: poziom
+umiejętności 0→2 po dwóch udanych czytaniach, stos książki 3→1. W przeglądarce: obie pod-zakładki
+Umiejętności renderują się poprawnie, `CharacterTab` z 2 panelami, panel admina tworzy
+`PassiveSkillType`, prawy klik na książce w ekwipunku → "Przeczytaj" → komunikat "Przeczytano
+książkę — Górnictwo: poziom 1!", poziom widoczny w panelu pasywnym z paskiem postępu. Naprawa
+equip-swap zweryfikowana osobno (equip drugiej broni, pierwsza wraca do plecaka, potwierdzone w
+bazie). Licznik narzędzia na kowadle zweryfikowany tylko przeglądem kodu — brak krainy-miasta w
+lokalnym dev.db uniemożliwił żywy test (ta sama, wcześniej już zaakceptowana granica środowiska
+co przy weryfikacji Kowadła w Etapie zbieractwa). Dane testowe (umiejętność, książka, przedmioty)
+usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

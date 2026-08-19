@@ -26,6 +26,8 @@ import {
   discardItem,
   type InventoryItemDto,
 } from "../../lib/inventoryApi";
+import { readBook } from "../../lib/passiveSkillsApi";
+import { getGatheringSettings } from "../../lib/gatheringApi";
 
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const ACTIVE_SLOTS = 6;
@@ -72,6 +74,7 @@ export function EquipmentTab({ character }: { character: Character }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
+  const gatheringSettingsQuery = useQuery({ queryKey: ["gathering-settings"], queryFn: getGatheringSettings });
 
   const classQuery = useQuery({
     queryKey: ["class", character.classId],
@@ -166,10 +169,24 @@ export function EquipmentTab({ character }: { character: Character }) {
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się ustawić progu użycia"),
   });
 
+  const readBookMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => readBook(characterId, inventoryItemId),
+    onSuccess: (data) => {
+      invalidateInventory();
+      queryClient.invalidateQueries({ queryKey: ["passive-skills", characterId] });
+      setActionError(null);
+      setChestResult(
+        data.success
+          ? `Przeczytano książkę — ${data.skillName}: poziom ${data.newLevel}!`
+          : `Nie udało się nauczyć (${data.skillName}) — książka zużyta.`,
+      );
+      setTimeout(() => setChestResult(null), 5000);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się przeczytać książki"),
+  });
+
   // Tap-to-activate: assigns the first free active slot rather than letting the caller pick one,
-  // so this path can never target an already-occupied slot — setActiveSlot silently orphans
-  // whatever item it bumps (clears its activeSlotIndex without giving it back a grid slotIndex),
-  // a pre-existing backend bug out of scope here. Only the slot-picking drag path can hit it.
+  // so this path can never target an already-occupied slot.
   function handleActivate(item: InventoryItemDto) {
     for (let slotIndex = 0; slotIndex < ACTIVE_SLOTS; slotIndex++) {
       if (!byActiveSlot.has(slotIndex)) {
@@ -200,6 +217,7 @@ export function EquipmentTab({ character }: { character: Character }) {
       canConfigureThreshold:
         item.activeSlotIndex !== null &&
         (item.item.potionTrigger === "hp_below" || item.item.potionTrigger === "mana_below"),
+      canRead: item.item.type === "book",
       x,
       y,
     });
@@ -270,7 +288,14 @@ export function EquipmentTab({ character }: { character: Character }) {
     return (
       <div key={slot} className={gridClassName}>
         <EquipSlotBox slot={slot} tall={tall}>
-          {item && <ItemBox inventoryItem={item} tall={tall} onContextMenu={handleItemContextMenu} />}
+          {item && (
+            <ItemBox
+              inventoryItem={item}
+              tall={tall}
+              onContextMenu={handleItemContextMenu}
+              gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}
+            />
+          )}
         </EquipSlotBox>
       </div>
     );
@@ -376,6 +401,7 @@ export function EquipmentTab({ character }: { character: Character }) {
                           : undefined
                       }
                       characterClassId={character.classId}
+                      gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}
                     />
                   )}
                 </GridSlot>
@@ -414,6 +440,7 @@ export function EquipmentTab({ character }: { character: Character }) {
             const item = items.find((i) => i.id === id);
             if (item) setThresholdTarget(item);
           }}
+          onRead={(id) => readBookMutation.mutate(id)}
         />
       )}
 

@@ -22,6 +22,8 @@ export interface ItemContextMenuTarget {
   /** Item is sitting in an active slot AND is a hp_below/mana_below potion — drives the "Ustaw
    * próg użycia" entry. Interval-triggered potions have no threshold to configure. */
   canConfigureThreshold?: boolean;
+  /** Item is a skill book (type "book") — drives the "Przeczytaj" entry. */
+  canRead?: boolean;
   x: number;
   y: number;
 }
@@ -37,6 +39,7 @@ export function ItemContextMenu({
   onActivate,
   onDeactivate,
   onConfigureThreshold,
+  onRead,
 }: {
   target: ItemContextMenuTarget;
   onClose: () => void;
@@ -48,6 +51,7 @@ export function ItemContextMenu({
   onActivate?: (inventoryItemId: string) => void;
   onDeactivate?: (inventoryItemId: string) => void;
   onConfigureThreshold?: (inventoryItemId: string) => void;
+  onRead?: (inventoryItemId: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
@@ -146,6 +150,17 @@ export function ItemContextMenu({
           className="block w-full px-3 py-2 text-left text-sm text-parchment hover:bg-panel-raised"
         >
           Ustaw próg użycia
+        </button>
+      )}
+      {target.canRead && onRead && (
+        <button
+          onClick={() => {
+            onRead(target.inventoryItemId);
+            onClose();
+          }}
+          className="block w-full px-3 py-2 text-left text-sm text-parchment hover:bg-panel-raised"
+        >
+          Przeczytaj
         </button>
       )}
       {target.canOpen && (

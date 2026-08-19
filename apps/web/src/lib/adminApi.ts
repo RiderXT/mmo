@@ -16,6 +16,8 @@ import type {
   NpcKind,
   CreateFishingSpotInput,
   CreateMineInput,
+  CreatePassiveSkillTypeInput,
+  GatherKind,
 } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
@@ -96,6 +98,8 @@ export interface ItemDto {
   gatherSpeedBonusPctMax: number | null;
   gatherChanceBonusPctMax: number | null;
   baitChanceBonusPct: number | null;
+  bookSkillTypeId: string | null;
+  bookSuccessChance: number | null;
 }
 
 export interface ClassSkillDto {
@@ -315,3 +319,21 @@ export const createMine = (input: CreateMineInput) =>
 export const updateMine = (id: string, input: CreateMineInput) =>
   apiFetch<MineDto>(`/api/admin/mines/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteMine = (id: string) => apiFetch<void>(`/api/admin/mines/${id}`, { method: "DELETE" });
+
+// Passive skill types
+export interface PassiveSkillTypeDto {
+  id: string;
+  name: string;
+  description: string;
+  maxLevel: number;
+  gatherKind: GatherKind | null;
+  chanceBonusPerLevel: number;
+  speedBonusPerLevel: number;
+}
+export const listPassiveSkillTypes = () => apiFetch<PassiveSkillTypeDto[]>("/api/admin/passive-skills");
+export const createPassiveSkillType = (input: CreatePassiveSkillTypeInput) =>
+  apiFetch<PassiveSkillTypeDto>("/api/admin/passive-skills", { method: "POST", body: JSON.stringify(input) });
+export const updatePassiveSkillType = (id: string, input: CreatePassiveSkillTypeInput) =>
+  apiFetch<PassiveSkillTypeDto>(`/api/admin/passive-skills/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deletePassiveSkillType = (id: string) =>
+  apiFetch<void>(`/api/admin/passive-skills/${id}`, { method: "DELETE" });

@@ -15,6 +15,7 @@ const DEFAULT_GATHERING_SETTINGS: GatheringSettings = {
   miningExtract: { minSeconds: 10, maxSeconds: 25 },
   miningSearch: { minSeconds: 5, maxSeconds: 15 },
   maxCyclesPerResolve: 100,
+  successesPerToolUpgrade: 100,
 };
 
 export function SettingsAdminPage() {
@@ -190,6 +191,15 @@ export function SettingsAdminPage() {
             className={inputClass}
             value={gathering.maxCyclesPerResolve}
             onChange={(e) => setGathering({ ...gathering, maxCyclesPerResolve: Number(e.target.value) })}
+          />
+        </Field>
+        <Field label="Udane zbiórki wymagane do ulepszenia wędki/kilofa na kolejny poziom">
+          <input
+            type="number"
+            min={1}
+            className={inputClass}
+            value={gathering.successesPerToolUpgrade}
+            onChange={(e) => setGathering({ ...gathering, successesPerToolUpgrade: Number(e.target.value) })}
           />
         </Field>
         {gatheringError && (

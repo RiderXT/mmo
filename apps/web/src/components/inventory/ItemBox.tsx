@@ -28,6 +28,7 @@ export function ItemBox({
   equippedComparisonItem,
   characterClassId,
   alwaysShowQuantity = false,
+  gatherSuccessRequired,
 }: {
   inventoryItem: InventoryItemDto;
   onSelect?: () => void;
@@ -47,6 +48,9 @@ export function ItemBox({
    * count visible from the start so it's obviously decreasing as an expedition auto-drinks it,
    * instead of the badge only appearing once you're down to a single potion. */
   alwaysShowQuantity?: boolean;
+  /** gathering.settings.successesPerToolUpgrade — when provided AND the item is a rod/pickaxe,
+   * the tooltip shows "Udane zbiórki: X/required". */
+  gatherSuccessRequired?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inventoryItem.id,
@@ -72,6 +76,7 @@ export function ItemBox({
           };
   const classMismatch =
     !!inventoryItem.item.classId && characterClassId !== undefined && inventoryItem.item.classId !== characterClassId;
+  const isGatherTool = inventoryItem.item.type === "rod" || inventoryItem.item.type === "pickaxe";
 
   return (
     <ItemTooltip
@@ -83,6 +88,8 @@ export function ItemBox({
       stats={stats}
       compareStats={compareStats}
       classMismatch={classMismatch}
+      gatherSuccessCount={isGatherTool && gatherSuccessRequired !== undefined ? inventoryItem.gatherSuccessCount : undefined}
+      gatherSuccessRequired={isGatherTool ? gatherSuccessRequired : undefined}
     >
       <div
         ref={setNodeRef}

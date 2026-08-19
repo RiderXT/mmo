@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
+import { getGatheringSettings } from "../settings/service.js";
 import {
   defaultUpgradeSuccessChance,
   defaultUpgradeGoldCost,
@@ -372,6 +373,19 @@ export async function upgradeItem(
     throw new InventoryError("Nie znaleziono przedmiotu", 404);
   }
 
+  // Rod/pickaxe upgrades are additionally gated behind actual use — a fresh tool can't be
+  // power-leveled purely with gold/materials, it has to prove itself gathering first. The counter
+  // resets to 0 below on a successful upgrade (see the success branch further down).
+  if (inventoryItem.item.type === "rod" || inventoryItem.item.type === "pickaxe") {
+    const { successesPerToolUpgrade } = await getGatheringSettings();
+    if (inventoryItem.gatherSuccessCount < successesPerToolUpgrade) {
+      throw new InventoryError(
+        `Potrzeba jeszcze ${successesPerToolUpgrade - inventoryItem.gatherSuccessCount} udanych zbiórek tym narzędziem (${inventoryItem.gatherSuccessCount}/${successesPerToolUpgrade}).`,
+        400,
+      );
+    }
+  }
+
   const requirements = await prisma.itemUpgradeRequirement.findMany({
     where: { itemId: inventoryItem.itemId, targetLevel: inventoryItem.upgradeLevel + 1 },
   });
@@ -433,7 +447,9 @@ export async function upgradeItem(
     if (success) {
       await tx.inventoryItem.update({
         where: { id: inventoryItem.id },
-        data: { upgradeLevel: targetLevel },
+        // Reset the gather-success counter (only meaningful for rod/pickaxe — harmless no-op
+        // write for every other item type) so the next upgrade level requires fresh proof of use.
+        data: { upgradeLevel: targetLevel, gatherSuccessCount: 0 },
       });
     } else {
       // On failure the item itself is destroyed, not just the materials/gold — upgrading is a

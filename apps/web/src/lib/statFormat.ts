@@ -99,4 +99,5 @@ export const TYPE_LABELS: Record<string, string> = {
   rod: "Wędka",
   pickaxe: "Kilof",
   bait: "Przynęta",
+  book: "Książka",
 };

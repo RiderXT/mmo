@@ -23,6 +23,7 @@ export const ItemTypeSchema = z.enum([
   "rod", // wędka — see modules/gathering
   "pickaxe", // kilof — see modules/gathering
   "bait", // przynęta/eliksir — carried in an active slot, not consumed, see modules/gathering
+  "book", // książka umiejętności — consumed on a successful/failed read, see modules/passiveSkills
 ]);
 export type ItemType = z.infer<typeof ItemTypeSchema>;
 

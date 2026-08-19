@@ -55,6 +55,7 @@ const GATHERING_SETTINGS_DEFAULT: GatheringSettings = {
   miningExtract: { minSeconds: 10, maxSeconds: 25 },
   miningSearch: { minSeconds: 5, maxSeconds: 15 },
   maxCyclesPerResolve: 100,
+  successesPerToolUpgrade: 100,
 };
 
 export async function getGatheringSettings(): Promise<GatheringSettings> {

@@ -15,6 +15,7 @@ import { ApiError } from "../../lib/apiClient";
 import { listInventory, upgradeItem, type InventoryItemDto } from "../../lib/inventoryApi";
 import { listPlayerItems } from "../../lib/itemsApi";
 import { listPlayerZones } from "../../lib/zonesApi";
+import { getGatheringSettings } from "../../lib/gatheringApi";
 import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
 import type { ItemDto } from "../../lib/adminApi";
 
@@ -27,6 +28,8 @@ const UPGRADABLE_TYPES = new Set<ItemType>([
   "necklace",
   "earrings",
   "ring",
+  "rod",
+  "pickaxe",
 ]);
 /** Non-interactive stand-in for an equipped item's doll slot while that exact item sits on the
  * anvil — the anvil already owns the one real (draggable) ItemBox for it, so this renders the
@@ -48,6 +51,7 @@ function AnvilEchoBox({ item }: { item: InventoryItemDto }) {
 
 const LEFT_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "necklace", "boots"];
 const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "shield", "ring", "earrings"];
+const TOOL_EQUIP_SLOTS: EquipSlot[] = ["rod", "pickaxe"];
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
@@ -67,6 +71,7 @@ export function AnvilTab({ character }: { character: Character }) {
     queryFn: () => listInventory(characterId),
   });
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
+  const gatheringSettingsQuery = useQuery({ queryKey: ["gathering-settings"], queryFn: getGatheringSettings });
 
   const itemFor = (itemId: string): ItemDto | undefined => itemsQuery.data?.find((i) => i.id === itemId);
 
@@ -153,6 +158,10 @@ export function AnvilTab({ character }: { character: Character }) {
   const requirements = selectedCatalogItem?.upgradeRequirements.filter((r) => r.targetLevel === targetLevel) ?? [];
   const hasPath = requirements.length > 0;
   const hasAllMaterials = requirements.every((r) => (ownedQtyByItemId.get(r.requiredItemId) ?? 0) >= r.requiredQty);
+  const isGatherTool = selected?.item.type === "rod" || selected?.item.type === "pickaxe";
+  const gatherSuccessRequired = gatheringSettingsQuery.data?.successesPerToolUpgrade;
+  const hasEnoughGatherSuccesses =
+    !isGatherTool || gatherSuccessRequired === undefined || (selected?.gatherSuccessCount ?? 0) >= gatherSuccessRequired;
 
   const currentStats = selected
     ? { ...interpolateUpgrade(selected.item.baseStats, selected.item.maxUpgradeStats, selected.upgradeLevel), ...selected.rolledStats }
@@ -200,6 +209,25 @@ export function AnvilTab({ character }: { character: Character }) {
                 );
               })}
             </div>
+            <div className="flex flex-col items-center gap-3">
+              {TOOL_EQUIP_SLOTS.map((slot) => {
+                const item = byEquipSlot.get(slot);
+                return (
+                  <EquipSlotBox key={slot} slot={slot}>
+                    {item &&
+                      (item.id === selectedId ? (
+                        <AnvilEchoBox item={item} />
+                      ) : (
+                        <ItemBox
+                          inventoryItem={item}
+                          onSelect={() => selectItem(item.id)}
+                          gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}
+                        />
+                      ))}
+                  </EquipSlotBox>
+                );
+              })}
+            </div>
           </div>
         </PanelFrame>
 
@@ -231,6 +259,7 @@ export function AnvilTab({ character }: { character: Character }) {
                     tall={cell.height === 2}
                     selected={cell.item.id === selectedId}
                     onSelect={() => selectItem(cell.item!.id)}
+                    gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}
                   />
                 )}
               </GridSlot>
@@ -245,7 +274,14 @@ export function AnvilTab({ character }: { character: Character }) {
           </p>
           <div className="mt-3 flex justify-center">
             <AnvilSlotBox>
-              {selected && <ItemBox inventoryItem={selected} selected onSelect={() => selectItem(selected.id)} />}
+              {selected && (
+                <ItemBox
+                  inventoryItem={selected}
+                  selected
+                  onSelect={() => selectItem(selected.id)}
+                  gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}
+                />
+              )}
             </AnvilSlotBox>
           </div>
 
@@ -349,9 +385,16 @@ export function AnvilTab({ character }: { character: Character }) {
                     })}
                   </ul>
 
+                  {isGatherTool && gatherSuccessRequired !== undefined && (
+                    <p className={`mt-3 text-sm ${hasEnoughGatherSuccesses ? "text-parchment-dim" : "text-red-400"}`}>
+                      Udane zbiórki tym narzędziem: {selected.gatherSuccessCount}/{gatherSuccessRequired}
+                      {!hasEnoughGatherSuccesses && " — za mało, by je ulepszyć."}
+                    </p>
+                  )}
+
                   <button
                     onClick={() => upgradeMutation.mutate(selected.id)}
-                    disabled={upgradeMutation.isPending || !hasAllMaterials || !hasEnoughGold}
+                    disabled={upgradeMutation.isPending || !hasAllMaterials || !hasEnoughGold || !hasEnoughGatherSuccesses}
                     className="mt-4 w-full rounded-md bg-gold px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Ulepsz przedmiot

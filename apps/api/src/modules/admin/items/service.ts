@@ -56,6 +56,13 @@ function gatherData(input: CreateItemInput) {
   };
 }
 
+function bookData(input: CreateItemInput) {
+  return {
+    bookSkillTypeId: input.bookSkillTypeId ?? null,
+    bookSuccessChance: input.bookSuccessChance ?? null,
+  };
+}
+
 export async function listItems() {
   const items = await prisma.item.findMany({ include: itemInclude, orderBy: { minLevel: "asc" } });
   return items.map(serialize);
@@ -111,6 +118,7 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
       gridWidth: input.gridWidth,
       ...potionData(input),
       ...gatherData(input),
+      ...bookData(input),
       upgradeRequirements: {
         create: input.upgradeRequirements.map((r) => ({
           targetLevel: r.targetLevel,

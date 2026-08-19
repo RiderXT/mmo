@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Character } from "@mmo/shared";
 import { StatsPanel } from "../../components/character/StatsPanel";
-import { SkillsPanel } from "../../components/character/SkillsPanel";
 import { VitalsPanel } from "../../components/character/VitalsPanel";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { getCombatStatsBreakdown } from "../../lib/charactersApi";
@@ -17,10 +16,9 @@ export function CharacterTab({ character }: { character: Character }) {
 
   return (
     <div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <VitalsPanel characterId={character.id} />
         <StatsPanel character={character} />
-        <SkillsPanel character={character} />
       </div>
 
       {breakdownQuery.data && (

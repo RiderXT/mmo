@@ -28,6 +28,8 @@ import { friendsRoutes } from "./modules/friends/routes.js";
 import { rankingRoutes } from "./modules/ranking/routes.js";
 import { gatheringRoutes } from "./modules/gathering/routes.js";
 import { fishingSpotsRoutes } from "./modules/admin/fishingSpots/routes.js";
+import { passiveSkillsRoutes } from "./modules/passiveSkills/routes.js";
+import { adminPassiveSkillsRoutes } from "./modules/admin/passiveSkills/routes.js";
 import { minesRoutes } from "./modules/admin/mines/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -79,6 +81,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(gatheringRoutes, { prefix: "/api/gathering" });
   await app.register(fishingSpotsRoutes, { prefix: "/api/admin/fishing-spots" });
   await app.register(minesRoutes, { prefix: "/api/admin/mines" });
+  await app.register(passiveSkillsRoutes, { prefix: "/api/passive-skills" });
+  await app.register(adminPassiveSkillsRoutes, { prefix: "/api/admin/passive-skills" });
 
   return app;
 }
