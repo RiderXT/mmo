@@ -2339,6 +2339,58 @@ podgląd w formularzu ładuje się (`naturalWidth: 1`), a ta sama grafika widocz
 zapisany czas w UTC zgadza się z oczekiwanym przesunięciem strefowym. Dane testowe (testowa
 grafika, testowy event) usunięte po weryfikacji.
 
+## Mapa ekspedycji: wizualny wybór krainy + inline wybór potworów (post-sześć-zgłoszeń)
+
+Przebudowa ekranu planowania ekspedycji (nie ekranu aktywnej walki) na życzenie użytkownika,
+który przesłał zrzut ekranu referencyjny ("MAPA EKSPEDYCJI" — mapa krain połączonych ścieżką po
+lewej, zaznaczanie potworów po prawej). Dobra wiadomość: zewnętrzna ramka (`PanelFrame.tsx`) już
+domyślnie renderuje dokładnie to, co widać na obrazku — 4 złote narożniki (`PanelCorners`),
+wyśrodkowany tytuł w Cinzel — więc redesign dotyczy WYŁĄCZNIE wewnętrznej treści.
+
+- **Scalono dwie dawne, osobne gałęzie** `ExpeditionPanel.tsx` (płaska lista krain, gdy postać
+  jeszcze nigdzie nie stała, ORAZ inny layout z rozwijaną listą "Idź do innej krainy", gdy już
+  stała) w jeden dwukolumnowy widok, aktywny zawsze gdy `!expedition && !isTraveling`. Usunięty
+  stan `otherZonesOpen` i cały blok rozwijanej listy — mapa to w pełni zastępuje.
+- **`ZoneMapPath.tsx`** (nowy) — lewa kolumna: krainy posortowane wg `minLevel` (kolejność
+  tierów) jako pionowa ścieżka węzłów, przerywany łącznik między kolejnymi. Węzeł = okrągły
+  medalion (`rounded-full`, gradient `panel-raised`→`panel`, 1px border — dokładnie wzorzec
+  odznaki ikon nawigacji z `AppShell.tsx`), z autorskim inline-SVG glifem (`ZoneGlyphs.tsx`:
+  ognisko dla miasta, drzewo dla dzikiej krainy — dwa warianty, bo model danych nie ma
+  bardziej szczegółowego "typu" krainy). Zablokowana (dzisiejszy warunek `!eligible`,
+  `character.level` poza `[minLevel, maxLevel]` — bez zmiany zasad gry, tylko nowy wygląd)
+  pokazuje `LockGlyph` (reużyty z drzewka umiejętności, `character/SkillSygil.tsx`) i jest
+  nieklikalna. Aktualna kraina dostaje złoty glow + plakietkę "Tu jesteś".
+- **`ZoneInfoCard.tsx`** (nowy) — pod mapą, dla klikniętej krainy: nazwa, opis, zalecany poziom,
+  czas podróży, lista przeciwników, i "Możliwe łupy" — realne ikony z `ZoneDto.drops[]` (limit 6
+  + "+N więcej"). Sekcja "Przygotowania" (sugerowane mikstury) z obrazka referencyjnego świadomie
+  POMINIĘTA — to nie jest żadna istniejąca funkcja, tylko przykładowa treść mockupu.
+- **`MonsterAttackPanel.tsx`** (nowy, zastępuje usunięty `MonsterPickerModal.tsx` — nie zostaje
+  jako martwy kod) — identyczna logika zaznaczania potworów (`Set<string>`, "Zaznacz/Odznacz
+  wszystkie") co dawny modal, ale renderowana INLINE w prawej kolumnie zamiast `fixed inset-0` +
+  `bg-black/60` backdrop; bez przycisku "Anuluj" (nie ma czego anulować, to nie overlay).
+  Ponieważ komponent zostaje teraz zamontowany cały czas (nie tylko gdy modal był otwarty), jego
+  stan zaznaczenia PRZETRWAŁ nawet przejście do `BattleTacticsModal` i powrót — drobna poprawka
+  UX względem starego zachowania (dawniej "Wstecz" z modala taktyki gubiło zaznaczone potwory).
+  `BattleTacticsModal` (osobny, świadomy krok) bez zmian.
+- Prawa kolumna reaguje na to, CO jest kliknięte na mapie względem tego, GDZIE postać faktycznie
+  stoi: inna kraina niż obecna → przycisk "Wyrusz do krainy"; obecna, miasto → info o NPC; obecna,
+  dzika, bez potworów → komunikat; obecna, dzika, z potworami → `MonsterAttackPanel`.
+  `selectedZoneId` domyślnie = `character.currentZoneId` (mapa od razu otwiera się na "tu
+  jesteś"), ale to tylko wartość POCZĄTKOWA `useState` — dalsze kliknięcia gracza nie są
+  nadpisywane przy przerenderowaniach.
+
+Zweryfikowane: `pnpm --filter web typecheck` czysto; grep po całym `apps/web/src` bez śladu
+usuniętego `MonsterPickerModal`/`pickerOpen`/`otherZonesOpen`. W przeglądarce: mapa renderuje
+wszystkie 10 krain, kraina poza zasięgiem poziomu poprawnie zablokowana (kłódka, `disabled`,
+`opacity-50`, tytuł z wymaganym poziomem) i nieklikalna; klik eligible krainy pokazuje
+`ZoneInfoCard` z realnymi wrogami/łupami i przycisk "Wyrusz"; postać ustawiona bezpośrednio w
+"Wilcze Uroczysko" — mapa pokazuje "TU JESTEŚ", prawy panel pokazuje realny `MonsterAttackPanel`;
+pełny przepływ (zaznacz wszystkie → "Rozpocznij walkę" → `BattleTacticsModal` → potwierdź) faktycznie
+wystartował ekspedycję z żywym dziennikiem walki, bez regresji względem starego przepływu.
+Responsywność: `lg:grid-cols-[1.3fr_1fr]` potwierdzone jako collapsujące do jednej kolumny
+(`gridTemplateColumns` = pojedyncza wartość) na viewport 375px. Dane testowe (pozycja postaci,
+testowa ekspedycja) zresetowane po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

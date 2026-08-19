@@ -18,7 +18,9 @@ import {
 } from "../../lib/expeditionsApi";
 import { CombatLog } from "./CombatLog";
 import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
-import { MonsterPickerModal } from "./MonsterPickerModal";
+import { MonsterAttackPanel } from "./MonsterAttackPanel";
+import { ZoneMapPath } from "./ZoneMapPath";
+import { ZoneInfoCard } from "./ZoneInfoCard";
 import { BattleTacticsModal } from "./BattleTacticsModal";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
 import { ActivePotionsSummary } from "./ActivePotionsSummary";
@@ -48,10 +50,12 @@ export function ExpeditionPanel({
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [claimResult, setClaimResult] = useState<ExpeditionClaimResult | null>(null);
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // Defaults to wherever the character already is, so the map opens on "you are here" with the
+  // right-side panel ready to go instead of forcing an extra click — but only as an INITIAL
+  // value; once the player picks something else on the map, re-renders (e.g. after travel
+  // completes) must not silently override that choice.
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(character.currentZoneId);
   const [tacticsMonsterIds, setTacticsMonsterIds] = useState<string[] | null>(null);
-  const [otherZonesOpen, setOtherZonesOpen] = useState(false);
   const [confirmingLeaveMessage, setConfirmingLeaveMessage] = useState<string | null>(null);
 
   const activeQuery = useQuery({
@@ -127,8 +131,6 @@ export function ExpeditionPanel({
     mutationFn: (destinationZoneId: string | null) => startTravel(characterId, destinationZoneId),
     onSuccess: () => {
       setError(null);
-      setOtherZonesOpen(false);
-      setSelectedZoneId(null);
       queryClient.invalidateQueries({ queryKey: ["character", characterId] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się wyruszyć w drogę"),
@@ -146,7 +148,6 @@ export function ExpeditionPanel({
     }) => startExpedition(characterId, zoneId, selectedMonsterIds, tactics),
     onSuccess: () => {
       setError(null);
-      setPickerOpen(false);
       setTacticsMonsterIds(null);
       queryClient.invalidateQueries({ queryKey: ["active-expedition", characterId] });
       queryClient.invalidateQueries({ queryKey: ["character", characterId] });
@@ -179,6 +180,12 @@ export function ExpeditionPanel({
   const itemFor = (itemId: string) => itemsQuery.data?.find((i) => i.id === itemId);
   const itemNameFor = (itemId: string) => itemFor(itemId)?.name ?? itemId;
   const zoneNameFor = (zoneId: string | null) => (zoneId ? zones.find((z) => z.id === zoneId)?.name ?? zoneId : "wioski");
+  const currentZone = zones.find((z) => z.id === character.currentZoneId) ?? null;
+  const townZone = zones.find((z) => z.isTown) ?? null;
+  const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
+  const selectedEligible = selectedZone
+    ? character.level >= selectedZone.minLevel && character.level <= selectedZone.maxLevel
+    : false;
 
   const unlockedClassSkillIds = new Set(
     characterSkillsQuery.data?.filter((s) => s.unlocked).map((s) => s.classSkillId) ?? [],
@@ -340,132 +347,13 @@ export function ExpeditionPanel({
     );
   }
 
-  if (character.currentZoneId) {
-    const currentZone = zones.find((z) => z.id === character.currentZoneId);
-    const otherZones = zones.filter((z) => z.id !== character.currentZoneId);
-    const isTown = currentZone?.isTown ?? false;
-    // "Return to town" must land on a real isTown zone (NPC-handel/Kowadło only work there) —
-    // targeting null used to drop the character into a legacy "no zone" limbo that isn't
-    // recognized as a town anywhere else in the UI, forcing a second manual trip.
-    const townZone = zones.find((z) => z.isTown) ?? null;
-
-    const travelControls = (
-      <>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {!isTown && (currentZone?.monsters.length ?? 0) > 0 && (
-            <button
-              onClick={() => setPickerOpen(true)}
-              className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright"
-            >
-              Walcz
-            </button>
-          )}
-          <button
-            onClick={() => setOtherZonesOpen((v) => !v)}
-            className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
-          >
-            Idź do innej krainy
-          </button>
-          {!isTown && (
-            <button
-              onClick={() => townZone && travelMutation.mutate(townZone.id)}
-              disabled={travelMutation.isPending || !townZone}
-              title={townZone ? undefined : "Brak skonfigurowanego miasta"}
-              className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Wróć do miasta
-            </button>
-          )}
-        </div>
-
-        {otherZonesOpen && (
-          <div className="mt-3 space-y-2 border-t border-line pt-3">
-            {otherZones.map((zone) => {
-              const eligible = character.level >= zone.minLevel && character.level <= zone.maxLevel;
-              return (
-                <button
-                  key={zone.id}
-                  disabled={!eligible || travelMutation.isPending}
-                  onClick={() => travelMutation.mutate(zone.id)}
-                  className={`block w-full rounded-md border px-3 py-2 text-left text-sm transition border-line hover:border-line-soft ${
-                    !eligible ? "cursor-not-allowed opacity-40" : ""
-                  }`}
-                >
-                  <span className="font-medium text-parchment">{zone.name}</span>
-                  <span className="ml-2 text-xs text-parchment-faint">
-                    poziom {zone.minLevel}-{zone.maxLevel}
-                  </span>
-                </button>
-              );
-            })}
-            {otherZones.length === 0 && <p className="text-sm text-parchment-faint">Brak innych krain.</p>}
-          </div>
-        )}
-
-        {error && (
-          <p role="alert" className="mt-2 text-sm text-red-400">
-            {error}
-          </p>
-        )}
-      </>
-    );
-
-    if (isTown && currentZone) {
-      return (
-        <PanelFrame title={currentZone.name}>
-          {flaggedBanner}
-          <p className="mt-1 text-xs text-parchment-faint">
-            To miasto — zakupy u NPC znajdziesz w zakładce NPC w menu.
-          </p>
-          <ActivePotionsSummary characterId={characterId} />
-
-          {travelControls}
-          <GatheringPanel character={character} zone={currentZone} />
-        </PanelFrame>
-      );
-    }
-
-    return (
-      <PanelFrame title={currentZone?.name ?? "Kraina"}>
-        {flaggedBanner}
-        <p className="mt-1 text-xs text-parchment-faint">Postać stoi w tej krainie — wybierz co robić dalej.</p>
-        <ActivePotionsSummary characterId={characterId} />
-
-        {travelControls}
-        {currentZone && <GatheringPanel character={character} zone={currentZone} />}
-
-        {pickerOpen && currentZone && (
-          <MonsterPickerModal
-            zone={currentZone}
-            durationMinutes={durationQuery.data?.minutes ?? null}
-            onCancel={() => setPickerOpen(false)}
-            onConfirm={(selectedMonsterIds) => {
-              setPickerOpen(false);
-              setTacticsMonsterIds(selectedMonsterIds);
-            }}
-          />
-        )}
-
-        {tacticsMonsterIds && currentZone && (
-          <BattleTacticsModal
-            activeSkills={(classQuery.data?.skills ?? []).filter(
-              (s) => s.kind === "active" && unlockedClassSkillIds.has(s.id),
-            )}
-            onBack={() => {
-              setTacticsMonsterIds(null);
-              setPickerOpen(true);
-            }}
-            onConfirm={(tactics: BattleTacticsInput) =>
-              startMutation.mutate({ zoneId: currentZone.id, selectedMonsterIds: tacticsMonsterIds, tactics })
-            }
-          />
-        )}
-      </PanelFrame>
-    );
-  }
-
+  // Unified "planning" screen — replaces what used to be two separate layouts (a flat zone list
+  // before the character had ever traveled anywhere, vs. a different layout with a collapsible
+  // "other zones" list once standing somewhere) with one persistent map. `selectedZone` is
+  // whatever's clicked on the map (for browsing zone info before committing), independent of
+  // `currentZone` (where the character actually is, which gates the monster-picker/gathering).
   return (
-    <PanelFrame title="Wyrusz do krainy">
+    <PanelFrame title="Mapa ekspedycji">
       {flaggedBanner}
       {durationQuery.data && (
         <p className="mt-1 text-xs text-parchment-faint">
@@ -473,43 +361,67 @@ export function ExpeditionPanel({
         </p>
       )}
 
-      <div className="mt-3 space-y-2">
-        {zones.map((zone) => {
-          const eligible = character.level >= zone.minLevel && character.level <= zone.maxLevel;
-          return (
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+        <div>
+          <ZoneMapPath zones={zones} character={character} selectedZoneId={selectedZoneId} onSelect={setSelectedZoneId} />
+          {selectedZone && <ZoneInfoCard zone={selectedZone} eligible={selectedEligible} />}
+          <ActivePotionsSummary characterId={characterId} />
+          {currentZone && !currentZone.isTown && (
             <button
-              key={zone.id}
-              disabled={!eligible}
-              onClick={() => setSelectedZoneId(zone.id)}
-              className={`block w-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                selectedZoneId === zone.id
-                  ? "border-gold bg-gold/10"
-                  : "border-line hover:border-line-soft"
-              } ${!eligible ? "cursor-not-allowed opacity-40" : ""}`}
+              onClick={() => townZone && travelMutation.mutate(townZone.id)}
+              disabled={travelMutation.isPending || !townZone}
+              title={townZone ? undefined : "Brak skonfigurowanego miasta"}
+              className="mt-3 rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="font-medium text-parchment">{zone.name}</span>
-              <span className="ml-2 text-xs text-parchment-faint">
-                poziom {zone.minLevel}-{zone.maxLevel} · ~{zone.travelTimeSeconds}s podróży
-              </span>
+              Wróć do miasta
             </button>
-          );
-        })}
-        {zones.length === 0 && <p className="text-sm text-parchment-faint">Brak dostępnych krain.</p>}
+          )}
+          {currentZone && <GatheringPanel character={character} zone={currentZone} />}
+          {error && (
+            <p role="alert" className="mt-2 text-sm text-red-400">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <div>
+          {!selectedZone ? (
+            <p className="text-sm text-parchment-faint">Wybierz krainę na mapie.</p>
+          ) : selectedZone.id !== character.currentZoneId ? (
+            <button
+              onClick={() => travelMutation.mutate(selectedZone.id)}
+              disabled={!selectedEligible || travelMutation.isPending}
+              className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Wyrusz do krainy
+            </button>
+          ) : selectedZone.isTown ? (
+            <p className="text-sm text-parchment-faint">
+              To miasto — zakupy u NPC znajdziesz w zakładce NPC w menu.
+            </p>
+          ) : selectedZone.monsters.length === 0 ? (
+            <p className="text-sm text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
+          ) : (
+            <MonsterAttackPanel
+              zone={selectedZone}
+              durationMinutes={durationQuery.data?.minutes ?? null}
+              onConfirm={(selectedMonsterIds) => setTacticsMonsterIds(selectedMonsterIds)}
+            />
+          )}
+        </div>
       </div>
 
-      {error && (
-        <p role="alert" className="mt-2 text-sm text-red-400">
-          {error}
-        </p>
+      {tacticsMonsterIds && currentZone && (
+        <BattleTacticsModal
+          activeSkills={(classQuery.data?.skills ?? []).filter(
+            (s) => s.kind === "active" && unlockedClassSkillIds.has(s.id),
+          )}
+          onBack={() => setTacticsMonsterIds(null)}
+          onConfirm={(tactics: BattleTacticsInput) =>
+            startMutation.mutate({ zoneId: currentZone.id, selectedMonsterIds: tacticsMonsterIds, tactics })
+          }
+        />
       )}
-
-      <button
-        onClick={() => selectedZoneId && travelMutation.mutate(selectedZoneId)}
-        disabled={!selectedZoneId || travelMutation.isPending}
-        className="mt-3 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
-      >
-        Wyrusz do krainy
-      </button>
     </PanelFrame>
   );
 }
