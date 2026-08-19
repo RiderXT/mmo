@@ -6,44 +6,15 @@ import { unlockSkill, unlockNode, getCharacterSkills, listCharacterSkillNodes } 
 import type { ClassSkillDto, SkillTreeNodeDto } from "../../lib/adminApi";
 import { ApiError } from "../../lib/apiClient";
 import { PanelFrame } from "../common/PanelFrame";
+import { SocketCorners } from "../inventory/SocketCorners";
+import { SkillSygil, LockGlyph } from "./SkillSygil";
+import { SkillTooltip } from "./SkillTooltip";
 
 const CATEGORIES: { key: SkillCategory; label: string }[] = [
   { key: "combat", label: "Walka" },
   { key: "survival", label: "Przetrwanie" },
   { key: "tactics", label: "Taktyka" },
 ];
-
-function skillIcon(skill: ClassSkillDto): string {
-  if (skill.kind === "active") return skill.effectType === "heal" ? "✨" : "🔥";
-  switch (skill.targetStat) {
-    case "attack":
-      return "⚔️";
-    case "defense":
-    case "damageReduction":
-      return "🛡️";
-    case "hp":
-      return "❤️";
-    case "maxMana":
-      return "🔷";
-    case "critChance":
-      return "🎯";
-    case "critDamage":
-      return "💥";
-    case "attackSpeed":
-      return "⚡";
-    case "evasion":
-    case "movementSpeed":
-      return "👢";
-    default:
-      return "⭐";
-  }
-}
-
-function nodeIcon(node: SkillTreeNodeDto): string {
-  if (node.effect === "cost") return "🔷";
-  if (node.effect === "cooldown") return "⏱️";
-  return "⬆️";
-}
 
 function formatNodeEffect(effect: "magnitude" | "cost" | "cooldown", magnitudePct: number): string {
   const pct = Math.round(magnitudePct * 1000) / 10;
@@ -73,36 +44,46 @@ function computeDepths(nodes: SkillTreeNodeDto[]): Map<string, number> {
 
 type Selection = { type: "skill"; skillId: string } | { type: "node"; nodeId: string };
 
+/** Skill-tree tile — same 1-slot footprint (w-14 h-14) and socket-corner treatment as an
+ * equipment slot (see inventory/EquipSlotBox.tsx + ItemBox.tsx), so the tree reads as part of
+ * the same visual system instead of a bespoke widget. `level` (shown top-left, "+N", mirroring
+ * ItemBox's upgrade-level badge) is omitted for skill roots, which are a one-time unlock with no
+ * real level to report — the gold border alone communicates "unlocked" there. */
 function Tile({
-  icon,
-  name,
-  levelLabel,
+  level,
   locked,
+  maxed,
   selected,
   onSelect,
 }: {
-  icon: string;
-  name: string;
-  levelLabel: string | null;
+  level: number | null;
   locked: boolean;
+  maxed: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
   return (
     <button
       onClick={onSelect}
-      className={`relative flex w-20 flex-col items-center gap-1 rounded-md border p-2 text-center transition ${
-        selected
-          ? "border-gold bg-gold/10"
-          : locked
-            ? "border-line-soft/40 opacity-50"
-            : "border-line-soft/60 hover:border-gold/60"
-      }`}
+      className={`relative flex h-14 w-14 shrink-0 items-center justify-center transition ${
+        locked
+          ? "border-2 border-dashed border-line-soft/60 opacity-60"
+          : maxed
+            ? "border border-gold-bright/70 bg-gold-bright/10"
+            : level
+              ? "border border-gold/50 bg-gold/10"
+              : "border border-line-soft/70 bg-panel-raised hover:border-gold/60"
+      } ${selected ? "ring-2 ring-gold-bright ring-offset-2 ring-offset-ink" : ""}`}
     >
-      {locked && <span className="absolute -right-1.5 -top-1.5 text-xs">🔒</span>}
-      <span className="text-xl">{icon}</span>
-      <span className="line-clamp-1 text-[11px] text-parchment-dim">{name}</span>
-      {levelLabel && <span className="text-[10px] tabular-nums text-gold-bright">{levelLabel}</span>}
+      {!locked && <SocketCorners />}
+      {locked ? (
+        <LockGlyph className="h-5 w-5 text-parchment-faint" />
+      ) : (
+        <SkillSygil className="h-6 w-6 text-parchment-dim" />
+      )}
+      {level != null && level > 0 && (
+        <span className="absolute left-0.5 top-0.5 text-xs text-gold-bright">+{level}</span>
+      )}
     </button>
   );
 }
@@ -200,31 +181,59 @@ export function SkillsPanel({ character }: { character: Character }) {
             );
             return (
               <div key={skill.id} className="flex flex-col items-center gap-1">
-                <Tile
-                  icon={skillIcon(skill)}
-                  name={skill.name}
-                  levelLabel={unlocked ? "Lv 1" : null}
+                <SkillTooltip
+                  title={skill.name}
+                  kindLabel={skill.kind === "active" ? `Aktywna, cd ${skill.cooldownSeconds}s` : "Pasywna"}
+                  status={unlocked ? "Odblokowana" : `Nieodblokowana`}
+                  description={skill.description || undefined}
+                  costLabel={!unlocked ? `Koszt odblokowania: ${skill.unlockCost} pkt` : null}
                   locked={!unlocked}
-                  selected={selection?.type === "skill" && selection.skillId === skill.id}
-                  onSelect={() => setSelection({ type: "skill", skillId: skill.id })}
-                />
+                >
+                  <Tile
+                    level={null}
+                    locked={!unlocked}
+                    maxed={false}
+                    selected={selection?.type === "skill" && selection.skillId === skill.id}
+                    onSelect={() => setSelection({ type: "skill", skillId: skill.id })}
+                  />
+                </SkillTooltip>
                 {rows.map((row, depth) => (
                   <div key={depth} className="flex gap-3">
                     {row.map((node) => {
                       const level = nodeLevelById.get(node.id) ?? 0;
                       const parentLevel = node.requiresNodeId ? (nodeLevelById.get(node.requiresNodeId) ?? 0) : 1;
+                      const requiredNode = node.requiresNodeId ? allNodesById.get(node.requiresNodeId) : null;
                       const nodeLocked = !unlocked || parentLevel < 1;
+                      const maxed = level >= node.maxLevel;
                       return (
                         <div key={node.id} className="flex flex-col items-center">
                           <Connector />
-                          <Tile
-                            icon={nodeIcon(node)}
-                            name={node.name}
-                            levelLabel={level > 0 ? `Lv ${level}/${node.maxLevel}` : null}
+                          <SkillTooltip
+                            title={node.name}
+                            kindLabel={
+                              node.effect === "magnitude" ? "Moc" : node.effect === "cost" ? "Koszt many" : "Odnowienie"
+                            }
+                            status={
+                              nodeLocked && requiredNode
+                                ? `Wymaga: ${requiredNode.name}`
+                                : `Poziom ${level}/${node.maxLevel}`
+                            }
+                            description={node.description || undefined}
+                            effectLines={[
+                              `${formatNodeEffect(node.effect, node.magnitudePct)} za poziom`,
+                              ...(level > 0 ? [`Obecnie: ${formatNodeEffect(node.effect, node.magnitudePct * level)}`] : []),
+                            ]}
+                            costLabel={!nodeLocked && !maxed ? `Koszt: ${node.pointCost} pkt` : maxed ? "Poziom maksymalny" : null}
                             locked={nodeLocked}
-                            selected={selection?.type === "node" && selection.nodeId === node.id}
-                            onSelect={() => setSelection({ type: "node", nodeId: node.id })}
-                          />
+                          >
+                            <Tile
+                              level={level}
+                              locked={nodeLocked}
+                              maxed={maxed}
+                              selected={selection?.type === "node" && selection.nodeId === node.id}
+                              onSelect={() => setSelection({ type: "node", nodeId: node.id })}
+                            />
+                          </SkillTooltip>
                         </div>
                       );
                     })}

@@ -2224,6 +2224,54 @@ znika); kolejne kliknięcia "Ulepsz" levelują węzeł (Lv 1→2/3) z widocznym 
 panelu szczegółów (+10%→+20% mocy). Wszystkie dane testowe (węzły, konta, postacie) usunięte po
 weryfikacji.
 
+## Kafelki drzewka umiejętności w stylu slotu ekwipunku + tooltip (post-drzewko-zależności)
+
+Czysto wizualna przebudowa (bez zmian schematu/backendu) na życzenie użytkownika, który przesłał
+zrzut ekranu swojego obecnego drzewka (kolorowe emoji, "Lv N" pod ikoną) i referencyjny mockup —
+chciał, żeby kafelki wyglądały jak sloty ekwipunku (kwadrat 1:1 z gniazdem sprzętu, złota ramka,
+poziom w rogu) i pokazywały tooltip na hover jak przy itemie. Wyraźnie zaznaczył, że dokładność
+ikon per-umiejętność nie jest teraz priorytetem ("silnik i rozmieszczenie" ważniejsze niż treść).
+
+- **Nowe komponenty** (`apps/web/src/components/character/`): `SkillSygil.tsx` — jeden wspólny
+  placeholder-glif (inline SVG, ta sama konwencja co `inventory/ItemTypeIcon.tsx`: `currentColor`
+  stroke, brak fill) używany dla WSZYSTKICH węzłów/umiejętności zamiast heurystycznie dobieranych
+  emoji — świadomie generyczny, do podmiany na docelowe ikony per-umiejętność później (jedna
+  zmiana w jednym miejscu, nie przebudowa). Ten sam plik eksportuje `LockGlyph` (kłódka, ten sam
+  styl rysowania) dla zablokowanych kafelków. `SkillTooltip.tsx` — wierny odpowiednik
+  `inventory/ItemTooltip.tsx` (identyczny mechanizm: `fixed` div, `getBoundingClientRect()` +
+  fallback góra/dół, `w-56`, te same stałe `TOOLTIP_WIDTH`/`TOOLTIP_GAP`), ale z treścią
+  dopasowaną do umiejętności (tytuł, etykieta rodzaju, status "Poziom X/Y" / "Wymaga: ...", opis,
+  linie efektu, koszt) zamiast delt statystyk itemu — osobny komponent zamiast rozszerzania
+  `ItemTooltip`, bo kształt danych się nie pokrywa.
+- **`SkillsPanel.tsx`'s `Tile`**: rozmiar `h-14 w-14` (56px), identyczny jak
+  `inventory/EquipSlotBox.tsx`/`ItemBox.tsx`. Cztery stany wizualne: zablokowany
+  (`border-2 border-dashed border-line-soft/60 opacity-60` + `LockGlyph`, jak pusty slot
+  ekwipunku), dostępny-niezainwestowany (`border-line-soft/70 bg-panel-raised
+  hover:border-gold/60`, neutralny), zainwestowany-nie-zmaksowany (`border-gold/50 bg-gold/10`),
+  zmaksowany (`border-gold-bright/70 bg-gold-bright/10`, jaśniejszy odcień). `SocketCorners`
+  (te same złote narożniki-bracket co sloty ekwipunku) na każdym odblokowanym kafelku. Poziom
+  pokazywany jako `+N` w lewym górnym rogu — dokładnie ten sam wzorzec co `ItemBox`'s odznaka
+  poziomu ulepszenia `+{upgradeLevel}` — WYŁĄCZNIE dla węzłów; korzenie umiejętności (jednorazowy
+  unlock, brak realnego poziomu w modelu danych) nie dostają fałszywej odznaki "+1" — jedyny
+  sygnał to zmiana obramowania z przerywanego na pełne. Etykieta nazwy pod kafelkiem USUNIĘTA
+  (była w poprzedniej wersji) — nazwa/opis/efekt dostępne przez hover-tooltip, zgodnie z życzeniem
+  użytkownika, żeby kafelek wyglądał czysto jak slot itemu, nie karta z podpisem.
+- Mechanika (zależności/levelowanie/kategorie), backend i model danych — bez zmian względem
+  poprzedniej sekcji. Tylko warstwa wizualna `Tile`+tooltip została przebudowana.
+
+Zweryfikowane: `pnpm --filter web typecheck` czysto. W przeglądarce (testowa postać z węzłami we
+wszystkich 4 stanach: zablokowany/dostępny/poziom 1 z 2/zmaksowany 3 z 3): odczyt DOM potwierdził
+dokładnie oczekiwane klasy Tailwind dla każdego stanu (`border-dashed` dla zablokowanych,
+`border-gold-bright/70` dla zmaksowanego z widocznym „+3”, `border-gold/50` dla częściowo
+zainwestowanego z „+1”, neutralny `border-line-soft/70` dla dostępnych-pustych). Tooltip
+wywołany syntetycznym `mouseover` (React 17+ deleguje mouseenter/leave z bąbelkującego
+mouseover/mouseout, więc bezpośredni natywny `mouseenter` nie wystarcza — trzeba `mouseover` z
+`bubbles:true`) pokazał poprawną treść zarówno dla zmaksowanego węzła ("Furia I / Moc / Poziom
+3/3 / opis / +10% mocy za poziom / Obecnie: +30% mocy / Poziom maksymalny" — mnożenie przez
+poziom potwierdzone) jak i dla zablokowanej umiejętności ("Krytyczne Uderzenie / Pasywna /
+Nieodblokowana / Koszt odblokowania: 1 pkt"). Dane testowe (węzły, konto, postać) usunięte po
+weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
