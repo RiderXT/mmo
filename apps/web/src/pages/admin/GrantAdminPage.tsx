@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminGrantInput, AdminCharacterDto } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
+import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
@@ -39,6 +40,8 @@ export function GrantAdminPage() {
   const [resolveId, setResolveId] = useState("");
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolveResult, setResolveResult] = useState<string | null>(null);
+  const [confirmingRevert, setConfirmingRevert] = useState(false);
+  const [confirmingRejectId, setConfirmingRejectId] = useState<string | null>(null);
 
   const characters = charactersQuery.data ?? [];
   const filtered = useMemo(() => {
@@ -297,13 +300,7 @@ export function GrantAdminPage() {
           <button
             onClick={() => {
               if (!revertId.trim()) return;
-              if (
-                confirm(
-                  "Cofnąć nagrody z tej ekspedycji? Tej operacji nie da się ponowić na tej samej ekspedycji.",
-                )
-              ) {
-                revertMutation.mutate(revertId.trim());
-              }
+              setConfirmingRevert(true);
             }}
             disabled={revertMutation.isPending || !revertId.trim()}
             className=" border border-red-400 px-4 py-1.5 text-sm font-medium text-red-400 hover:bg-red-400/10 disabled:opacity-50"
@@ -388,10 +385,7 @@ export function GrantAdminPage() {
                       Przyznaj mimo to
                     </button>
                     <button
-                      onClick={() =>
-                        confirm("Odrzucić nagrodę z tej ekspedycji bez przyznawania?") &&
-                        resolveMutation.mutate({ id: exp.id, grant: false })
-                      }
+                      onClick={() => setConfirmingRejectId(exp.id)}
                       disabled={resolveMutation.isPending}
                       className="border border-line-soft px-3 py-1 text-xs text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
                     >
@@ -430,11 +424,10 @@ export function GrantAdminPage() {
               Przyznaj mimo to
             </button>
             <button
-              onClick={() =>
-                resolveId.trim() &&
-                confirm("Odrzucić nagrodę z tej ekspedycji bez przyznawania?") &&
-                resolveMutation.mutate({ id: resolveId.trim(), grant: false })
-              }
+              onClick={() => {
+                if (!resolveId.trim()) return;
+                setConfirmingRejectId(resolveId.trim());
+              }}
               disabled={resolveMutation.isPending || !resolveId.trim()}
               className=" border border-line-soft px-3 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
             >
@@ -453,6 +446,32 @@ export function GrantAdminPage() {
           </p>
         )}
       </div>
+
+      {confirmingRevert && (
+        <ConfirmModal
+          title="Cofnąć ekspedycję?"
+          message="Cofnąć nagrody z tej ekspedycji? Tej operacji nie da się ponowić na tej samej ekspedycji."
+          danger
+          onConfirm={() => {
+            revertMutation.mutate(revertId.trim());
+            setConfirmingRevert(false);
+          }}
+          onCancel={() => setConfirmingRevert(false)}
+        />
+      )}
+
+      {confirmingRejectId && (
+        <ConfirmModal
+          title="Odrzucić nagrodę?"
+          message="Odrzucić nagrodę z tej ekspedycji bez przyznawania?"
+          danger
+          onConfirm={() => {
+            resolveMutation.mutate({ id: confirmingRejectId, grant: false });
+            setConfirmingRejectId(null);
+          }}
+          onCancel={() => setConfirmingRejectId(null)}
+        />
+      )}
     </div>
   );
 }

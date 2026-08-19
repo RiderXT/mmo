@@ -19,6 +19,9 @@ export interface ItemContextMenuTarget {
   canActivate?: boolean;
   /** Item is sitting in an active slot — drives the "Wyjmij ze slotu" entry. */
   canDeactivate?: boolean;
+  /** Item is sitting in an active slot AND is a hp_below/mana_below potion — drives the "Ustaw
+   * próg użycia" entry. Interval-triggered potions have no threshold to configure. */
+  canConfigureThreshold?: boolean;
   x: number;
   y: number;
 }
@@ -33,6 +36,7 @@ export function ItemContextMenu({
   onUnequip,
   onActivate,
   onDeactivate,
+  onConfigureThreshold,
 }: {
   target: ItemContextMenuTarget;
   onClose: () => void;
@@ -43,6 +47,7 @@ export function ItemContextMenu({
   onUnequip?: (inventoryItemId: string) => void;
   onActivate?: (inventoryItemId: string) => void;
   onDeactivate?: (inventoryItemId: string) => void;
+  onConfigureThreshold?: (inventoryItemId: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
@@ -77,7 +82,7 @@ export function ItemContextMenu({
 
   // Keep the menu on-screen near the click point rather than off the right/bottom edge.
   const left = Math.min(target.x, window.innerWidth - 180);
-  const top = Math.min(target.y, window.innerHeight - 220);
+  const top = Math.min(target.y, window.innerHeight - 260);
 
   return (
     <div
@@ -130,6 +135,17 @@ export function ItemContextMenu({
           className="block w-full px-3 py-2 text-left text-sm text-parchment hover:bg-panel-raised"
         >
           Wyjmij ze slotu
+        </button>
+      )}
+      {target.canConfigureThreshold && onConfigureThreshold && (
+        <button
+          onClick={() => {
+            onConfigureThreshold(target.inventoryItemId);
+            onClose();
+          }}
+          className="block w-full px-3 py-2 text-left text-sm text-parchment hover:bg-panel-raised"
+        >
+          Ustaw próg użycia
         </button>
       )}
       {target.canOpen && (

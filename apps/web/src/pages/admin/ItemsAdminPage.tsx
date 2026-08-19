@@ -9,6 +9,7 @@ import {
   type CreateItemInput,
 } from "@mmo/shared";
 import { Field, MiniField, inputClass } from "../../components/admin/Field";
+import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
@@ -175,6 +176,8 @@ export function ItemsAdminPage() {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateItemInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<CreateItemInput["type"] | "all">("all");
   const [classFilter, setClassFilter] = useState<string>("all");
@@ -203,7 +206,7 @@ export function ItemsAdminPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteItem,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-items"] }),
-    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
+    onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
   });
 
   function openCreate() {
@@ -303,7 +306,7 @@ export function ItemsAdminPage() {
                     Edytuj
                   </button>
                   <button
-                    onClick={() => confirm(`Usunąć "${item.name}"?`) && deleteMutation.mutate(item.id)}
+                    onClick={() => setConfirmDeleteId(item.id)}
                     className="text-red-400 hover:underline"
                   >
                     Usuń
@@ -321,6 +324,12 @@ export function ItemsAdminPage() {
           </tbody>
         </table>
       </div>
+
+      {deleteError && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {deleteError}
+        </p>
+      )}
 
       {editingId !== null && (
         <div className="mt-6 space-y-4 panel p-4">
@@ -1018,6 +1027,19 @@ export function ItemsAdminPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmModal
+          title="Usunąć?"
+          message={`Usunąć "${itemsQuery.data?.find((i) => i.id === confirmDeleteId)?.name}"?`}
+          danger
+          onConfirm={() => {
+            deleteMutation.mutate(confirmDeleteId);
+            setConfirmDeleteId(null);
+          }}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       )}
     </div>
   );

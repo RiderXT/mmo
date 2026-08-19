@@ -12,6 +12,8 @@ export interface InventoryItemDto {
   upgradeLevel: number;
   equippedSlot: EquipSlot | null;
   activeSlotIndex: number | null;
+  // Player's per-slot override of item.potionThresholdPct — see setPotionThresholdOverride below.
+  potionThresholdOverridePct: number | null;
   item: {
     id: string;
     name: string;
@@ -26,6 +28,10 @@ export interface InventoryItemDto {
     class: { id: string; name: string } | null;
     sellPrice: number;
     gridWidth: number;
+    // Potion behavior (only meaningful when type === "consumable") — drives the active-slot
+    // right-click "Ustaw próg użycia" entry, only offered for hp_below/mana_below triggers.
+    potionTrigger: "hp_below" | "mana_below" | "interval" | null;
+    potionThresholdPct: number | null;
   };
 }
 
@@ -92,4 +98,15 @@ export const discardItem = (characterId: string, inventoryItemId: string) =>
   apiFetch<void>(`/api/inventory/${characterId}/discard`, {
     method: "POST",
     body: JSON.stringify({ inventoryItemId }),
+  });
+
+/** null clears the override, reverting to the item's admin-configured default threshold. */
+export const setPotionThresholdOverride = (
+  characterId: string,
+  inventoryItemId: string,
+  thresholdPct: number | null,
+) =>
+  apiFetch<void>(`/api/inventory/${characterId}/potion-threshold`, {
+    method: "POST",
+    body: JSON.stringify({ inventoryItemId, thresholdPct }),
   });

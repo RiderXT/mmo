@@ -27,6 +27,7 @@ import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 import { GatheringPanel } from "../gathering/GatheringPanel";
 import { PanelFrame } from "../common/PanelFrame";
+import { ConfirmModal } from "../common/ConfirmModal";
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -51,6 +52,7 @@ export function ExpeditionPanel({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [tacticsMonsterIds, setTacticsMonsterIds] = useState<string[] | null>(null);
   const [otherZonesOpen, setOtherZonesOpen] = useState(false);
+  const [confirmingLeaveMessage, setConfirmingLeaveMessage] = useState<string | null>(null);
 
   const activeQuery = useQuery({
     queryKey: ["active-expedition", characterId],
@@ -257,9 +259,7 @@ export function ExpeditionPanel({
                   phase === "traveling_there"
                     ? "Zawrócić teraz? Nic jeszcze się nie wydarzyło — nie odbierzesz żadnych nagród."
                     : "Opuścić walkę teraz? Odbierzesz tylko to, co widać już w dzienniku walki poniżej — reszta czasu przepadnie. Postać zostanie w krainie.";
-                if (confirm(message)) {
-                  leaveMutation.mutate(expedition.id);
-                }
+                setConfirmingLeaveMessage(message);
               }}
               disabled={leaveMutation.isPending}
               className="mt-2 rounded-md border border-line-soft px-3 py-1.5 text-xs text-parchment-dim hover:bg-panel-raised disabled:opacity-50"
@@ -296,6 +296,19 @@ export function ExpeditionPanel({
           <LootBar events={revealedEvents} itemFor={itemFor} />
         </div>
         <CombatLog events={revealedEvents} itemFor={itemFor} />
+
+        {confirmingLeaveMessage && (
+          <ConfirmModal
+            title="Opuścić ekspedycję?"
+            message={confirmingLeaveMessage}
+            danger
+            onCancel={() => setConfirmingLeaveMessage(null)}
+            onConfirm={() => {
+              setConfirmingLeaveMessage(null);
+              leaveMutation.mutate(expedition.id);
+            }}
+          />
+        )}
       </PanelFrame>
     );
   }

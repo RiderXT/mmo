@@ -100,7 +100,9 @@ export async function gatherCombatBuild(characterId: string) {
       itemName: inv.item.name,
       quantity: inv.quantity,
       trigger: inv.item.potionTrigger as PotionSlot["trigger"],
-      thresholdPct: inv.item.potionThresholdPct,
+      // Player's per-slot override (set via right-click in the equipment tab) wins over the
+      // item's admin-configured default when present.
+      thresholdPct: inv.potionThresholdOverridePct ?? inv.item.potionThresholdPct,
       intervalSeconds: inv.item.potionIntervalSec,
       effect: inv.item.potionEffect as PotionSlot["effect"],
       magnitudePct: inv.item.potionMagnitudePct ?? 0.3,

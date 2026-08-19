@@ -27,6 +27,7 @@ export function ItemBox({
   tall = false,
   equippedComparisonItem,
   characterClassId,
+  alwaysShowQuantity = false,
 }: {
   inventoryItem: InventoryItemDto;
   onSelect?: () => void;
@@ -42,6 +43,10 @@ export function ItemBox({
   equippedComparisonItem?: InventoryItemDto | null;
   /** Viewing character's class id, for the tooltip's "wrong class" warning. */
   characterClassId?: string | null;
+  /** Show the quantity badge even at quantity 1 — the active-potion bar wants the remaining
+   * count visible from the start so it's obviously decreasing as an expedition auto-drinks it,
+   * instead of the badge only appearing once you're down to a single potion. */
+  alwaysShowQuantity?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inventoryItem.id,
@@ -114,7 +119,7 @@ export function ItemBox({
             +{inventoryItem.upgradeLevel}
           </span>
         )}
-        {inventoryItem.quantity > 1 && (
+        {(alwaysShowQuantity || inventoryItem.quantity > 1) && (
           <span className="absolute bottom-0.5 right-1 text-xs text-parchment-dim">
             {inventoryItem.quantity}
           </span>

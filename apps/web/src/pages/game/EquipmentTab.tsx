@@ -7,6 +7,7 @@ import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { ActiveItemSlotBox } from "../../components/inventory/ActiveItemSlotBox";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
+import { PotionThresholdModal } from "../../components/inventory/PotionThresholdModal";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
 import { getPlayerClass } from "../../lib/classesApi";
@@ -19,6 +20,7 @@ import {
   unequipItem,
   setActiveSlot,
   clearActiveSlot,
+  setPotionThresholdOverride,
   openChest,
   sellItem,
   discardItem,
@@ -51,6 +53,7 @@ export function EquipmentTab({ character }: { character: Character }) {
   const [chestResult, setChestResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [contextMenu, setContextMenu] = useState<ItemContextMenuTarget | null>(null);
+  const [thresholdTarget, setThresholdTarget] = useState<InventoryItemDto | null>(null);
   // Require a small pointer movement before a drag starts, so a plain click/tap doesn't get
   // swallowed by the drag sensor as an accidental micro-drag.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -82,7 +85,14 @@ export function EquipmentTab({ character }: { character: Character }) {
     mutationFn: (vars: { inventoryItemId: string; toSlotIndex: number }) =>
       moveItem(characterId, vars.inventoryItemId, vars.toSlotIndex),
     onSuccess: invalidateInventory,
-    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się przenieść"),
+    // A "miejsce zajęte" rejection means the client's view of the grid disagrees with the
+    // server's (e.g. a drop resolved elsewhere landed an item in that slot since the last
+    // fetch) — refetch so the grid immediately shows what's actually there instead of leaving
+    // a slot that looks empty but keeps rejecting every move into it.
+    onError: (err) => {
+      setActionError(err instanceof ApiError ? err.message : "Nie udało się przenieść");
+      invalidateInventory();
+    },
   });
 
   const equipMutation = useMutation({
@@ -136,6 +146,13 @@ export function EquipmentTab({ character }: { character: Character }) {
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się usunąć przedmiotu"),
   });
 
+  const setPotionThresholdMutation = useMutation({
+    mutationFn: (vars: { inventoryItemId: string; thresholdPct: number | null }) =>
+      setPotionThresholdOverride(characterId, vars.inventoryItemId, vars.thresholdPct),
+    onSuccess: invalidateInventory,
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się ustawić progu użycia"),
+  });
+
   // Tap-to-activate: assigns the first free active slot rather than letting the caller pick one,
   // so this path can never target an already-occupied slot — setActiveSlot silently orphans
   // whatever item it bumps (clears its activeSlotIndex without giving it back a grid slotIndex),
@@ -167,6 +184,9 @@ export function EquipmentTab({ character }: { character: Character }) {
       canUnequip: !!item.equippedSlot,
       canActivate: activatable,
       canDeactivate: item.activeSlotIndex !== null,
+      canConfigureThreshold:
+        item.activeSlotIndex !== null &&
+        (item.item.potionTrigger === "hp_below" || item.item.potionTrigger === "mana_below"),
       x,
       y,
     });
@@ -275,7 +295,9 @@ export function EquipmentTab({ character }: { character: Character }) {
                   const item = byActiveSlot.get(slotIndex);
                   return (
                     <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
-                      {item && <ItemBox inventoryItem={item} onContextMenu={handleItemContextMenu} />}
+                      {item && (
+                        <ItemBox inventoryItem={item} onContextMenu={handleItemContextMenu} alwaysShowQuantity />
+                      )}
                     </ActiveItemSlotBox>
                   );
                 })}
@@ -366,6 +388,24 @@ export function EquipmentTab({ character }: { character: Character }) {
             if (item) handleActivate(item);
           }}
           onDeactivate={(id) => clearActiveSlotMutation.mutate(id)}
+          onConfigureThreshold={(id) => {
+            const item = items.find((i) => i.id === id);
+            if (item) setThresholdTarget(item);
+          }}
+        />
+      )}
+
+      {thresholdTarget && thresholdTarget.item.potionTrigger != null && thresholdTarget.item.potionTrigger !== "interval" && (
+        <PotionThresholdModal
+          itemName={thresholdTarget.item.name}
+          trigger={thresholdTarget.item.potionTrigger}
+          currentPct={thresholdTarget.potionThresholdOverridePct ?? thresholdTarget.item.potionThresholdPct ?? 0.3}
+          hasOverride={thresholdTarget.potionThresholdOverridePct != null}
+          onSave={(pct) => {
+            setPotionThresholdMutation.mutate({ inventoryItemId: thresholdTarget.id, thresholdPct: pct });
+            setThresholdTarget(null);
+          }}
+          onCancel={() => setThresholdTarget(null)}
         />
       )}
     </div>

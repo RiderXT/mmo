@@ -409,6 +409,12 @@ model InventoryItem {
   upgradeLevel  Int      @default(0)
   equippedSlot  String?
   activeSlotIndex Int?
+  // Player-set override of Item.potionThresholdPct for THIS specific inventory stack — lets the
+  // player pick "use below 30% HP" per active slot instead of always the admin's item-wide
+  // default. Only meaningful when Item.potionTrigger is "hp_below"/"mana_below"; ignored (and not
+  // settable) for "interval"-triggered potions since there's no threshold to override. Null =
+  // use the item's own default (see gatherCombatBuild in expeditions/service.ts).
+  potionThresholdOverridePct Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

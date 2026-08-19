@@ -7,6 +7,7 @@ import {
   type CreateMineInput,
 } from "@mmo/shared";
 import { Field, MiniField, inputClass } from "../../components/admin/Field";
+import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
@@ -181,6 +182,8 @@ function FishingSpotsSection() {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateFishingSpotInput>(emptyFishingForm());
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDeleteSpotId, setConfirmDeleteSpotId] = useState<string | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: (input: CreateFishingSpotInput) =>
@@ -200,7 +203,7 @@ function FishingSpotsSection() {
       queryClient.invalidateQueries({ queryKey: ["admin-fishing-spots"] });
       queryClient.invalidateQueries({ queryKey: ["admin-zones"] });
     },
-    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
+    onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
   });
 
   function openCreate() {
@@ -263,7 +266,7 @@ function FishingSpotsSection() {
                     Edytuj
                   </button>
                   <button
-                    onClick={() => confirm(`Usunąć łowisko "${spot.name}"?`) && deleteMutation.mutate(spot.id)}
+                    onClick={() => setConfirmDeleteSpotId(spot.id)}
                     className="text-red-400 hover:underline"
                   >
                     Usuń
@@ -281,6 +284,12 @@ function FishingSpotsSection() {
           </tbody>
         </table>
       </div>
+
+      {deleteError && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {deleteError}
+        </p>
+      )}
 
       {editingId !== null && (
         <div className="mt-6 space-y-4 panel p-4">
@@ -350,6 +359,19 @@ function FishingSpotsSection() {
           </div>
         </div>
       )}
+
+      {confirmDeleteSpotId && (
+        <ConfirmModal
+          title="Usunąć?"
+          message={`Usunąć łowisko "${spotsQuery.data?.find((s) => s.id === confirmDeleteSpotId)?.name}"?`}
+          danger
+          onConfirm={() => {
+            deleteMutation.mutate(confirmDeleteSpotId);
+            setConfirmDeleteSpotId(null);
+          }}
+          onCancel={() => setConfirmDeleteSpotId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -364,6 +386,8 @@ function MinesSection() {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateMineInput>(emptyMineForm());
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDeleteMineId, setConfirmDeleteMineId] = useState<string | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: (input: CreateMineInput) => (editingId && editingId !== "new" ? updateMine(editingId, input) : createMine(input)),
@@ -382,7 +406,7 @@ function MinesSection() {
       queryClient.invalidateQueries({ queryKey: ["admin-mines"] });
       queryClient.invalidateQueries({ queryKey: ["admin-zones"] });
     },
-    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
+    onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
   });
 
   function openCreate() {
@@ -450,7 +474,7 @@ function MinesSection() {
                     Edytuj
                   </button>
                   <button
-                    onClick={() => confirm(`Usunąć kopalnię "${mine.name}"?`) && deleteMutation.mutate(mine.id)}
+                    onClick={() => setConfirmDeleteMineId(mine.id)}
                     className="text-red-400 hover:underline"
                   >
                     Usuń
@@ -468,6 +492,12 @@ function MinesSection() {
           </tbody>
         </table>
       </div>
+
+      {deleteError && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {deleteError}
+        </p>
+      )}
 
       {editingId !== null && (
         <div className="mt-6 space-y-4 panel p-4">
@@ -554,6 +584,19 @@ function MinesSection() {
             </button>
           </div>
         </div>
+      )}
+
+      {confirmDeleteMineId && (
+        <ConfirmModal
+          title="Usunąć?"
+          message={`Usunąć kopalnię "${minesQuery.data?.find((m) => m.id === confirmDeleteMineId)?.name}"?`}
+          danger
+          onConfirm={() => {
+            deleteMutation.mutate(confirmDeleteMineId);
+            setConfirmDeleteMineId(null);
+          }}
+          onCancel={() => setConfirmDeleteMineId(null)}
+        />
       )}
     </div>
   );

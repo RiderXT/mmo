@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateNpcSchema, type CreateNpcInput } from "@mmo/shared";
 import { Field, MiniField, inputClass } from "../../components/admin/Field";
+import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
@@ -30,6 +31,8 @@ export function NpcsAdminPage() {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateNpcInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: (input: CreateNpcInput) =>
@@ -45,7 +48,7 @@ export function NpcsAdminPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteNpc,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-npcs"] }),
-    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
+    onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
   });
 
   function openCreate() {
@@ -110,7 +113,7 @@ export function NpcsAdminPage() {
                     Edytuj
                   </button>
                   <button
-                    onClick={() => confirm(`Usunąć NPC "${npc.name}"?`) && deleteMutation.mutate(npc.id)}
+                    onClick={() => setConfirmDeleteId(npc.id)}
                     className="text-red-400 hover:underline"
                   >
                     Usuń
@@ -128,6 +131,12 @@ export function NpcsAdminPage() {
           </tbody>
         </table>
       </div>
+
+      {deleteError && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {deleteError}
+        </p>
+      )}
 
       {editingId !== null && (
         <div className="mt-6 space-y-4 panel p-4">
@@ -258,6 +267,19 @@ export function NpcsAdminPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmModal
+          title="Usunąć?"
+          message={`Usunąć NPC "${npcsQuery.data?.find((n) => n.id === confirmDeleteId)?.name}"?`}
+          danger
+          onConfirm={() => {
+            deleteMutation.mutate(confirmDeleteId);
+            setConfirmDeleteId(null);
+          }}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       )}
     </div>
   );

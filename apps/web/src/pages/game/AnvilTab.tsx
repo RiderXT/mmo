@@ -28,6 +28,24 @@ const UPGRADABLE_TYPES = new Set<ItemType>([
   "earrings",
   "ring",
 ]);
+/** Non-interactive stand-in for an equipped item's doll slot while that exact item sits on the
+ * anvil — the anvil already owns the one real (draggable) ItemBox for it, so this renders the
+ * same visual footprint without a second dnd-kit draggable of the same id. */
+function AnvilEchoBox({ item }: { item: InventoryItemDto }) {
+  return (
+    <div
+      title="Na kowadle"
+      className="relative flex h-14 w-14 flex-col items-center justify-center gap-0.5 border border-gold/40 bg-panel-raised/60 text-xs font-medium text-parchment-dim"
+    >
+      <ItemTypeIcon type={item.item.type} className="h-6 w-6 text-gold/60" />
+      <span className="line-clamp-1 px-1 text-center leading-tight">{item.item.name}</span>
+      {item.upgradeLevel > 0 && (
+        <span className="absolute left-0.5 top-0.5 text-xs text-gold-bright">+{item.upgradeLevel}</span>
+      )}
+    </div>
+  );
+}
+
 const LEFT_EQUIP_SLOTS: EquipSlot[] = ["helmet", "armor", "necklace", "boots"];
 const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon", "shield", "ring", "earrings"];
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
@@ -109,10 +127,12 @@ export function AnvilTab({ character }: { character: Character }) {
   const byEquipSlot = new Map<EquipSlot, InventoryItemDto>();
   const byGridSlot = new Map<number, InventoryItemDto>();
   for (const item of items) {
-    // The selected item is shown "on the anvil" instead of its normal spot — otherwise the same
-    // inventoryItemId would render as two separate dnd-kit draggables at once.
-    if (item.id === selectedId) continue;
+    // A grid item placed on the anvil vacates its inventory slot — otherwise the same
+    // inventoryItemId would render as two separate dnd-kit draggables at once. An EQUIPPED item
+    // stays worn while it's being evaluated on the anvil, so it keeps rendering in its doll slot
+    // too (as a static echo, not a second draggable — see equip-slot rendering below).
     if (item.equippedSlot) byEquipSlot.set(item.equippedSlot, item);
+    else if (item.id === selectedId) continue;
     else if (item.activeSlotIndex === null && UPGRADABLE_TYPES.has(item.item.type)) byGridSlot.set(item.slotIndex!, item);
   }
   const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
@@ -155,9 +175,12 @@ export function AnvilTab({ character }: { character: Character }) {
                 const item = byEquipSlot.get(slot);
                 return (
                   <EquipSlotBox key={slot} slot={slot}>
-                    {item && (
-                      <ItemBox inventoryItem={item} selected={item.id === selectedId} onSelect={() => selectItem(item.id)} />
-                    )}
+                    {item &&
+                      (item.id === selectedId ? (
+                        <AnvilEchoBox item={item} />
+                      ) : (
+                        <ItemBox inventoryItem={item} onSelect={() => selectItem(item.id)} />
+                      ))}
                   </EquipSlotBox>
                 );
               })}
@@ -167,9 +190,12 @@ export function AnvilTab({ character }: { character: Character }) {
                 const item = byEquipSlot.get(slot);
                 return (
                   <EquipSlotBox key={slot} slot={slot}>
-                    {item && (
-                      <ItemBox inventoryItem={item} selected={item.id === selectedId} onSelect={() => selectItem(item.id)} />
-                    )}
+                    {item &&
+                      (item.id === selectedId ? (
+                        <AnvilEchoBox item={item} />
+                      ) : (
+                        <ItemBox inventoryItem={item} onSelect={() => selectItem(item.id)} />
+                      ))}
                   </EquipSlotBox>
                 );
               })}

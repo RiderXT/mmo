@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Character } from "@mmo/shared";
 import { getPlayerClass } from "../../lib/classesApi";
@@ -7,6 +8,7 @@ import { PanelFrame } from "../common/PanelFrame";
 
 export function SkillsPanel({ character }: { character: Character }) {
   const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
 
   const classQuery = useQuery({
     queryKey: ["class", character.classId],
@@ -22,11 +24,12 @@ export function SkillsPanel({ character }: { character: Character }) {
   const mutation = useMutation({
     mutationFn: (classSkillId: string) => allocateSkill(character.id, classSkillId),
     onSuccess: () => {
+      setError(null);
       queryClient.invalidateQueries({ queryKey: ["character-skills", character.id] });
       queryClient.invalidateQueries({ queryKey: ["character", character.id] });
       queryClient.invalidateQueries({ queryKey: ["combat-stats", character.id] });
     },
-    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się przydzielić punktu"),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się przydzielić punktu"),
   });
 
   if (!character.classId || !classQuery.data) return null;
@@ -70,6 +73,11 @@ export function SkillsPanel({ character }: { character: Character }) {
           );
         })}
       </div>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {error}
+        </p>
+      )}
     </PanelFrame>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreateGameEventSchema, type CreateGameEventInput } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
+import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
@@ -61,6 +62,8 @@ export function EventsAdminPage() {
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [form, setForm] = useState<CreateGameEventInput>(emptyForm());
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: (input: CreateGameEventInput) =>
@@ -76,7 +79,7 @@ export function EventsAdminPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteEvent,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-events"] }),
-    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
+    onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
   });
 
   function openCreate() {
@@ -152,7 +155,7 @@ export function EventsAdminPage() {
                     Edytuj
                   </button>
                   <button
-                    onClick={() => confirm(`Usunąć event "${event.name}"?`) && deleteMutation.mutate(event.id)}
+                    onClick={() => setConfirmDeleteId(event.id)}
                     className="text-red-400 hover:underline"
                   >
                     Usuń
@@ -170,6 +173,12 @@ export function EventsAdminPage() {
           </tbody>
         </table>
       </div>
+
+      {deleteError && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {deleteError}
+        </p>
+      )}
 
       {editingId !== null && (
         <div className="mt-6 space-y-4 panel p-4">
@@ -289,6 +298,19 @@ export function EventsAdminPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmModal
+          title="Usunąć?"
+          message={`Usunąć event "${eventsQuery.data?.find((ev) => ev.id === confirmDeleteId)?.name}"?`}
+          danger
+          onConfirm={() => {
+            deleteMutation.mutate(confirmDeleteId);
+            setConfirmDeleteId(null);
+          }}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       )}
     </div>
   );

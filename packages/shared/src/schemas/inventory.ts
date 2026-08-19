@@ -58,6 +58,13 @@ export const ClearActiveSlotSchema = z.object({
 });
 export type ClearActiveSlotInput = z.infer<typeof ClearActiveSlotSchema>;
 
+// null clears the override (falls back to the item's admin-configured default).
+export const SetPotionThresholdSchema = z.object({
+  inventoryItemId: z.string(),
+  thresholdPct: z.number().min(0).max(1).nullable(),
+});
+export type SetPotionThresholdInput = z.infer<typeof SetPotionThresholdSchema>;
+
 export const InventoryItemSchema = z.object({
   id: z.string(),
   characterId: z.string(),
@@ -68,6 +75,7 @@ export const InventoryItemSchema = z.object({
   upgradeLevel: z.number().int(),
   equippedSlot: EquipSlotSchema.nullable(),
   activeSlotIndex: z.number().int().nullable(),
+  potionThresholdOverridePct: z.number().nullable(),
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 

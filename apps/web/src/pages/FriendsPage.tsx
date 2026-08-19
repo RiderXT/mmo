@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { PanelFrame } from "../components/common/PanelFrame";
+import { ConfirmModal } from "../components/common/ConfirmModal";
 import { ApiError } from "../lib/apiClient";
 import {
   listFriends,
@@ -18,6 +19,9 @@ export function FriendsPage() {
   const [targetName, setTargetName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState<{ userId: string; characterName: string | null } | null>(
+    null,
+  );
 
   const friendsQuery = useQuery({ queryKey: ["friends"], queryFn: listFriends });
 
@@ -144,7 +148,7 @@ export function FriendsPage() {
                   {f.characterLevel != null && <span className="text-xs text-parchment-faint">· lvl. {f.characterLevel}</span>}
                 </div>
                 <button
-                  onClick={() => confirm(`Usunąć "${f.characterName}" ze znajomych?`) && removeMutation.mutate(f.userId)}
+                  onClick={() => setConfirmingRemove({ userId: f.userId, characterName: f.characterName })}
                   className="text-xs text-red-400 hover:underline"
                 >
                   Usuń
@@ -154,6 +158,19 @@ export function FriendsPage() {
           </ul>
         )}
       </PanelFrame>
+
+      {confirmingRemove && (
+        <ConfirmModal
+          title="Usunąć znajomego?"
+          message={`Usunąć "${confirmingRemove.characterName}" ze znajomych?`}
+          danger
+          onCancel={() => setConfirmingRemove(null)}
+          onConfirm={() => {
+            removeMutation.mutate(confirmingRemove.userId);
+            setConfirmingRemove(null);
+          }}
+        />
+      )}
     </AppShell>
   );
 }

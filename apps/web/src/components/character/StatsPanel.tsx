@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Character, CoreStatKey } from "@mmo/shared";
 import { allocateStat } from "../../lib/charactersApi";
@@ -13,14 +14,16 @@ const STAT_LABELS: Record<CoreStatKey, string> = {
 
 export function StatsPanel({ character }: { character: Character }) {
   const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: (stat: CoreStatKey) => allocateStat(character.id, stat),
     onSuccess: () => {
+      setError(null);
       queryClient.invalidateQueries({ queryKey: ["character", character.id] });
       queryClient.invalidateQueries({ queryKey: ["combat-stats", character.id] });
     },
-    onError: (err) => alert(err instanceof ApiError ? err.message : "Nie udało się przydzielić punktu"),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się przydzielić punktu"),
   });
 
   return (
@@ -49,6 +52,11 @@ export function StatsPanel({ character }: { character: Character }) {
           </div>
         ))}
       </div>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {error}
+        </p>
+      )}
     </PanelFrame>
   );
 }

@@ -299,6 +299,43 @@ export async function clearActiveSlot(
   });
 }
 
+/** Lets the player pick a per-slot HP/MP threshold for a hp_below/mana_below potion instead of
+ * always using the item's admin-configured default (Item.potionThresholdPct) — read back by
+ * gatherCombatBuild in modules/expeditions/service.ts. Rejected for potions with no threshold
+ * trigger (interval-based, or non-potions) since there'd be nothing for the override to affect. */
+export async function setPotionThresholdOverride(
+  input: { characterId: string; inventoryItemId: string; thresholdPct: number | null },
+  userId: string,
+  requestId?: string,
+) {
+  await assertCharacterOwnership(input.characterId, userId);
+
+  const inventoryItem = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: { select: { potionTrigger: true } } },
+  });
+  if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
+    throw new InventoryError("Nie znaleziono przedmiotu", 404);
+  }
+  if (inventoryItem.item.potionTrigger !== "hp_below" && inventoryItem.item.potionTrigger !== "mana_below") {
+    throw new InventoryError("Ten przedmiot nie ma progu użycia do ustawienia", 400);
+  }
+
+  await prisma.inventoryItem.update({
+    where: { id: inventoryItem.id },
+    data: { potionThresholdOverridePct: input.thresholdPct },
+  });
+
+  await logAction({
+    module: "inventory",
+    action: "set_potion_threshold",
+    actorUserId: userId,
+    actorCharacterId: input.characterId,
+    requestId,
+    payload: { inventoryItemId: input.inventoryItemId, thresholdPct: input.thresholdPct },
+  });
+}
+
 export async function upgradeItem(
   input: { characterId: string; inventoryItemId: string },
   userId: string,

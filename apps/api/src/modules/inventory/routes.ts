@@ -6,6 +6,7 @@ import {
   UpgradeItemSchema,
   SetActiveSlotSchema,
   ClearActiveSlotSchema,
+  SetPotionThresholdSchema,
   OpenChestSchema,
   SellItemSchema,
   DiscardItemSchema,
@@ -19,6 +20,7 @@ import {
   upgradeItem,
   setActiveSlot,
   clearActiveSlot,
+  setPotionThresholdOverride,
   openChest,
   sellItem,
   discardItem,
@@ -89,6 +91,18 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
     const body = ClearActiveSlotSchema.parse(request.body);
     try {
       await clearActiveSlot({ characterId, ...body }, request.user!.sub, request.id);
+      return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:characterId/potion-threshold", { preHandler: requireAuth }, async (request, reply) => {
+    const { characterId } = request.params as { characterId: string };
+    const body = SetPotionThresholdSchema.parse(request.body);
+    try {
+      await setPotionThresholdOverride({ characterId, ...body }, request.user!.sub, request.id);
       return reply.code(204).send();
     } catch (err) {
       if (err instanceof InventoryError) return reply.code(err.statusCode).send({ error: err.message });
