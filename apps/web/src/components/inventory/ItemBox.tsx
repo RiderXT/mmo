@@ -5,10 +5,30 @@ import { API_URL } from "../../lib/apiClient";
 import { ItemTypeIcon } from "./ItemTypeIcon";
 import { ItemTooltip } from "./ItemTooltip";
 
-/** Uploaded artwork when the admin has set one, otherwise the generic per-type placeholder. */
-function ItemIcon({ type, imageUrl, className }: { type: InventoryItemDto["item"]["type"]; imageUrl: string | null; className?: string }) {
-  if (imageUrl) return <img src={`${API_URL}${imageUrl}`} alt="" className={`${className} object-contain`} />;
-  return <ItemTypeIcon type={type} className={className} />;
+/** Uploaded artwork when the admin has set one — fills the whole slot (name only shows on
+ * hover via ItemTooltip, so it doesn't need to fit below a small icon here). Falls back to the
+ * generic per-type placeholder + name label when there's no artwork, since a bare type icon
+ * alone doesn't identify the specific item. */
+function ItemIcon({
+  type,
+  imageUrl,
+  name,
+  iconClassName,
+}: {
+  type: InventoryItemDto["item"]["type"];
+  imageUrl: string | null;
+  name: string;
+  iconClassName: string;
+}) {
+  if (imageUrl) {
+    return <img src={`${API_URL}${imageUrl}`} alt="" className="absolute inset-0 h-full w-full object-contain p-1" />;
+  }
+  return (
+    <>
+      <ItemTypeIcon type={type} className={iconClassName} />
+      <span className="line-clamp-1 px-1 text-center leading-tight">{name}</span>
+    </>
+  );
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -125,8 +145,12 @@ export function ItemBox({
             : ""
         } ${isDragging ? "opacity-40" : ""}`}
       >
-        <ItemIcon type={inventoryItem.item.type} imageUrl={inventoryItem.item.imageUrl} className="h-6 w-6 text-parchment-dim" />
-        <span className="line-clamp-1 px-1 text-center leading-tight">{inventoryItem.item.name}</span>
+        <ItemIcon
+          type={inventoryItem.item.type}
+          imageUrl={inventoryItem.item.imageUrl}
+          name={inventoryItem.item.name}
+          iconClassName="h-6 w-6 text-parchment-dim"
+        />
         {inventoryItem.upgradeLevel > 0 && (
           <span className="absolute left-0.5 top-0.5 text-xs text-gold-bright">
             +{inventoryItem.upgradeLevel}
@@ -153,8 +177,12 @@ export function ItemBoxPreview({ inventoryItem }: { inventoryItem: InventoryItem
         TYPE_COLORS[inventoryItem.item.type] ?? "border-line-soft bg-panel-raised"
       }`}
     >
-      <ItemIcon type={inventoryItem.item.type} imageUrl={inventoryItem.item.imageUrl} className="h-6 w-6 text-parchment-dim" />
-      <span className="line-clamp-1 px-1 text-center leading-tight">{inventoryItem.item.name}</span>
+      <ItemIcon
+        type={inventoryItem.item.type}
+        imageUrl={inventoryItem.item.imageUrl}
+        name={inventoryItem.item.name}
+        iconClassName="h-6 w-6 text-parchment-dim"
+      />
     </div>
   );
 }
