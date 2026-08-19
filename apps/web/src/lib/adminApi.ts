@@ -329,6 +329,10 @@ export interface PassiveSkillTypeDto {
   gatherKind: GatherKind | null;
   chanceBonusPerLevel: number;
   speedBonusPerLevel: number;
+  xpPerLevel: number;
+  xpPerGatherAction: number;
+  bookGateFromLevel: number | null;
+  booksRequiredPerLevel: number;
 }
 export const listPassiveSkillTypes = () => apiFetch<PassiveSkillTypeDto[]>("/api/admin/passive-skills");
 export const createPassiveSkillType = (input: CreatePassiveSkillTypeInput) =>

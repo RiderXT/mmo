@@ -19,7 +19,9 @@ export function PassiveSkillsPanel({ characterId }: { characterId: string }) {
   return (
     <PanelFrame title="Umiejętności pasywne">
       <p className="text-sm text-parchment-faint">
-        Rosną nie za punkty umiejętności, lecz przez czytanie odpowiednich książek (prawy klik na
+        Nie przydziela się w nie punktów. Umiejętności związane z łowieniem/kopaniem rosną z
+        doświadczenia zdobywanego podczas zbieractwa; pozostałe (i wyższe poziomy tych pierwszych,
+        jeśli ustawiona jest bramka) rosną przez czytanie odpowiednich książek (prawy klik na
         książce w plecaku → Przeczytaj) — każda próba ma szansę na sukces i zużywa jedną sztukę.
       </p>
       {skills.length === 0 ? (
@@ -31,6 +33,11 @@ export function PassiveSkillsPanel({ characterId }: { characterId: string }) {
             const gatherLabel = skill.gatherKind ? GATHER_KIND_LABELS[skill.gatherKind] ?? skill.gatherKind : null;
             const chanceBonus = Math.round(skill.level * skill.chanceBonusPerLevel * 1000) / 10;
             const speedBonus = Math.round(skill.level * skill.speedBonusPerLevel * 1000) / 10;
+            const nextLevel = skill.level + 1;
+            const gated =
+              skill.gatherKind != null && skill.bookGateFromLevel != null && nextLevel >= skill.bookGateFromLevel;
+            const xpPct = skill.xpPerLevel > 0 ? (skill.xp / skill.xpPerLevel) * 100 : 0;
+            const xpReady = skill.xp >= skill.xpPerLevel;
             return (
               <div key={skill.id}>
                 <div className="flex items-baseline justify-between text-sm">
@@ -43,6 +50,24 @@ export function PassiveSkillsPanel({ characterId }: { characterId: string }) {
                 <div className="mt-1">
                   <ProgressBar pct={pct} />
                 </div>
+                {skill.gatherKind && skill.level < skill.maxLevel && (
+                  <div className="mt-1">
+                    <div className="flex items-baseline justify-between text-[11px] text-parchment-faint">
+                      <span>XP do następnego poziomu</span>
+                      <span className="tabular-nums">
+                        {skill.xp}/{skill.xpPerLevel}
+                      </span>
+                    </div>
+                    <ProgressBar pct={xpPct} />
+                  </div>
+                )}
+                {gated && xpReady && skill.level < skill.maxLevel && (
+                  <p className="mt-1 text-xs text-gold-bright">
+                    Gotowe do awansu — przeczytaj jeszcze {skill.booksRequiredPerLevel - skill.pendingBooksRead}{" "}
+                    {skill.booksRequiredPerLevel - skill.pendingBooksRead === 1 ? "książkę" : "książki"} (
+                    {skill.pendingBooksRead}/{skill.booksRequiredPerLevel}).
+                  </p>
+                )}
                 {gatherLabel && (skill.chanceBonusPerLevel > 0 || skill.speedBonusPerLevel > 0) && (
                   <p className="mt-1 text-xs text-parchment-faint">
                     Aktualny bonus do {gatherLabel}:

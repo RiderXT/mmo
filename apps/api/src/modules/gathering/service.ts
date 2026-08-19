@@ -4,7 +4,7 @@ import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import { clearStaleActiveExpeditionPointer } from "../expeditions/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import { getGatheringSettings } from "../settings/service.js";
-import { getPassiveSkillGatherBonus } from "../passiveSkills/service.js";
+import { getPassiveSkillGatherBonus, grantGatherXp } from "../passiveSkills/service.js";
 import { getActivePersonalBuffMultipliers } from "../../lib/personalBuffs.js";
 import type { GatherKind, GatherPhase, GatherSessionDto, GatheringSettings, StartGatheringInput } from "@mmo/shared";
 
@@ -213,10 +213,12 @@ async function resolveOnePhase(
       include: { drops: true },
     });
     const awarded = rollDrops(spot.drops, chanceBonusPct, dropChanceMultiplier);
-    if (awarded.length > 0) {
-      // allowPartial: a full bag must not crash the lazy phase-resolution loop (it would break
-      // the whole "active gathering" fetch) — grant what fits, silently drop the rest.
-      await prisma.$transaction(async (tx) => {
+    // Transaction runs on EVERY catching attempt (not just successful ones) — grantGatherXp
+    // rewards the attempt itself; loot/gatherSuccessCount stay conditional on awarded.length as
+    // before. allowPartial: a full bag must not crash the lazy phase-resolution loop.
+    await prisma.$transaction(async (tx) => {
+      await grantGatherXp(tx, session.characterId, "fishing");
+      if (awarded.length > 0) {
         for (const a of awarded) {
           await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
         }
@@ -226,8 +228,8 @@ async function resolveOnePhase(
             data: { gatherSuccessCount: { increment: 1 } },
           });
         }
-      });
-    }
+      }
+    });
     const range = {
       minSeconds: spot.minCatchSeconds ?? settings.fishing.minSeconds,
       maxSeconds: spot.maxCatchSeconds ?? settings.fishing.maxSeconds,
@@ -247,10 +249,10 @@ async function resolveOnePhase(
 
   if (session.phase === "extracting") {
     const awarded = rollDrops(mine.drops, chanceBonusPct, dropChanceMultiplier);
-    if (awarded.length > 0) {
-      // allowPartial: a full bag must not crash the lazy phase-resolution loop (it would break
-      // the whole "active gathering" fetch) — grant what fits, silently drop the rest.
-      await prisma.$transaction(async (tx) => {
+    // See fishing branch above — transaction (and grantGatherXp) runs on every dig attempt.
+    await prisma.$transaction(async (tx) => {
+      await grantGatherXp(tx, session.characterId, "mining");
+      if (awarded.length > 0) {
         for (const a of awarded) {
           await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
         }
@@ -260,8 +262,8 @@ async function resolveOnePhase(
             data: { gatherSuccessCount: { increment: 1 } },
           });
         }
-      });
-    }
+      }
+    });
     // Search phase is deliberately NOT sped up by the pickaxe — only extraction is "work",
     // searching is travel-like wandering to the next node (confirmed design decision).
     const range = {

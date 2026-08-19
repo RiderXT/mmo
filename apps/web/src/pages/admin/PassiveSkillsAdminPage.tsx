@@ -25,6 +25,10 @@ function emptyForm(): CreatePassiveSkillTypeInput {
     gatherKind: null,
     chanceBonusPerLevel: 0,
     speedBonusPerLevel: 0,
+    xpPerLevel: 100,
+    xpPerGatherAction: 1,
+    bookGateFromLevel: null,
+    booksRequiredPerLevel: 1,
   };
 }
 
@@ -36,6 +40,10 @@ function fromDto(skill: PassiveSkillTypeDto): CreatePassiveSkillTypeInput {
     gatherKind: skill.gatherKind,
     chanceBonusPerLevel: skill.chanceBonusPerLevel,
     speedBonusPerLevel: skill.speedBonusPerLevel,
+    xpPerLevel: skill.xpPerLevel,
+    xpPerGatherAction: skill.xpPerGatherAction,
+    bookGateFromLevel: skill.bookGateFromLevel,
+    booksRequiredPerLevel: skill.booksRequiredPerLevel,
   };
 }
 
@@ -98,10 +106,12 @@ export function PassiveSkillsAdminPage() {
         </button>
       </div>
       <p className="mt-1 text-sm text-parchment-dim">
-        Rosną tylko przez czytanie książek (item typu "book" wskazujący na daną umiejętność w
-        panelu Itemy) — gracze nie przydzielają w nie punktów. Jeśli ustawisz rodzaj zbieractwa,
+        Gracze nie przydzielają w nie punktów. Umiejętności z rodzajem zbieractwa rosną z
+        doświadczenia zdobywanego podczas łowienia/kopania (każda próba, nie tylko udana) —
         każdy poziom dodaje bonus do szansy/szybkości tej aktywności, sumujący się z bonusem
-        samego narzędzia.
+        samego narzędzia. Od skonfigurowanego poziomu awans dodatkowo wymaga przeczytania książek
+        (item typu "book" wskazujący na daną umiejętność w panelu Itemy). Umiejętności bez
+        rodzaju zbieractwa rosną wyłącznie przez czytanie książek, jak dotąd.
       </p>
 
       <div className="mt-4 overflow-x-auto panel">
@@ -224,6 +234,50 @@ export function PassiveSkillsAdminPage() {
                 value={form.speedBonusPerLevel}
                 onChange={(e) => setForm({ ...form, speedBonusPerLevel: Number(e.target.value) })}
                 disabled={!form.gatherKind}
+              />
+            </Field>
+            <Field label="XP potrzebne na poziom">
+              <input
+                type="number"
+                min={1}
+                max={1_000_000}
+                className={inputClass}
+                value={form.xpPerLevel}
+                onChange={(e) => setForm({ ...form, xpPerLevel: Number(e.target.value) })}
+                disabled={!form.gatherKind}
+              />
+            </Field>
+            <Field label="XP za jedną próbę (połów/wydobycie)">
+              <input
+                type="number"
+                min={1}
+                max={100_000}
+                className={inputClass}
+                value={form.xpPerGatherAction}
+                onChange={(e) => setForm({ ...form, xpPerGatherAction: Number(e.target.value) })}
+                disabled={!form.gatherKind}
+              />
+            </Field>
+            <Field label="Bramka książkowa od poziomu (puste = brak)">
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                className={inputClass}
+                value={form.bookGateFromLevel ?? ""}
+                onChange={(e) => setForm({ ...form, bookGateFromLevel: e.target.value === "" ? null : Number(e.target.value) })}
+                disabled={!form.gatherKind}
+              />
+            </Field>
+            <Field label="Wymagane książki po bramce">
+              <input
+                type="number"
+                min={1}
+                max={100}
+                className={inputClass}
+                value={form.booksRequiredPerLevel}
+                onChange={(e) => setForm({ ...form, booksRequiredPerLevel: Number(e.target.value) })}
+                disabled={!form.gatherKind || form.bookGateFromLevel == null}
               />
             </Field>
           </div>

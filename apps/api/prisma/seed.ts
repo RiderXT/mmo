@@ -91,6 +91,44 @@ async function seedClasses() {
   console.log(`Utworzono ${classes.length} klasy postaci po 6 umiejętności każda.`);
 }
 
+async function seedPassiveSkills() {
+  const skills = [
+    {
+      name: "Rybak",
+      description: "Rośnie z doświadczenia zdobywanego podczas łowienia. Podnosi szansę i szybkość połowu.",
+      gatherKind: "fishing",
+    },
+    {
+      name: "Górnik",
+      description: "Rośnie z doświadczenia zdobywanego podczas wydobycia. Podnosi szansę i szybkość wydobycia.",
+      gatherKind: "mining",
+    },
+  ] as const;
+
+  for (const skill of skills) {
+    const existing = await prisma.passiveSkillType.findUnique({ where: { name: skill.name } });
+    if (existing) {
+      console.log(`Umiejętność pasywna "${skill.name}" już istnieje, pomijam.`);
+      continue;
+    }
+    await prisma.passiveSkillType.create({
+      data: {
+        name: skill.name,
+        description: skill.description,
+        maxLevel: 50,
+        gatherKind: skill.gatherKind,
+        chanceBonusPerLevel: 0.01,
+        speedBonusPerLevel: 0.005,
+        xpPerLevel: 50,
+        xpPerGatherAction: 5,
+        bookGateFromLevel: 10,
+        booksRequiredPerLevel: 2,
+      },
+    });
+    console.log(`Utworzono umiejętność pasywną "${skill.name}".`);
+  }
+}
+
 async function seedWorldContent() {
   const count = await prisma.zone.count();
   if (count > 0) {
@@ -198,6 +236,7 @@ async function seedWorldContent() {
 async function main() {
   await seedAdmin();
   await seedClasses();
+  await seedPassiveSkills();
   await seedWorldContent();
 }
 

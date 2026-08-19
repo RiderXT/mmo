@@ -35,6 +35,10 @@ export async function createPassiveSkillType(
       gatherKind: input.gatherKind ?? null,
       chanceBonusPerLevel: input.chanceBonusPerLevel,
       speedBonusPerLevel: input.speedBonusPerLevel,
+      xpPerLevel: input.xpPerLevel,
+      xpPerGatherAction: input.xpPerGatherAction,
+      bookGateFromLevel: input.bookGateFromLevel ?? null,
+      booksRequiredPerLevel: input.booksRequiredPerLevel,
     },
   });
 
@@ -72,6 +76,10 @@ export async function updatePassiveSkillType(
       gatherKind: input.gatherKind ?? null,
       chanceBonusPerLevel: input.chanceBonusPerLevel,
       speedBonusPerLevel: input.speedBonusPerLevel,
+      xpPerLevel: input.xpPerLevel,
+      xpPerGatherAction: input.xpPerGatherAction,
+      bookGateFromLevel: input.bookGateFromLevel ?? null,
+      booksRequiredPerLevel: input.booksRequiredPerLevel,
     },
   });
 

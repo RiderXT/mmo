@@ -1990,6 +1990,62 @@ dla złego hasła; link "Ustawienia konta" na własnym profilu; panel admina "Po
 (`PUT` 200) i odczytuje ustawienia. Dane testowe (testowy item, ustawienia poleceń) usunięte po
 weryfikacji.
 
+**Licznik X.XXs + awans umiejętności pasywnej powiązanej ze zbieractwem z XP + bramka
+książkowa** — trzy powiązane poprawki do łowienia/kopania:
+
+- **Licznik czasu**: `GatheringPanel.tsx` tickował dotąd co 1s tylko po to, żeby przesuwać pasek
+  %, bez żadnej liczby na ekranie. Tick przyspieszony do 100ms i obok etykiety fazy
+  ("Łowi rybę…") dopisany dokładny odliczający czas `(X.XXs)` — `Math.max(0, (phaseEndsAt -
+  now) / 1000).toFixed(2)`.
+- **Nowy tor awansu XP dla umiejętności powiązanych ze zbieractwem**: dotąd `CharacterPassiveSkill`
+  rosło WYŁĄCZNIE przez czytanie książek (`readBook`'s `Math.random() < bookSuccessChance`) — bez
+  żadnego pola XP. Teraz `PassiveSkillType` z ustawionym `gatherKind` ma płaską krzywą
+  (`xpPerLevel`, stała ilość XP na każdy poziom) i przyznaje `xpPerGatherAction` XP za KAŻDĄ próbę
+  zbieractwa (nie tylko udaną — potwierdzone z użytkownikiem), niezależnie od tego, czy coś
+  faktycznie złowiono/wydobyto. Nowa `passiveSkills/service.ts`'s `grantGatherXp(tx, characterId,
+  gatherKind)` — wywoływana wewnątrz `gathering/service.ts`'s `resolveOnePhase` na fazie
+  "catching" (rybactwo) i "extracting" (górnictwo, NIE "searching" — to wędrówka, nie próba
+  wydobycia) — dolicza XP i auto-awansuje w pętli, aż poziom osiągnie próg XP LUB (jeśli
+  skonfigurowana) bramkę książkową. Transakcja w `resolveOnePhase` otwiera się teraz ZAWSZE (nie
+  tylko przy udanym połowie jak dotąd) właśnie po to, żeby XP naliczało się na każdą próbę;
+  przyznanie łupu/`gatherSuccessCount` zostaje warunkowe jak wcześniej, wewnątrz tej samej
+  transakcji.
+- **Bramka książkowa**: nowe `PassiveSkillType.bookGateFromLevel` (nullable — brak = czysty awans
+  za XP na zawsze) i `booksRequiredPerLevel`. Gdy poziom DOCELOWY (`currentLevel + 1`) osiąga tę
+  granicę, samo zebranie pełnego XP już nie awansuje automatycznie — `readBook` (przeprojektowany
+  dla umiejętności z `gatherKind`) wymaga dodatkowo `booksRequiredPerLevel` udanych odczytów
+  (każdy nadal rzuca istniejące `bookSuccessChance` — książka może się "zmarnować", zgodnie z
+  potwierdzeniem od użytkownika), zanim poziom faktycznie wzrośnie. Nowe pole
+  `CharacterPassiveSkill.pendingBooksRead` liczy postęp w stronę bramki na bieżącym poziomie
+  (zeruje się po awansie). `readBook` blokuje z jasnym komunikatem PRZED zużyciem książki, jeśli:
+  (a) bramka jeszcze nieaktywna na tym poziomie ("rośnie z doświadczenia... książka nie jest
+  jeszcze potrzebna"), albo (b) bramka aktywna, ale XP jeszcze niepełne ("zbierz najpierw pełne
+  doświadczenie X/Y"). Zwraca teraz też jawne pole `leveledUp` (osobne od `success` — udany odczyt
+  książki może tylko przybliżyć do bramki bez realnego awansu), żeby frontend nie musiał zgadywać
+  z porównania poziomów. Umiejętności BEZ `gatherKind` (gdyby kiedyś powstały) zachowują dokładnie
+  stary tok — nie mają żadnego źródła XP.
+- Panel gracza (`PassiveSkillsPanel.tsx`) pokazuje osobny pasek "XP do następnego poziomu" dla
+  umiejętności z `gatherKind` oraz — gdy bramka aktywna i XP pełne — komunikat "Gotowe do awansu —
+  przeczytaj jeszcze N książek (X/Y)". Panel admina (`PassiveSkillsAdminPage.tsx`) dostał 4 nowe
+  kontrolowane pola (`xpPerLevel`, `xpPerGatherAction`, `bookGateFromLevel`,
+  `booksRequiredPerLevel`), zgatowane jak istniejące pola bonusów (`disabled={!form.gatherKind}`).
+  `seed.ts` (nowa, idempotentna `seedPassiveSkills()`, guard `findUnique({where:{name}})`) tworzy
+  dwie gotowe umiejętności: "Rybak" (fishing) i "Górnik" (mining) — `maxLevel: 50, xpPerLevel: 50,
+  xpPerGatherAction: 5, bookGateFromLevel: 10, booksRequiredPerLevel: 2`.
+
+Zweryfikowane: `pnpm -r typecheck`+`build` czysto. Skryptem bezpośrednio przez `grantGatherXp`:
+3 próby → 15/50 XP; 10 prób łącznie → poziom 1, nadwyżka XP przeniesiona (0 zamiast ujemnej);
+ręcznie ustawiona postać na poziomie 9 z pełnym XP (próg bramki na 10) — kolejne wywołania
+`grantGatherXp` NIE awansują i XP zostaje zacapowane na progu; `readBook` na tym etapie: pierwsza
+książka zwiększa `pendingBooksRead` do 1/2 bez awansu, druga awansuje na poziom 10 i zeruje
+liczniki; `readBook` poniżej pełnego XP poprawnie odrzucony z komunikatem "Zbierz najpierw pełne
+doświadczenie". W przeglądarce: prawdziwa sesja łowienia (testowe łowisko + wędka, potem
+usunięte) pokazuje odliczający `(X.XXs)` w panelu Zbieractwa, licznik "Łącznie zebrano" rośnie po
+cyklu; zakładka Umiejętności → Umiejętności pasywne pokazuje realnie rosnące XP "Rybak" (15/50 po
+3 próbach, zgodnie ze skryptem) bez czytania żadnej książki; panel admina "Umiejętności pasywne"
+→ Edytuj "Rybak" pokazuje wszystkie 4 nowe pola z poprawnymi wartościami z seeda. Dane testowe
+(testowe łowisko, testowa wędka, postęp XP testowej postaci) usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

@@ -50,7 +50,8 @@ export function GatheringPanel({ character, zone }: { character: Character; zone
 
   useEffect(() => {
     if (!session) return;
-    const interval = setInterval(() => setNow(Date.now()), 1000);
+    // 100ms tick — fine-grained enough for a readable X.XXs countdown without excessive re-renders.
+    const interval = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(interval);
   }, [session]);
 
@@ -86,6 +87,7 @@ export function GatheringPanel({ character, zone }: { character: Character; zone
   const pct = phaseAnchor
     ? ((now - phaseAnchor.seenAt) / Math.max(1, phaseAnchor.endsAt - phaseAnchor.seenAt)) * 100
     : 0;
+  const remainingSeconds = phaseEndsAtMs != null ? Math.max(0, (phaseEndsAtMs - now) / 1000) : 0;
 
   return (
     <PanelFrame title="Zbieractwo" emphasis="secondary" className="mt-3">
@@ -97,7 +99,10 @@ export function GatheringPanel({ character, zone }: { character: Character; zone
 
       {session ? (
         <div className="mt-2 space-y-2">
-          <p className="text-sm text-parchment-dim">{PHASE_LABELS[session.phase]}</p>
+          <p className="text-sm text-parchment-dim">
+            {PHASE_LABELS[session.phase]}{" "}
+            <span className="tabular-nums text-parchment-faint">({remainingSeconds.toFixed(2)}s)</span>
+          </p>
           <ProgressBar pct={pct} />
           <p className="text-xs text-parchment-faint">Łącznie zebrano: {session.totalGathered}</p>
           <button

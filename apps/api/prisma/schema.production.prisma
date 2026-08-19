@@ -221,6 +221,17 @@ model PassiveSkillType {
   // Same idea for the phase-duration speed bonus (only applies to catching/extracting, mirroring
   // how the tool's own speed bonus never speeds up the mining "searching" phase).
   speedBonusPerLevel  Float    @default(0)
+  // XP-driven leveling for gatherKind skills — see passiveSkills/service.ts's grantGatherXp
+  // (called from gathering/service.ts on every catch/dig attempt, success or not) and readBook.
+  // Flat curve: always xpPerLevel XP per level, no scaling curve — simple to configure/predict.
+  xpPerLevel            Int      @default(100)
+  // XP granted per matching gather attempt (not just successful ones).
+  xpPerGatherAction     Int      @default(1)
+  // From this level onward (inclusive, counting the TARGET level), reaching full XP no longer
+  // auto-levels — booksRequiredPerLevel successful book reads (still gated by bookSuccessChance,
+  // a book can still be "wasted") are required on top. Null = no gate, pure XP leveling forever.
+  bookGateFromLevel     Int?
+  booksRequiredPerLevel Int      @default(1)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -233,6 +244,11 @@ model CharacterPassiveSkill {
   characterId String
   skillTypeId String
   level       Int    @default(0)
+  // Progress toward the next level — see PassiveSkillType.xpPerLevel. Carried over (not reset to
+  // 0) past a level-up, so surplus XP from a large xpPerGatherAction isn't wasted.
+  xp               Int @default(0)
+  // Successful book reads accumulated toward the book gate at the CURRENT level — resets on level-up.
+  pendingBooksRead Int @default(0)
 
   character Character        @relation(fields: [characterId], references: [id], onDelete: Cascade)
   skillType PassiveSkillType @relation(fields: [skillTypeId], references: [id], onDelete: Cascade)

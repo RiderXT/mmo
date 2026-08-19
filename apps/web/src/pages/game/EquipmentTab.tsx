@@ -186,9 +186,11 @@ export function EquipmentTab({ character }: { character: Character }) {
       queryClient.invalidateQueries({ queryKey: ["passive-skills", characterId] });
       setActionError(null);
       setChestResult(
-        data.success
+        data.leveledUp
           ? `Przeczytano książkę — ${data.skillName}: poziom ${data.newLevel}!`
-          : `Nie udało się nauczyć (${data.skillName}) — książka zużyta.`,
+          : data.success
+            ? `Przeczytano książkę — ${data.skillName}: postęp ${data.pendingBooksRead}/${data.booksRequiredPerLevel} do awansu.`
+            : `Nie udało się nauczyć (${data.skillName}) — książka zużyta.`,
       );
       setTimeout(() => setChestResult(null), 5000);
     },
