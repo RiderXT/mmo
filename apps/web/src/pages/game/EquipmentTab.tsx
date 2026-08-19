@@ -7,12 +7,9 @@ import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { ActiveItemSlotBox } from "../../components/inventory/ActiveItemSlotBox";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
-import { DiscardConfirmModal } from "../../components/inventory/DiscardConfirmModal";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
 import { getPlayerClass } from "../../lib/classesApi";
-import { interpolateUpgrade } from "../../lib/statMath";
-import { STAT_LABELS, TYPE_LABELS, formatStatValue } from "../../lib/statFormat";
 import { listPlayerItems } from "../../lib/itemsApi";
 import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
 import {
@@ -40,9 +37,9 @@ const RIGHT_EQUIP_SLOTS: EquipSlot[] = ["weapon"];
 // weapon/armor occupy 2 grid cells (Item.gridWidth) — size their equip socket to match instead of
 // cramming a tall item into a 1-cell box.
 const TALL_EQUIP_SLOTS = new Set<EquipSlot>(["weapon", "armor"]);
-// Item types with a rendered socket in this doll — drives the tap-to-equip button in the detail
-// panel, since dnd-kit drag alone is unreachable on mobile (source item and target socket are
-// often both off-screen at once; see critique 2026-08-17).
+// Item types with a rendered socket in this doll — drives the context menu's "Załóż" entry
+// (since dnd-kit drag alone is unreachable on mobile; see critique 2026-08-17) and the tooltip's
+// equipped-item stat comparison.
 const EQUIPPABLE_TYPES = new Set<string>([...COL1_SLOTS, ...COL2_SLOTS, ...CENTER_EQUIP_SLOTS, ...RIGHT_EQUIP_SLOTS]);
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
@@ -50,15 +47,12 @@ const TAB_LABELS = ["I", "II", "III", "IV"];
 export function EquipmentTab({ character }: { character: Character }) {
   const characterId = character.id;
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [chestResult, setChestResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [contextMenu, setContextMenu] = useState<ItemContextMenuTarget | null>(null);
-  const [confirmingDiscardId, setConfirmingDiscardId] = useState<string | null>(null);
-  // Require a small pointer movement before a drag starts, so a plain click/tap
-  // (to select an item and show its details) still fires instead of being
-  // swallowed by the drag sensor.
+  // Require a small pointer movement before a drag starts, so a plain click/tap doesn't get
+  // swallowed by the drag sensor as an accidental micro-drag.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
@@ -138,7 +132,6 @@ export function EquipmentTab({ character }: { character: Character }) {
     onSuccess: () => {
       invalidateInventory();
       setActionError(null);
-      if (selectedId) setSelectedId(null);
     },
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się usunąć przedmiotu"),
   });
@@ -158,12 +151,22 @@ export function EquipmentTab({ character }: { character: Character }) {
   }
 
   function handleItemContextMenu(item: InventoryItemDto, x: number, y: number) {
+    const equippable = !item.equippedSlot && item.activeSlotIndex === null && EQUIPPABLE_TYPES.has(item.item.type);
+    const activatable =
+      !item.equippedSlot &&
+      item.activeSlotIndex === null &&
+      (item.item.type === "consumable" || item.item.type === "bait");
     setContextMenu({
       inventoryItemId: item.id,
       name: item.item.name,
       upgradeLevel: item.upgradeLevel,
       canOpen: item.item.type === "chest",
       canSell: item.item.sellPrice > 0 && !item.equippedSlot,
+      canEquip: equippable,
+      equipSlot: equippable ? (item.item.type as EquipSlot) : null,
+      canUnequip: !!item.equippedSlot,
+      canActivate: activatable,
+      canDeactivate: item.activeSlotIndex !== null,
       x,
       y,
     });
@@ -228,23 +231,13 @@ export function EquipmentTab({ character }: { character: Character }) {
     return count;
   });
 
-  const selected = items.find((i) => i.id === selectedId) ?? null;
-
   function renderEquipSlot(slot: EquipSlot, gridClassName: string) {
     const item = byEquipSlot.get(slot);
     const tall = TALL_EQUIP_SLOTS.has(slot);
     return (
       <div key={slot} className={gridClassName}>
         <EquipSlotBox slot={slot} tall={tall}>
-          {item && (
-            <ItemBox
-              inventoryItem={item}
-              tall={tall}
-              selected={item.id === selectedId}
-              onSelect={() => setSelectedId(item.id)}
-              onContextMenu={handleItemContextMenu}
-            />
-          )}
+          {item && <ItemBox inventoryItem={item} tall={tall} onContextMenu={handleItemContextMenu} />}
         </EquipSlotBox>
       </div>
     );
@@ -282,14 +275,7 @@ export function EquipmentTab({ character }: { character: Character }) {
                   const item = byActiveSlot.get(slotIndex);
                   return (
                     <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
-                      {item && (
-                        <ItemBox
-                          inventoryItem={item}
-                          selected={item.id === selectedId}
-                          onSelect={() => setSelectedId(item.id)}
-                          onContextMenu={handleItemContextMenu}
-                        />
-                      )}
+                      {item && <ItemBox inventoryItem={item} onContextMenu={handleItemContextMenu} />}
                     </ActiveItemSlotBox>
                   );
                 })}
@@ -339,9 +325,13 @@ export function EquipmentTab({ character }: { character: Character }) {
                     <ItemBox
                       inventoryItem={cell.item}
                       tall={cell.height === 2}
-                      selected={cell.item.id === selectedId}
-                      onSelect={() => setSelectedId(cell.item!.id)}
                       onContextMenu={handleItemContextMenu}
+                      equippedComparisonItem={
+                        EQUIPPABLE_TYPES.has(cell.item.item.type)
+                          ? byEquipSlot.get(cell.item.item.type as EquipSlot) ?? null
+                          : undefined
+                      }
+                      characterClassId={character.classId}
                     />
                   )}
                 </GridSlot>
@@ -362,118 +352,6 @@ export function EquipmentTab({ character }: { character: Character }) {
         </p>
       )}
 
-      {selected && (
-        <PanelFrame
-          emphasis="secondary"
-          className="mt-6 max-w-sm"
-          bodyClassName="space-y-2"
-          title={
-            <>
-              {selected.item.name}
-              {selected.upgradeLevel > 0 && <span className="normal-case text-gold-bright"> +{selected.upgradeLevel}</span>}
-            </>
-          }
-          headerRight={
-            <button
-              onClick={() => setSelectedId(null)}
-              className="text-xs normal-case tracking-normal text-parchment-faint hover:text-parchment-dim"
-            >
-              zamknij
-            </button>
-          }
-        >
-          <p className="text-xs text-parchment-faint">
-            {TYPE_LABELS[selected.item.type] ?? selected.item.type} · od poziomu {selected.item.minLevel}
-            {selected.item.class ? ` · dla klasy: ${selected.item.class.name}` : " · uniwersalny"}
-            {selected.equippedSlot ? ` · założony (${selected.equippedSlot})` : ""}
-            {selected.activeSlotIndex !== null ? ` · aktywny slot ${selected.activeSlotIndex + 1}` : ""}
-          </p>
-          {selected.item.description && <p className="text-sm text-parchment-dim">{selected.item.description}</p>}
-          <div className="text-sm text-parchment-dim">
-            {Object.entries({
-              ...interpolateUpgrade(selected.item.baseStats, selected.item.maxUpgradeStats, selected.upgradeLevel),
-              ...selected.rolledStats,
-            })
-              .filter(([, v]) => v)
-              .map(([k, v]) => (
-                <span key={k} className="mr-3 inline-block">
-                  {STAT_LABELS[k as keyof typeof STAT_LABELS] ?? k}: {formatStatValue(k as keyof typeof STAT_LABELS, v as number)}
-                </span>
-              ))}
-          </div>
-          {selected.item.type !== "consumable" && (
-            <p className="text-xs text-parchment-faint">Ulepszanie — zobacz zakładkę "Kowadło".</p>
-          )}
-          <div className="flex flex-wrap gap-2 pt-1">
-            {selected.equippedSlot && (
-              <button
-                onClick={() => unequipMutation.mutate(selected.id)}
-                disabled={unequipMutation.isPending}
-                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Zdejmij
-              </button>
-            )}
-            {!selected.equippedSlot && selected.activeSlotIndex === null && EQUIPPABLE_TYPES.has(selected.item.type) && (
-              <button
-                onClick={() => equipMutation.mutate({ inventoryItemId: selected.id, equipSlot: selected.item.type as EquipSlot })}
-                disabled={equipMutation.isPending}
-                className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Załóż
-              </button>
-            )}
-            {selected.activeSlotIndex !== null && (
-              <button
-                onClick={() => clearActiveSlotMutation.mutate(selected.id)}
-                disabled={clearActiveSlotMutation.isPending}
-                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Wyjmij ze slotu
-              </button>
-            )}
-            {!selected.equippedSlot &&
-              selected.activeSlotIndex === null &&
-              (selected.item.type === "consumable" || selected.item.type === "bait") && (
-                <button
-                  onClick={() => handleActivate(selected)}
-                  disabled={setActiveSlotMutation.isPending}
-                  className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Aktywuj
-                </button>
-              )}
-            {/* Same actions as the right-click menu, kept reachable from here since this panel is the
-                one place keyboard users can already land on (via ItemBox's Enter/Space handler). */}
-            {selected.item.type === "chest" && (
-              <button
-                onClick={() => openChestMutation.mutate(selected.id)}
-                disabled={openChestMutation.isPending}
-                className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Otwórz
-              </button>
-            )}
-            {selected.item.sellPrice > 0 && !selected.equippedSlot && (
-              <button
-                onClick={() => sellMutation.mutate(selected.id)}
-                disabled={sellMutation.isPending}
-                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Sprzedaj
-              </button>
-            )}
-            <button
-              onClick={() => setConfirmingDiscardId(selected.id)}
-              disabled={discardMutation.isPending}
-              className="rounded-md border border-red-500/50 px-4 py-1.5 text-sm text-red-400 hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Usuń
-            </button>
-          </div>
-        </PanelFrame>
-      )}
-
       {contextMenu && (
         <ItemContextMenu
           target={contextMenu}
@@ -481,18 +359,13 @@ export function EquipmentTab({ character }: { character: Character }) {
           onOpen={(id) => openChestMutation.mutate(id)}
           onSell={(id) => sellMutation.mutate(id)}
           onDiscard={(id) => discardMutation.mutate(id)}
-        />
-      )}
-
-      {confirmingDiscardId && selected && confirmingDiscardId === selected.id && (
-        <DiscardConfirmModal
-          name={selected.item.name}
-          upgradeLevel={selected.upgradeLevel}
-          onCancel={() => setConfirmingDiscardId(null)}
-          onConfirm={() => {
-            discardMutation.mutate(confirmingDiscardId);
-            setConfirmingDiscardId(null);
+          onEquip={(id, equipSlot) => equipMutation.mutate({ inventoryItemId: id, equipSlot })}
+          onUnequip={(id) => unequipMutation.mutate(id)}
+          onActivate={(id) => {
+            const item = items.find((i) => i.id === id);
+            if (item) handleActivate(item);
           }}
+          onDeactivate={(id) => clearActiveSlotMutation.mutate(id)}
         />
       )}
     </div>

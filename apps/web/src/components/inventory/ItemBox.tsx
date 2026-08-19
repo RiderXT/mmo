@@ -22,18 +22,26 @@ const TYPE_COLORS: Record<string, string> = {
 export function ItemBox({
   inventoryItem,
   onSelect,
-  selected,
+  selected = false,
   onContextMenu,
   tall = false,
+  equippedComparisonItem,
+  characterClassId,
 }: {
   inventoryItem: InventoryItemDto;
-  onSelect: () => void;
-  selected: boolean;
+  onSelect?: () => void;
+  selected?: boolean;
   onContextMenu?: (inventoryItem: InventoryItemDto, x: number, y: number) => void;
   /** True when rendered as the primary cell of a gridWidth=2 item (weapon/armor) — heightens the
    * box to match GridSlot's own row-span-2 sizing instead of leaving it a narrow 1-cell box
    * inside a 2-cell socket. */
   tall?: boolean;
+  /** The item currently worn in the equip slot this item would occupy, for the tooltip's stat
+   * comparison — undefined disables the comparison (non-equippable type, or the caller doesn't
+   * track equipped gear here), null means the slot is empty (compare against zero). */
+  equippedComparisonItem?: InventoryItemDto | null;
+  /** Viewing character's class id, for the tooltip's "wrong class" warning. */
+  characterClassId?: string | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: inventoryItem.id,
@@ -44,6 +52,21 @@ export function ItemBox({
     ...interpolateUpgrade(inventoryItem.item.baseStats, inventoryItem.item.maxUpgradeStats, inventoryItem.upgradeLevel),
     ...inventoryItem.rolledStats,
   };
+  const compareStats =
+    equippedComparisonItem === undefined
+      ? undefined
+      : equippedComparisonItem === null
+        ? {}
+        : {
+            ...interpolateUpgrade(
+              equippedComparisonItem.item.baseStats,
+              equippedComparisonItem.item.maxUpgradeStats,
+              equippedComparisonItem.upgradeLevel,
+            ),
+            ...equippedComparisonItem.rolledStats,
+          };
+  const classMismatch =
+    !!inventoryItem.item.classId && characterClassId !== undefined && inventoryItem.item.classId !== characterClassId;
 
   return (
     <ItemTooltip
@@ -53,6 +76,8 @@ export function ItemBox({
       minLevel={inventoryItem.item.minLevel}
       className={inventoryItem.item.class?.name ?? null}
       stats={stats}
+      compareStats={compareStats}
+      classMismatch={classMismatch}
     >
       <div
         ref={setNodeRef}
@@ -68,7 +93,7 @@ export function ItemBox({
           // dnd-kit's {...attributes} already makes this div role="button" tabIndex={0}, but only
           // wires pointer activators (no KeyboardSensor is registered) — so Enter/Space need their
           // own handler to actually open the detail panel for keyboard users.
-          if (e.key === "Enter" || e.key === " ") {
+          if (onSelect && (e.key === "Enter" || e.key === " ")) {
             e.preventDefault();
             onSelect();
           }
