@@ -2272,6 +2272,73 @@ poziom potwierdzone) jak i dla zablokowanej umiejętności ("Krytyczne Uderzenie
 Nieodblokowana / Koszt odblokowania: 1 pkt"). Dane testowe (węzły, konto, postać) usunięte po
 weryfikacji.
 
+## Sześć zgłoszeń: tło admina, upload grafik itemów, 3 poprawki błędów, panel mikstur (post-kafelki-drzewka)
+
+Pakiet niepowiązanych zgłoszeń użytkownika, każde zweryfikowane osobno.
+
+- **Tło panelu admina**: `.panel`/`bg-panel`/`bg-ink` mają w całej grze lekki ciepły odcień
+  (`oklch(... 45)`, hue 45° — celowy "pergaminowy" motyw), który w adminie czytał się jako
+  "wciąż trochę brązowy". Nowy `.admin-scope` (`index.css`) nadpisuje te trzy klasy na czysto
+  neutralny szary/czarny (`oklch(... 0 0)`, chroma 0) TYLKO w zakresie panelu admina — `AppShell`
+  dostał opcjonalny `mainClassName`, ustawiany na `"admin-scope"` w `AdminSettingsPage.tsx` i
+  `AdminLogsPage.tsx`; selektor `.admin-scope .bg-panel` wygrywa z samym `.bg-panel` przez wyższą
+  specyficzność, więc żaden z ~11 plików zakładek admina nie wymagał zmian — motyw właściwej gry
+  zostaje nietknięty.
+- **Upload grafiki itemu**: nowe `Item.imageUrl String?` (addytywnie), `@fastify/multipart` +
+  `@fastify/static` (limit 3 MB, katalog `apps/api/uploads/items/` tworzony przy starcie
+  serwera — gitignored, więc świeży checkout/deploy inaczej by go nie miał). Nowy endpoint
+  `POST /api/admin/items/:id/image` — zapisuje pod `{itemId}-{timestamp}.{ext}`, kasuje poprzedni
+  plik przy reuploadzie (świeża nazwa zamiast nadpisywania = bez problemu z cache przeglądarki).
+  Upload dostępny dopiero dla ISTNIEJĄCEGO itemu (zapisz najpierw, potem wgraj grafikę) — brak
+  wsparcia dla uploadu "w locie" przy tworzeniu nowego itemu. Front: `ItemBox.tsx`'s nowy
+  `ItemIcon` renderuje `<img>` gdy `imageUrl` ustawiony, inaczej dotychczasowy placeholder
+  (`ItemTypeIcon`) — pokryte tylko główne miejsce renderowania itemów (ekwipunek/plecak/aktywne
+  mikstury); drobne ikonki w LootBar/AnvilTab/NpcTab/ExpeditionPanel zostały przy placeholderze
+  (świadome zawężenie zakresu, nie przeoczenie).
+- **Przenoszenie między kartami plecaka nie działało**: `DndContext` w `EquipmentTab.tsx` nie
+  miał `<DragOverlay>` — realny `ItemBox` (ten sam węzeł DOM, który dnd-kit fizycznie przesuwał
+  przez `transform`) był unmountowany w momencie przełączenia zakładki plecaka w trakcie
+  przeciągania (`TabDropButton`'s hover-triggered `onSelect`), bo siatka renderuje tylko komórki
+  AKTUALNEJ zakładki (`layoutGridTab`). Naprawione dodaniem `<DragOverlay>` + stanem
+  `activeDragItem` (ustawianym w nowym `onDragStart`) i nowym `ItemBoxPreview` (nieinteraktywny
+  klon kafla, bez `useDraggable`/tooltipa) — ten węzeł żyje w portalu poza siatką, więc
+  przełączenie zakładki już go nie dotyczy. Usunięto też ręczne `style={transform...}` z
+  `ItemBox.tsx` (i nieużywany już `transform` z `useDraggable()`) — z `DragOverlay` obecnym,
+  pozostawienie transformu na źródłowym elemencie dawałoby wizualny duplikat.
+- **Event exp/złoto "nie działał"**: cała logika liczenia/stosowania mnożnika (start ekspedycji →
+  symulacja → zapis na ekspedycji → odbiór nagrody) była poprawna. Prawdziwa przyczyna:
+  `<input type="datetime-local">` w `EventsAdminPage.tsx` wysyłał "naiwny" string bez strefy
+  (`"2026-08-19T22:30"`), a `admin/events/service.ts`'s `new Date(input.startsAt)` interpretował
+  go w strefie czasowej PROCESU SERWERA, nie przeglądarki admina — na produkcyjnym VPS (zwykle
+  UTC) to realne przesunięcie o 1-2h względem zamiaru admina (Europe/Warsaw), więc świeżo
+  utworzony/aktywowany event "od teraz" faktycznie aktywował się 1-2h później niż admin myślał.
+  Naprawione nowym `localInputValueToISO()` — konwertuje naiwny string na jednoznaczny
+  ISO-z-`Z` PRZED wysłaniem, używając poprawnie lokalnej strefy PRZEGLĄDARKI (gdzie ten kod
+  faktycznie działa), więc serwer już niczego nie zgaduje. Zweryfikowane: event utworzony w
+  przeglądarce jako "22:30" (Warszawa, UTC+2 latem) zapisał się w bazie jako dokładnie
+  `20:30:00.000Z` — poprawne niezależnie od strefy serwera.
+- **Fałszywy "(-1)" w tooltipie przy identycznych statach**: `ItemTooltip.tsx` liczyło różnicę na
+  SUROWYCH wartościach (`value - compareValue`), potem osobno zaokrąglało wynik do wyświetlenia —
+  dwie wartości, które PO ZAOKRĄGLENIU wyświetlają się identycznie (np. obie "+1%"), mogą się
+  różnić tuż pod powierzchnią (0.0051 vs 0.0149) na tyle, że zaokrąglona RÓŻNICA wychodzi ±1,
+  mimo że widoczne liczby są takie same. Naprawione liczeniem różnicy na już-zaokrąglonych
+  (wyświetlanych) wartościach zamiast na surowych floatach — identyczne wyświetlane liczby dają
+  teraz zawsze różnicę 0.
+- **Panel aktywnych mikstur w ekspedycji był czystym tekstem**: `ActivePotionsSummary.tsx`
+  przebudowany, żeby używać dokładnie tych samych komponentów co zakładka Ekwipunek
+  (`ActiveItemSlotBox` + `ItemBox`, 6 slotów) zamiast ręcznie stylowanych `<span>` z nazwą i
+  ikonką. `ItemBox`'s `useDraggable` jest bezpieczny do renderowania poza `<DndContext>` (dnd-kit
+  ma domyślny kontekst) — przeciąganie po prostu nigdy się nie aktywuje w tym czysto
+  podglądowym miejscu, bez potrzeby duplikowania logiki wizualnej w osobnym komponencie.
+
+Zweryfikowane w przeglądarce: tło admina — kolor obliczony (`getComputedStyle`) potwierdzony jako
+`oklch(0.12 0 0)`/`oklch(0.23 0 0)` (bez odcienia) na stronie ustawień i na stronie logów; upload
+grafiki — realny plik PNG wgrany przez symulowany `<input type="file">`, potwierdzony `200 OK`,
+podgląd w formularzu ładuje się (`naturalWidth: 1`), a ta sama grafika widoczna w prawdziwym
+`ItemBox` w zakładce Ekwipunek (aktywny slot mikstury); event — utworzony przez formularz,
+zapisany czas w UTC zgadza się z oczekiwanym przesunięciem strefowym. Dane testowe (testowa
+grafika, testowy event) usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

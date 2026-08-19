@@ -100,11 +100,18 @@ export function ItemTooltip({
             <div className="mt-2 space-y-0.5 border-t border-gold/20 pt-2">
               {statKeys.map((stat) => {
                 const value = stats[stat] ?? 0;
-                const diff = compareStats ? value - (compareStats[stat] ?? 0) : 0;
-                // Gate on the ROUNDED diff, not the raw one — a sub-1 difference (e.g. from a
-                // rolled affix) is real but formatStatValue would print it as "+0", which reads
-                // as a false "changed" signal next to a value that's visibly identical.
-                const roundedDiff = STAT_FORMAT[stat] === "percent" ? Math.round(diff * 100) : Math.round(diff);
+                const isPercent = STAT_FORMAT[stat] === "percent";
+                // Diff the DISPLAYED (already-rounded) numbers, not the raw floats — two values
+                // that each individually round to the same shown number (e.g. both "+1%") can
+                // still be a hair apart internally (0.0051 vs 0.0149), and rounding THAT raw gap
+                // can spuriously print "(-1%)" next to two numbers that look identical on screen.
+                const displayedValue = isPercent ? Math.round(value * 100) : Math.round(value);
+                const displayedCompare = compareStats
+                  ? isPercent
+                    ? Math.round((compareStats[stat] ?? 0) * 100)
+                    : Math.round(compareStats[stat] ?? 0)
+                  : 0;
+                const roundedDiff = displayedValue - displayedCompare;
                 return (
                   <p key={stat} className="text-parchment-dim">
                     {STAT_LABELS[stat]}:{" "}
@@ -114,7 +121,9 @@ export function ItemTooltip({
                     {!classMismatch && compareStats && roundedDiff !== 0 && (
                       <span className={roundedDiff > 0 ? "text-rarity-uncommon" : "text-red-400"}>
                         {" "}
-                        ({formatStatValue(stat, diff)})
+                        ({roundedDiff > 0 ? "+" : ""}
+                        {roundedDiff}
+                        {isPercent ? "%" : ""})
                       </span>
                     )}
                   </p>

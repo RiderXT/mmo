@@ -94,4 +94,20 @@ input[type="range"]:focus-visible {
     border-right: 2px solid theme("colors.gold.DEFAULT");
     border-bottom-right-radius: theme("borderRadius.xl");
   }
+
+  /* Admin panel only — same lightness tiers as the game's panel/ink tokens, but hue/chroma
+     stripped to neutral grey/black instead of the warm parchment tint used everywhere else.
+     Scoped to .admin-scope (applied to AppShell's <main> from AdminSettingsPage) so the game's
+     own fantasy palette is untouched. Higher specificity (two classes) wins over the plain
+     bg-panel/bg-ink utilities regardless of stylesheet order. */
+  .admin-scope {
+    background-color: oklch(12% 0 0);
+  }
+  .admin-scope .panel,
+  .admin-scope .bg-panel {
+    background-color: oklch(23% 0 0);
+  }
+  .admin-scope .bg-ink {
+    background-color: oklch(12% 0 0);
+  }
 }

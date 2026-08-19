@@ -1,4 +1,8 @@
+import path from "node:path";
+import fs from "node:fs";
 import Fastify, { type FastifyInstance } from "fastify";
+import fastifyMultipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { isProd } from "./config/env.js";
 import { APP_VERSION } from "./lib/appVersion.js";
 import { registerSecurityPlugins } from "./plugins/security.js";
@@ -52,6 +56,20 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await registerSecurityPlugins(app);
   registerErrorHandler(app);
+
+  // Uploaded item artwork — served from apps/api/uploads (relative to cwd, matching how this
+  // project already resolves dev.db/.env: the API is always started with cwd at apps/api/).
+  // Registering the file-size limit here (not per-route) is @fastify/multipart's only place to
+  // configure it.
+  await app.register(fastifyMultipart, { limits: { fileSize: 3 * 1024 * 1024 } });
+  const uploadsRoot = path.join(process.cwd(), "uploads");
+  // uploads/ is gitignored (user-generated content, not source) — a fresh checkout (e.g. first
+  // deploy) won't have it yet, and @fastify/static requires its root to exist at registration.
+  fs.mkdirSync(path.join(uploadsRoot, "items"), { recursive: true });
+  await app.register(fastifyStatic, {
+    root: uploadsRoot,
+    prefix: "/uploads/",
+  });
 
   app.get("/health", async () => ({ status: "ok", time: new Date().toISOString() }));
   app.get("/api/version", async () => ({ version: APP_VERSION }));

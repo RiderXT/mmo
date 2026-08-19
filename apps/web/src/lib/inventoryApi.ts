@@ -31,6 +31,9 @@ export interface InventoryItemDto {
     class: { id: string; name: string } | null;
     sellPrice: number;
     gridWidth: number;
+    // Uploaded artwork (relative /uploads/... path from the API), or null to fall back to the
+    // generic per-type placeholder icon — see components/inventory/ItemTypeIcon.tsx.
+    imageUrl: string | null;
     // Potion behavior (only meaningful when type === "consumable") — drives the active-slot
     // right-click "Ustaw próg użycia" entry (hp_below/mana_below triggers) and the "Użyj" entry
     // (on_use trigger — see useBuffItem below).

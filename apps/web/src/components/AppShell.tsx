@@ -329,7 +329,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, mainClassName = "" }: { children: ReactNode; mainClassName?: string }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
@@ -361,7 +361,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
 
-        <main className="flex-1 px-4 py-6 md:px-8">
+        <main className={`flex-1 px-4 py-6 md:px-8 ${mainClassName}`}>
           <div className="mx-auto max-w-5xl">{children}</div>
         </main>
       </div>

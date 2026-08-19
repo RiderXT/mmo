@@ -27,7 +27,7 @@ export function AdminLogsPage() {
   const totalPages = logsQuery.data ? Math.max(1, Math.ceil(logsQuery.data.total / filter.pageSize)) : 1;
 
   return (
-    <AppShell>
+    <AppShell mainClassName="admin-scope">
       <h1 className="text-lg font-semibold text-parchment">Dziennik zdarzeń (GameLog)</h1>
       <p className="mt-1 text-sm text-parchment-dim">
         Każda akcja w grze jest tu logowana — filtruj po module, poziomie, dacie lub treści, by

@@ -1,8 +1,15 @@
 import { useDraggable } from "@dnd-kit/core";
 import type { InventoryItemDto } from "../../lib/inventoryApi";
 import { interpolateUpgrade } from "../../lib/statMath";
+import { API_URL } from "../../lib/apiClient";
 import { ItemTypeIcon } from "./ItemTypeIcon";
 import { ItemTooltip } from "./ItemTooltip";
+
+/** Uploaded artwork when the admin has set one, otherwise the generic per-type placeholder. */
+function ItemIcon({ type, imageUrl, className }: { type: InventoryItemDto["item"]["type"]; imageUrl: string | null; className?: string }) {
+  if (imageUrl) return <img src={`${API_URL}${imageUrl}`} alt="" className={`${className} object-contain`} />;
+  return <ItemTypeIcon type={type} className={className} />;
+}
 
 const TYPE_COLORS: Record<string, string> = {
   weapon: "border-rarity-rare/50 bg-rarity-rare/10",
@@ -52,7 +59,7 @@ export function ItemBox({
    * the tooltip shows "Udane zbiórki: X/required". */
   gatherSuccessRequired?: number;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: inventoryItem.id,
     data: { inventoryItem },
   });
@@ -110,7 +117,6 @@ export function ItemBox({
             onSelect();
           }
         }}
-        style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : undefined}
         className={`relative flex w-14 cursor-grab select-none flex-col items-center justify-center gap-0.5 border text-xs font-medium text-parchment transition active:cursor-grabbing hover:brightness-110 ${
           tall ? "h-[7.5rem]" : "h-14"
         } ${TYPE_COLORS[inventoryItem.item.type] ?? "border-line-soft bg-panel-raised"} ${
@@ -119,7 +125,7 @@ export function ItemBox({
             : ""
         } ${isDragging ? "opacity-40" : ""}`}
       >
-        <ItemTypeIcon type={inventoryItem.item.type} className="h-6 w-6 text-parchment-dim" />
+        <ItemIcon type={inventoryItem.item.type} imageUrl={inventoryItem.item.imageUrl} className="h-6 w-6 text-parchment-dim" />
         <span className="line-clamp-1 px-1 text-center leading-tight">{inventoryItem.item.name}</span>
         {inventoryItem.upgradeLevel > 0 && (
           <span className="absolute left-0.5 top-0.5 text-xs text-gold-bright">
@@ -133,5 +139,22 @@ export function ItemBox({
         )}
       </div>
     </ItemTooltip>
+  );
+}
+
+/** Non-interactive visual clone of ItemBox's tile — no useDraggable, no tooltip. Rendered inside
+ * <DragOverlay> so the "ghost" of a dragged item survives DOM changes to the REAL ItemBox mid-drag
+ * (e.g. switching inventory tabs unmounts the source slot's ItemBox, which would otherwise
+ * silently end the drag — see EquipmentTab.tsx's onDragStart/onDragEnd + TabDropButton). */
+export function ItemBoxPreview({ inventoryItem }: { inventoryItem: InventoryItemDto }) {
+  return (
+    <div
+      className={`relative flex h-14 w-14 flex-col items-center justify-center gap-0.5 border text-xs font-medium text-parchment shadow-xl ${
+        TYPE_COLORS[inventoryItem.item.type] ?? "border-line-soft bg-panel-raised"
+      }`}
+    >
+      <ItemIcon type={inventoryItem.item.type} imageUrl={inventoryItem.item.imageUrl} className="h-6 w-6 text-parchment-dim" />
+      <span className="line-clamp-1 px-1 text-center leading-tight">{inventoryItem.item.name}</span>
+    </div>
   );
 }

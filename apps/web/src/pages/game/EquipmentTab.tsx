@@ -1,11 +1,19 @@
 import { useState } from "react";
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Character, EquipSlot } from "@mmo/shared";
 import { GridSlot } from "../../components/inventory/GridSlot";
 import { EquipSlotBox } from "../../components/inventory/EquipSlotBox";
 import { ActiveItemSlotBox } from "../../components/inventory/ActiveItemSlotBox";
-import { ItemBox } from "../../components/inventory/ItemBox";
+import { ItemBox, ItemBoxPreview } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
 import { TabDropButton } from "../../components/inventory/TabDropButton";
 import { PotionThresholdModal } from "../../components/inventory/PotionThresholdModal";
@@ -77,6 +85,7 @@ export function EquipmentTab({ character }: { character: Character }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [chestResult, setChestResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [activeDragItem, setActiveDragItem] = useState<InventoryItemDto | null>(null);
   const [contextMenu, setContextMenu] = useState<ItemContextMenuTarget | null>(null);
   const [thresholdTarget, setThresholdTarget] = useState<InventoryItemDto | null>(null);
   // Require a small pointer movement before a drag starts, so a plain click/tap doesn't get
@@ -265,7 +274,12 @@ export function EquipmentTab({ character }: { character: Character }) {
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się usunąć ze slotu"),
   });
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragItem((event.active.data.current?.inventoryItem as InventoryItemDto | undefined) ?? null);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDragItem(null);
     setActionError(null);
     const { active, over } = event;
     if (!over) return;
@@ -331,7 +345,7 @@ export function EquipmentTab({ character }: { character: Character }) {
 
   return (
     <div>
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex flex-wrap gap-8">
           <PanelFrame title="Ekwipunek" bodyClassName="flex flex-col items-center gap-4">
             <div className="grid grid-cols-[auto_auto_auto_auto] gap-3">
@@ -415,6 +429,8 @@ export function EquipmentTab({ character }: { character: Character }) {
             </div>
           </PanelFrame>
         </div>
+
+        <DragOverlay>{activeDragItem && <ItemBoxPreview inventoryItem={activeDragItem} />}</DragOverlay>
       </DndContext>
 
       {actionError && (

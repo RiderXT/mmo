@@ -18,10 +18,12 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  uploadItemImage,
   listClasses,
   listPassiveSkillTypes,
   type ItemDto,
 } from "../../lib/adminApi";
+import { API_URL } from "../../lib/apiClient";
 import { TYPE_LABELS, STAT_LABELS, statHint } from "../../lib/statFormat";
 
 const ITEM_TYPES = ItemTypeSchema.options;
@@ -222,6 +224,15 @@ export function ItemsAdminPage() {
     onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
   });
 
+  const uploadImageMutation = useMutation({
+    mutationFn: (file: File) => uploadItemImage(editingId as string, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-items"] });
+      setError(null);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się wgrać grafiki"),
+  });
+
   function openCreate() {
     setForm(emptyForm());
     setError(null);
@@ -243,6 +254,7 @@ export function ItemsAdminPage() {
     saveMutation.mutate(parsed.data);
   }
 
+  const editingItem = editingId && editingId !== "new" ? itemsQuery.data?.find((i) => i.id === editingId) : undefined;
   const otherItems = (itemsQuery.data ?? []).filter((i) => i.id !== editingId);
   const upgradeMaterialPicker = useItemPickerFilter(otherItems);
   const chestLootPicker = useItemPickerFilter(otherItems);
@@ -349,6 +361,41 @@ export function ItemsAdminPage() {
           <h2 className="font-medium text-parchment">
             {editingId === "new" ? "Nowy item" : "Edycja itemu"}
           </h2>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-parchment-dim">Grafika itemu</p>
+            {editingId === "new" ? (
+              <p className="text-xs text-parchment-faint">Zapisz nowy item, żeby móc wgrać dla niego grafikę.</p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">
+                  {editingItem?.imageUrl ? (
+                    <img
+                      src={`${API_URL}${editingItem.imageUrl}`}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-[10px] text-parchment-faint">brak</span>
+                  )}
+                </div>
+                <label className="cursor-pointer border border-line-soft px-3 py-1.5 text-xs text-parchment-dim hover:bg-panel-raised">
+                  {uploadImageMutation.isPending ? "Wgrywanie…" : "Wybierz plik (PNG/JPEG/WEBP/GIF, max 3 MB)"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    disabled={uploadImageMutation.isPending}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadImageMutation.mutate(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nazwa">

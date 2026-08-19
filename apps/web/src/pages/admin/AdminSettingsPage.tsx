@@ -36,7 +36,7 @@ export function AdminSettingsPage() {
   const active = TABS.find((t) => t.key === activeTab) ?? TABS[0];
 
   return (
-    <AppShell>
+    <AppShell mainClassName="admin-scope">
       <div className="flex flex-wrap gap-1 border-b border-line pb-2">
         {TABS.map((tab) => (
           <button

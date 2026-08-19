@@ -20,7 +20,8 @@ import type {
   GatherKind,
   SkillCategory,
 } from "@mmo/shared";
-import { apiFetch } from "./apiClient";
+import { apiFetch, API_URL, ApiError } from "./apiClient";
+import { useAuthStore } from "../store/authStore";
 
 export interface ZoneDto {
   id: string;
@@ -101,6 +102,7 @@ export interface ItemDto {
   baitChanceBonusPct: number | null;
   bookSkillTypeId: string | null;
   bookSuccessChance: number | null;
+  imageUrl: string | null;
 }
 
 export interface SkillTreeNodeDto {
@@ -167,6 +169,25 @@ export const updateItem = (id: string, input: CreateItemInput) =>
   apiFetch<ItemDto>(`/api/admin/items/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteItem = (id: string) =>
   apiFetch<void>(`/api/admin/items/${id}`, { method: "DELETE" });
+
+// Multipart upload — deliberately NOT going through apiFetch, which always forces a JSON
+// Content-Type; a browser-built FormData needs its own auto-generated multipart boundary header.
+export const uploadItemImage = async (id: string, file: File): Promise<ItemDto> => {
+  const { accessToken } = useAuthStore.getState();
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_URL}/api/admin/items/${id}/image`, {
+    method: "POST",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}) as { error?: string });
+    throw new ApiError(body.error ?? res.statusText, res.status);
+  }
+  return res.json();
+};
 
 // Classes
 export const listClasses = () => apiFetch<ClassDto[]>("/api/admin/classes");

@@ -23,6 +23,21 @@ function toLocalInputValue(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Inverse of toLocalInputValue — a bare "yyyy-MM-ddTHH:mm" has no timezone, so `new Date()`
+ * parses it in whatever timezone is asking (correct here, in the browser, since the value was
+ * entered in the admin's own local time). Converting to a real ISO instant (`Z` suffix) BEFORE
+ * sending it to the API is essential — the server may run in a different timezone (the
+ * production VPS is typically UTC), and would otherwise silently reinterpret the same naive
+ * string as if it were server-local time, shifting when the event actually starts/ends by the
+ * timezone offset between admin and server (this was the root cause of "event mnożnika nie
+ * działa" — the event existed but activated/deactivated at the wrong wall-clock moment). */
+function localInputValueToISO(value: string): string {
+  const [datePart, timePart] = value.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  return new Date(year, month - 1, day, hour, minute).toISOString();
+}
+
 function emptyForm(): CreateGameEventInput {
   const now = new Date();
   const in72h = new Date(now.getTime() + 72 * 60 * 60 * 1000);
@@ -100,7 +115,11 @@ export function EventsAdminPage() {
       setError(parsed.error.issues[0]?.message ?? "Nieprawidłowe dane");
       return;
     }
-    saveMutation.mutate(parsed.data);
+    saveMutation.mutate({
+      ...parsed.data,
+      startsAt: localInputValueToISO(parsed.data.startsAt),
+      endsAt: localInputValueToISO(parsed.data.endsAt),
+    });
   }
 
   const now = Date.now();

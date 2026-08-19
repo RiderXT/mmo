@@ -1,6 +1,17 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { prisma } from "../../../lib/prismaClient.js";
 import { logAction } from "../../../lib/gameLog.js";
 import type { CreateItemInput, UpdateItemInput } from "@mmo/shared";
+
+// Relative to cwd (apps/api/), matching how app.ts serves it at /uploads/.
+const UPLOADS_DIR = path.join(process.cwd(), "uploads", "items");
+const EXT_BY_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
 
 const itemInclude = {
   upgradeRequirements: { include: { requiredItem: { select: { id: true, name: true } } } },
@@ -258,4 +269,42 @@ export async function deleteItem(id: string, actorUserId: string, requestId?: st
     requestId,
     payload: { itemId: id, name: existing.name },
   });
+}
+
+/** Saves an uploaded image for an item, replacing (and deleting) any previous one — a fresh
+ * filename per upload (itemId + timestamp) avoids serving a stale browser-cached image under a
+ * reused URL after re-uploading. */
+export async function setItemImage(
+  id: string,
+  buffer: Buffer,
+  mimetype: string,
+  actorUserId: string,
+  requestId?: string,
+) {
+  const existing = await prisma.item.findUnique({ where: { id } });
+  if (!existing) throw new ItemError("Nie znaleziono itemu", 404);
+
+  const ext = EXT_BY_MIME[mimetype];
+  if (!ext) throw new ItemError("Dozwolone formaty: PNG, JPEG, WEBP, GIF", 400);
+
+  await fs.mkdir(UPLOADS_DIR, { recursive: true });
+  const filename = `${id}-${Date.now()}${ext}`;
+  await fs.writeFile(path.join(UPLOADS_DIR, filename), buffer);
+
+  if (existing.imageUrl) {
+    await fs.rm(path.join(UPLOADS_DIR, path.basename(existing.imageUrl)), { force: true });
+  }
+
+  const imageUrl = `/uploads/items/${filename}`;
+  const item = await prisma.item.update({ where: { id }, data: { imageUrl }, include: itemInclude });
+
+  await logAction({
+    module: "admin:items",
+    action: "upload_image",
+    actorUserId,
+    requestId,
+    payload: { itemId: id, imageUrl },
+  });
+
+  return serialize(item);
 }

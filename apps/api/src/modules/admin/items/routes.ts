@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { CreateItemSchema, UpdateItemSchema } from "@mmo/shared";
 import { requireRole } from "../../../lib/authGuard.js";
-import { listItems, getItem, createItem, updateItem, deleteItem, ItemError } from "./service.js";
+import { listItems, getItem, createItem, updateItem, deleteItem, setItemImage, ItemError } from "./service.js";
 
 export async function itemsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/", { preHandler: requireRole("admin", "moderator") }, async (_request, reply) => {
@@ -43,6 +43,23 @@ export async function itemsRoutes(app: FastifyInstance): Promise<void> {
     try {
       await deleteItem(id, request.user!.sub, request.id);
       return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof ItemError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/:id/image", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const file = await request.file();
+    if (!file) return reply.code(400).send({ error: "Brak pliku" });
+    const buffer = await file.toBuffer();
+    if (file.file.truncated) {
+      return reply.code(400).send({ error: "Plik jest za duży (limit 3 MB)" });
+    }
+    try {
+      const item = await setItemImage(id, buffer, file.mimetype, request.user!.sub, request.id);
+      return reply.send(item);
     } catch (err) {
       if (err instanceof ItemError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;

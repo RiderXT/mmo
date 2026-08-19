@@ -442,6 +442,9 @@ model Item {
   bookSuccessChance   Float?
   // Gold received for selling one unit via the inventory context menu. 0 = not sellable.
   sellPrice           Int      @default(1)
+  // Uploaded artwork path (e.g. "/uploads/items/xxx.png"), served statically by the API — see
+  // modules/admin/items. Null = fall back to the generic per-type placeholder icon.
+  imageUrl            String?
   // How many grid cells this item occupies vertically when placed unequipped (see
   // apps/web/src/lib/inventoryGrid.ts — despite the field name, cells stack downward, not
   // sideways). weapon/armor are seeded at 2; everything else is 1.
