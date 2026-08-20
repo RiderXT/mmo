@@ -182,7 +182,7 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
         />
         <TabNavLink
           tab="skills"
-          icon="/icons/nav/postac.png"
+          icon="/icons/nav/umiejetnosci.png"
           label="Umiejętności"
           onNavigate={onNavigate}
         />

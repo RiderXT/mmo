@@ -2871,6 +2871,53 @@ niewidoczny po stronie usera): wszystkie 4 `<img>` poprawnie się załadowały (
 `naturalWidth/Height` zgodne z przyciętym plikiem), poprawnie pozycjonowane i obracane na każdym
 rogu panelu "Mapa ekspedycji". `pnpm --filter web typecheck` czysto.
 
+### Upgrade ikon sidebaru z paczki `Tymczasowe/rpg_menu_design/` (2026-08-20)
+
+User potwierdził chęć przejrzenia całego folderu z gotowym mockupem menu (`index.html` +
+`icons/*`) i wdrożenia tym samym sposobem co narożnik mapy ekspedycji. Sidebar (`AppShell.tsx`)
+już wcześniej w tej sesji dostał realną grafikę (`NavIconImg`, `/icons/nav/*.png`) dla części
+linków — to zadanie to upgrade jakości tamtych plików + domknięcie jednego brakującego (Umiejętności).
+
+**Inwentaryzacja 21 plików** (`python` skrypt, sprawdzenie wymiarów/trybu/realnej wariancji
+kanału alfa dla każdego): 19 plików PNG miało już PRAWDZIWĄ przezroczystość (nie tylko format
+RGBA jak przy narożniku — realnie zmienny alfa), 2 pliki `.jpg` (ranking, Handlarz potionami) nie
+miały żadnego kanału alfa i wymagały usunięcia tła. 6 z 19 "przezroczystych" plików (poczta,
+itemshop, targ, pulpit, wyzwania, przyjaciele — wszystkie 64×64) okazały się PUSTYMI placeholderami
+(sam złoty pierścień, bez ilustracji w środku) — niegotowe do użycia, zgłoszone userowi wprost.
+
+**Usunięcie tła z JPG-ów** — prostszy próg odległości-od-bieli (jak przy narożniku) nie wystarczał,
+bo tło tych dwóch plików było jasnoszare/teksturowane, nie jednolicie białe. Zamiast tego:
+`PIL.ImageDraw.floodfill` z 8 punktów startowych (rogi + środki krawędzi), tolerancja 28, wypełnienie
+sentinelem, potem `alpha=0` tam gdzie sentinel — wypełnianie tylko POŁĄCZONEGO regionu tła (nie
+globalny próg koloru), więc odporne na nierówne/teksturowane tło bez ryzyka ugryzienia w środek
+ilustracji. Zadziałało czysto na obu plikach (zweryfikowane wizualnie na złożeniu z realnym
+kolorem `ink` gry).
+
+**Dopasowanie treści do slotów — świadome odejście od nazw plików**: `znajomi.png` okazał się
+grafiką trzech portretów postaci (wojownik/mag/łotrzyk) — wizualnie dużo lepiej pasuje do
+"Postacie" (lista postaci gracza) niż do "Znajomi". `postacie.png` to zaklęta księga z runami —
+lepiej pasuje jako drugi kandydat na "Umiejętności" niż na "Postacie". Użyto treści zamiast nazw:
+`znajomi.png` → slot `postacie.png`, dedykowany `umiejetnosci.png` (księga z kompasem) →
+Umiejętności (naprawia wcześniejszy placeholder — ta zakładka używała dotąd ikony Postaci).
+Link "Znajomi" w nawigacji zostawiony z dotychczasową ikoną — żaden z nowych plików nie pasował
+lepiej, a `przyjaciele.png` (który mógłby być kandydatem z nazwy) to pusty placeholder.
+
+**Kompresja** — pliki źródłowe 208×208–2048×2048, część >90KB, `ranking` przed kompresją 5MB.
+Przeskalowane do maks. 300px (Pillow/LANCZOS) + `optimize=True` — `ranking.png` 5MB → 194KB,
+`kowadlo.png` 600×600 → 300×300/155KB.
+
+**Pozostałe 7 gotowych ikon reprezentujących niezbudowane jeszcze systemy** (Klan, PVP, Sklepy,
+Aktywności, Misje, drugi wariant Shop, Wiadomości/poczta, plus portret "Handlarz potionami") —
+świadomie NIE podpięte do żadnego nowego linku nawigacji ani nie skopiowane do `apps/web/public/`
+— to by wymagało zbudowania faktycznych systemów (gildie, PVP, poczta, sklep, questy), nie tylko
+ikon. Zostają w `Tymczasowe/` jako gotowy zapas na przyszłość, zgłoszone userowi wprost zamiast
+ciche pominięcie albo ciche zbudowanie pustych ekranów bez pytania.
+
+Zweryfikowane w przeglądarce: wszystkie ikony sidebaru (`nav img`) załadowały się poprawnie
+(`complete: true`) z nowymi, większymi `naturalWidth` (208-300px zamiast starych 96px) —
+potwierdza podmianę, nie tylko podmianę pliku pod starą nazwą. `pnpm --filter web typecheck`
+czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
