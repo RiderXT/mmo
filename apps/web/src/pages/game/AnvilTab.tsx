@@ -321,6 +321,12 @@ export function AnvilTab({ character }: { character: Character }) {
                     tall={cell.height === 2}
                     selected={cell.item.id === selectedId}
                     onSelect={() => handlePickerSelect(cell.item!, catalystSlotCount)}
+                    equippedComparisonItem={
+                      UPGRADABLE_TYPES.has(cell.item.item.type)
+                        ? byEquipSlot.get(cell.item.item.type as EquipSlot) ?? null
+                        : undefined
+                    }
+                    characterClassId={character.classId}
                     gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}
                   />
                 )}
@@ -339,6 +345,12 @@ export function AnvilTab({ character }: { character: Character }) {
               {selected && (
                 <ItemBox
                   inventoryItem={selected}
+                  equippedComparisonItem={
+                    UPGRADABLE_TYPES.has(selected.item.type) && selected.equippedSlot === null
+                      ? byEquipSlot.get(selected.item.type as EquipSlot) ?? null
+                      : undefined
+                  }
+                  characterClassId={character.classId}
                   selected
                   onSelect={() => selectItem(selected.id)}
                   gatherSuccessRequired={gatheringSettingsQuery.data?.successesPerToolUpgrade}

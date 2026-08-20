@@ -2513,6 +2513,29 @@ faktycznie zmniejszyło ilość katalizatora o 1, materiału o wymaganą ilość
 przedmiot do +1, i wyczyściło sloty katalizatorów po próbie. `pnpm -r typecheck` czysto dla
 `shared`/`api`/`web`.
 
+### Fix: brak porównania statów/ostrzeżenia o klasie na kowadle (2026-08-20)
+
+User zgłosił, że w zakładce Kowadło nie widać, czy przedmiot jest lepszy/gorszy od założonego, ani
+ostrzeżenia "nie dla Twojej klasy" — mimo że ten sam `ItemTooltip`/`ItemBox` w zakładce Ekwipunek
+to pokazuje. Przyczyna: `EquipmentTab.tsx` przekazuje do `ItemBox` propsy `equippedComparisonItem`
+(co jest założone w tym samym slocie, do porównania statów) i `characterClassId` (do ostrzeżenia
+o klasie) — `AnvilTab.tsx` nigdy tego nie przekazywało, więc `ItemTooltip` renderował się bez tych
+sekcji na całym ekranie kowadła (siatka wyboru ORAZ sam slot kowadła).
+
+Naprawione dokładnie tym samym wzorcem co `EquipmentTab.tsx`: `equippedComparisonItem =
+UPGRADABLE_TYPES.has(item.type) ? byEquipSlot.get(item.type as EquipSlot) ?? null : undefined`
+(katalizatory świadomie pomijają porównanie — nie są ekwipunkiem). Dla samego slotu kowadła dodany
+dodatkowy warunek `selected.equippedSlot === null` — gdy na kowadle leży przedmiot, który jest
+jednocześnie założony (przeciągnięty z lalki), porównywanie go z samym sobą nie ma sensu, więc
+pomijane (ten sam warunek co dla renderu lalki w obu zakładkach).
+
+Zweryfikowane w przeglądarce: hover na "Hełm Maga Wilków" (inna klasa niż postać) pokazuje "Nie
+dla Twojej klasy (wymaga: Mag)"; hover na "Hełm Strażnika Twierdzy" (ten sam typ/klasa co założony,
+wyższy tier) pokazuje deltę w nawiasie np. "Obrona: +4 (+3)". `pnpm --filter web typecheck` czysto.
+Przy okazji, przy tym samym teście, naprawiono własną pomyłkę z poprzedniej sesji: skrypt sprzątający
+po teście katalizatorów odjął złoto postaci testowej o więcej niż wcześniej dodał, zostawiając ją na
+-100 złota — zresetowane do 0.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
