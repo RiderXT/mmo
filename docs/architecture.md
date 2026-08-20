@@ -2951,6 +2951,49 @@ Ewentualne raporty ukończonych botów sprzed crasha mogą wciąż leżeć na VP
 `apps/api/scripts/bot/reports/*.md` (zapis na dysk, nie do pamięci procesu) — do sprawdzenia
 bezpośrednio na serwerze. `pnpm --filter api exec tsc --noEmit` czysto.
 
+### Grafiki itemów: 107 istniejących + 7 nowych, na razie tylko `dev.db` (2026-08-20)
+
+User wygenerował 17 ikon przedmiotów (AI, prompty w [karty-wzor.md](karty-wzor.md)) — po jednej
+na każdy `ItemTypeSchema`. Odkrycie po przejrzeniu realnych danych: `weapon`/`armor`/`helmet` w
+tym katalogu (179 itemów, 10 stref × warianty) kodują w NAZWIE 4 różne wizualnie podtypy każdy
+(np. weapon: Różdżka/Topór/Miecz/Sztylet — to nie to samo, mimo tego samego `type` w bazie), więc
+jedna wygenerowana ikona pasuje tylko do JEDNEGO z tych podtypów, nie do wszystkich. Przypisano
+więc obraz tylko tam gdzie nazwa faktycznie pasuje (`Miecz *`, `Ciężka Zbroja *`+`Płytowa Zbroja
+*`, `Hełm Wojownika *`+`Hełm Strażnika *`) — Różdżki/Topory/Sztylety/Szaty/Skórzane
+zbroje/hełmy Maga i Łotrzyka świadomie zostały bez obrazu zamiast dostać mylącą grafikę. Typy bez
+podtypów w nazwie (`boots`, `necklace`, `earrings`, `ring`, `material`) dostały jedną ikonę
+zbiorczo na wszystkie warianty strefowe — tu nie ma ryzyka niedopasowania. `consumable`:
+przypisano czerwoną miksturę tylko do "Mikstury Życia" (kolor semantycznie = zdrowie), NIE do
+"Mikstury Many"/"Eliksiru Szybkości" (błędny kolor byłby mylący, wymagają osobnych ikon).
+Razem: 107 itemów z obrazem.
+
+7 typów (`shield`, `rod`, `pickaxe`, `bait`, `catalyst`, `book`, `quest`) nie miało w bazie ANI
+JEDNEGO przedmiotu — ikona nie miała się do czego przypiąć. Za zgodą usera utworzono po jednym
+nowym itemie na typ, z ostrożnymi wartościami wzorowanymi na najsłabszym istniejącym tierze
+(Wilcze Uroczysko, `Miecz Wilków`/`Ciężka Zbroja Wilków`/`Mikstura Życia` jako punkt odniesienia
+dla rzędu wielkości statów): `Tarcza Wilków` (defense 4→6, jak inny sprzęt), `Wędka Rybaka` /
+`Kilof Górnika` (5%/5% bonus do prędkości/szansy zbiórki), `Przynęta Rybacka` (5% bonus szansy,
+`stackable:false` — [gathering/service.ts](../apps/api/src/modules/gathering/service.ts) już
+dokumentuje że bait nie jest zużywany, tylko sprawdzany obecnościowo w aktywnym slocie),
+`Iskra Kowalska` (katalizator, 5% bonus szansy ulepszenia, `stackable:true` — potwierdzone w
+[inventory/service.ts:527](../apps/api/src/modules/inventory/service.ts) że katalizator JEST
+zużywany przy ulepszeniu), `Podręcznik Rybaka` (`bookSkillTypeId` = realny `PassiveSkillType`
+"Rybak" z bazy, `bookSuccessChance:0.7`), `Zapieczętowany Zwój` (quest, `sellPrice:0` — questowe
+przedmioty nie powinny być sprzedawalne). Wszystkie oznaczone jako punkt startowy do
+wyregulowania przez usera, nie finalny balans.
+
+**Tylko `dev.db` (lokalna baza SQLite)** — sprawdzone przez `DATABASE_URL` w `.env` przed
+uruchomieniem, żadna operacja nie dotknęła produkcyjnego Postgresa na VPS. Zweryfikowane w
+przeglądarce: prawdziwe obrazy ładują się poprawnie w ekwipunku (`complete:true`,
+`/uploads/items/...`), itemy bez przypisanej grafiki poprawnie pokazują dotychczasowy generyczny
+placeholder zamiast błędu.
+
+Do synchronizacji z produkcją: [seed-item-images.ts](../apps/api/scripts/seed-item-images.ts) —
+idempotentny skrypt (pomija itemy które już mają `imageUrl`, pomija tworzenie itemu o nazwie
+która już istnieje), do uruchomienia bezpośrednio na VPS po ręcznym `scp` 17 plików PNG z
+`Tymczasowe/ikony/clean/` do katalogu na serwerze (patrz docstring w pliku). Nie uruchomiony
+automatycznie w tej sesji — brak bezpośredniego dostępu do VPS z tego środowiska.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
