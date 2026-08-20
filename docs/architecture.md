@@ -3174,6 +3174,25 @@ ekspedycji" ma 10 dzieci (4 paski + 4 narożniki + nagłówek + treść), wszyst
 (`panel-edge.png`, `panel-edge-vertical.png`) ładują się 200 OK. `pnpm --filter web exec tsc
 --noEmit` czysto.
 
+### Tekstura wypełnienia: dogrywka po nadpisanym pliku, z korekcją winiety (2026-08-20)
+
+User wskazał ten sam plik, który wcześniej flagowałem jako nienadający się do kafelkowania
+(wyraźna winieta: jasny środek, ciemne rogi — zmierzone wcześniej jako różnica jasności środek
+vs róg ~19/255). Zamiast prosić o kolejny plik, spróbowano naprawić ten — **korekcja pola
+płaskiego** (flat-field): podzielenie obrazu przez jego własną, mocno rozmytą kopię
+(`GaussianBlur(radius=120)`, przechwytuje tylko powolną zmianę oświetlenia, nie fakturę kamienia),
+przywrócone do docelowej jasności. Winieta spadła do różnicy ~3/255 między środkiem a rogami —
+potwierdzone liczbowo i wizualnie. Dopiero POTEM wycięty kafelek (800×800) i wygładzony tą samą
+techniką offset-and-heal co pasek krawędzi (na obu osiach tym razem, nie tylko poziomej) — różnica
+lewa/prawa i góra/dół krawędzi ~3.0/255, zweryfikowana wizualnie kafelkiem 3×3 (brak widocznego
+szwu ani powtarzającego się "gorącego punktu").
+
+Wpięte do `PanelFrame.tsx` (`backgroundImage` inline style, `background-repeat: repeat`,
+analogicznie do `bg-panel` które zastępuje tylko dla `cornerStyle="ornate"`). Zweryfikowane PRZED
+wysłaniem — kolejny mockup Pillow (narożnik + paski + prawdziwa tekstura razem) tym razem pokazał
+poprawną fakturę kamienia, nie pomyłkowy plik jak poprzednio. W przeglądarce: `background-image`
+panelu wskazuje na `panel-fill.png`, request 200 OK. `pnpm --filter web exec tsc --noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
