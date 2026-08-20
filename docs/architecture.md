@@ -3116,6 +3116,20 @@ przypadek). Pasek teraz realnie się zmniejsza w czasie rzeczywistym, znika przy
 "0" pusty kafelek; etykieta zmieniona na "na bieżąco w trakcie walki". `pnpm --filter web exec tsc
 --noEmit` czysto.
 
+### Ramka mapy ekspedycji: druga poprawka — usunięta CAŁA linia obramowania (2026-08-20)
+
+Usunięcie podwójnej linii (poprzedni wpis) nie wystarczyło — user przesłał kolejny screen,
+narożniki dalej "niespójne". Prawdziwy problem: nawet JEDNA cienka linia CSS (`border-gold/40`,
+1px) obok grubego, teksturowanego, rytego bractu (`corner-ornate.png`, ramiona ~84px) zawsze będzie
+wyglądać jak dwa różne elementy sklejone razem — różnica w "wadze" wizualnej (gruby engraving vs
+włosowa linia) jest zbyt duża, żeby to się kiedykolwiek zlało w jedną spójną ramkę, niezależnie od
+pozycjonowania. Usunięty CAŁY zewnętrzny `border` dla `cornerStyle="ornate"` — panel trzyma się
+teraz wyłącznie na `bg-panel` (kontrast wobec `ink` w tle) + cień + grafika narożników, bez żadnej
+prostej linii do konkurowania z ornamentem. Dokładnie ten sam wzorzec ("same rogi, bez ciągłej
+linii") już zaakceptowany wcześniej dla kwadratów itemów (`SocketCorners`). Zweryfikowane:
+`getComputedStyle` na panelu "Mapa ekspedycji" pokazuje `borderWidth: 0px`. `pnpm --filter web
+exec tsc --noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

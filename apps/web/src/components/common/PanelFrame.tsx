@@ -13,10 +13,13 @@ import { OrnateCorners } from "./OrnateCorners";
  * no heavy drop shadow, so it doesn't visually compete with the panels around it.
  *
  * `cornerStyle="ornate"` swaps in OrnateCorners (real engraved-gold corner art) — opt-in per
- * surface (currently just the expedition map) rather than the app-wide default. No separate
- * inset border line here (tried one initially): the art already draws its own edge, and a plain
- * CSS line showing through the art's transparent gaps at a slightly different position read as
- * two mismatched frames fighting each other, not a richer one. */
+ * surface (currently just the expedition map) rather than the app-wide default. No plain CSS
+ * `border` line at all here (tried keeping one, twice): a hairline line has nowhere near the
+ * visual weight of the chunky engraved bracket art, so wherever they'd need to meet — the corner,
+ * or the art's own transparent gaps — they read as two different frames stapled together, not
+ * one. The corner art alone (plus `bg-panel` giving the panel body a real edge against `ink`)
+ * carries the framing; this is the same "corners only, no continuous line" treatment already used
+ * for item sockets (see inventory/SocketCorners.tsx). */
 export function PanelFrame({
   title,
   headerRight,
@@ -41,8 +44,10 @@ export function PanelFrame({
   const ornate = cornerStyle === "ornate";
   return (
     <div
-      className={`relative border bg-panel ${
-        secondary ? "border-gold/25 shadow-[0_4px_14px_rgba(0,0,0,0.35)]" : "border-gold/40 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+      className={`relative bg-panel ${ornate ? "" : "border"} ${
+        secondary
+          ? `${ornate ? "" : "border-gold/25"} shadow-[0_4px_14px_rgba(0,0,0,0.35)]`
+          : `${ornate ? "" : "border-gold/40"} shadow-[0_8px_24px_rgba(0,0,0,0.5)]`
       } ${className}`}
     >
       {ornate ? (
