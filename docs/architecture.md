@@ -2624,6 +2624,74 @@ toku" pokazał miksturę w slocie 1 (`1` na plakietce) mimo że log walki potwie
 TestSnapshotPotion (+9)". Posprzątane (`leaveExpedition` + usunięcie testowego itemu). `pnpm -r
 typecheck` czysto dla `shared`/`api`/`web`.
 
+### Bot gracza — playtesting balansu i test obciążeniowy serwera (2026-08-20)
+
+User poprosił o system botów grających w grę autonomicznie (postać → ekspedycje → punkty
+umiejętności → zakupy u NPC → ulepszenia na kowadle) z raportem szczegółowości "do poziomu 10
+potrzebowałem 10 min, zużyłem 200 miksturek i 3000 złota" — z dwoma celami: (1) test wczesnego
+balansu gry, (2) test czy serwer nie zwalnia pod obciążeniem. Ustalone z userem przed
+implementacją (AskUserQuestion): bot ma też docelowo działać przeciw prawdziwemu VPS-owi (nie
+tylko lokalnie), na start budujemy jednego bota ze szczegółowym raportem (nie od razu rój N
+botów).
+
+**Kluczowa decyzja architektoniczna**: bot rozmawia z API przez PRAWDZIWE żądania HTTP (fetch +
+Bearer token), dokładnie jak przeglądarka — nie woła bezpośrednio funkcji `service.ts` ani nie
+dotyka bazy. To jedyny sposób, żeby jednocześnie zrealizować oba cele usera: test balansu musi
+przejść przez te same reguły co prawdziwy gracz, a test obciążeniowy musi wygenerować prawdziwy
+ruch sieciowy/DB, nie ominąć go. Bot też NIE przyspiesza czasu ekspedycji — czeka realnie do
+`endsAt`, tak jak prawdziwy gracz czekałby (celowe: to jest miara realnego tempa gry, nie
+teoretycznego minimum).
+
+**Nowe pliki** (`apps/api/scripts/bot/`, poza `tsconfig.json`'s `include: ["src"]` — uruchamiane
+bezpośrednio przez `npx tsx`, tak jak istniejące `prisma/scripts/*.ts`):
+- **`client.ts`** — lekki typowany klient HTTP na 9 obszarach API (auth, postać, klasy, podróż,
+  ekspedycje, sklep NPC, itemy/ekwipunek/kowadło, umiejętności, strefy) — zbudowany na podstawie
+  pełnej inwentaryzacji REST API (deleguj do subagenta Explore, żeby nie zgadywać kształtów
+  żądań/odpowiedzi). Auto-relogowanie przy 401 (access token wygasa po 15 min — długo trwający
+  bot by inaczej się wywalił w połowie).
+- **`report.ts`** (`BotReport`) — dziennik zdarzeń z znacznikami czasu + per-poziomowe rozbicie
+  (czas/złoto zarobione-wydane/mikstury zużyte/liczba ekspedycji/błędy), generuje Markdown i JSON.
+  Sekcja "Anomalie": poziomy, które trwały >2× medianę pozostałych — NIE zgaduje przyczyny
+  (żadnej fabrykowanej narracji "bo X"), tylko wskazuje gdzie faktycznie warto zajrzeć.
+- **`policy.ts`** (`runBot`) — pętla decyzyjna: wydaj punkty statystyk (główny stat klasy) →
+  wydaj punkty umiejętności (najpierw nowe umiejętności, potem węzły drzewka, zachłannie od
+  najtańszych) → załóż wolny ekwipunek pasujący do pustych slotów → w mieście dokup mikstury gdy
+  zapas niski i włóż jedną do aktywnego slotu → spróbuj ulepszyć założone przedmioty na kowadle
+  gdy stać na materiały+złoto → wybierz najsilniejszą dostępną krainę i walcz, czekaj na
+  rzeczywisty koniec walki, odbierz nagrodę. Zatrzymuje się na docelowym poziomie albo po
+  przekroczeniu jednego z dwóch niezależnych limitów bezpieczeństwa (czas ścienny, liczba
+  ekspedycji) — bez nich zapętlony/utknięty bot działałby w nieskończoność.
+- **`run.ts`** — CLI, konfiguracja przez zmienne środowiskowe (`BOT_BASE_URL`, `BOT_NAME`,
+  `BOT_CLASS`, `BOT_TARGET_LEVEL`, `BOT_MAX_MINUTES`, `BOT_MAX_EXPEDITIONS`), zapisuje raport do
+  `scripts/bot/reports/` (gitignored — to wynik testu, nie kod). Ostrzeżenie w konsoli, jeśli
+  `BOT_BASE_URL` wygląda na produkcyjny adres.
+- **`README.md`** — instrukcja użycia + jawnie spisane ograniczenia obecnej wersji (jeden bot na
+  uruchomienie, brak automatycznego czyszczenia kont testowych, prosta/deterministyczna polityka).
+
+**Dobór potworów do walki — świadomie ostrożny, po realnym teście dwóch wariantów**: pierwsza
+wersja filtrowała `monster.level <= character.level` (tylko najsłabsze potwory w strefie) — dała
+100% wygranych, ale bardzo wolny progres (utknięcie na poziomie 1 przez całe 5.5 min testu, 8
+ekspedycji). Rozluźnienie do `<= character.level + 2` (żeby przyspieszyć) w realnym teście
+odwróciło to w PRAWIE SAME PORAŻKI (0 pokonanych potworów w 7 z 9 ekspedycji) — realny sygnał, że
+postać na poziomie 1 nie radzi sobie z potworami nawet 2 poziomy wyżej w tej strefie, ale zły
+wynik dla samego bota (marnuje mikstury/złoto bez żadnego postępu, zaśmieca raport szumem
+zamiast czystym sygnałem). Wrócono do `<= character.level` — konserwatywne, ale przewidywalne;
+częste "BRAK ZWYCIĘSTW" w raporcie z tym ustawieniem samo w sobie jest wtedy realnym sygnałem
+balansu wartym sprawdzenia, nie artefaktem zbyt agresywnej polityki bota.
+
+Zweryfikowane bezpośrednio (3 uruchomienia przeciw lokalnemu dev, konta/postacie posprzątane po
+teście): pełny cykl register → utwórz postać → podróż → ekspedycja (prawdziwy czas oczekiwania) →
+odbiór nagrody → awans zadziałał od początku do końca bez ręcznej ingerencji; po drodze złapany i
+naprawiony realny bug (puste ciało żądania z nagłówkiem `Content-Type: application/json` odrzucane
+przez Fastify na endpointach bez body, np. `claim` — naprawione: nagłówek dodawany tylko gdy
+faktycznie jest body); bot poprawnie ominął item zastrzeżony dla innej klasy, poprawnie zgłosił
+nieudaną próbę ulepszenia (za mało złota) jako zdarzenie w raporcie, a nie awarię. Raport Markdown
+wygenerował się poprawnie z tabelą per-poziom i pełnym dziennikiem.
+
+**Nieuruchomione celowo**: bot NIE został odpalony przeciw produkcyjnemu VPS-owi w tej sesji —
+mimo że user potwierdził chęć takiego trybu, realne obciążenie żywego serwera wymaga osobnej,
+jawnej zgody w momencie odpalenia, nie tylko ogólnej zgody na architekturę.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

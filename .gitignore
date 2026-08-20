@@ -12,3 +12,4 @@ apps/api/prisma/dev.db-journal
 .turbo/
 *.tsbuildinfo
 apps/api/uploads/
+apps/api/scripts/bot/reports/
