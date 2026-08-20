@@ -36,12 +36,12 @@ export function EquipSlotBox({
     <div className="flex flex-col items-center gap-1">
       <div
         ref={setNodeRef}
-        className={`relative flex w-14 items-center justify-center border-2 border-dashed shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)] transition ${
+        className={`relative flex w-14 items-center justify-center border-2 shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)] transition ${
           tall ? "h-[7.5rem]" : "h-14"
         } ${
           isOver
             ? "border-gold-bright bg-gold/30 shadow-[inset_0_1px_4px_rgba(0,0,0,0.45),0_0_16px_oklch(76%_0.09_85_/_0.7)]"
-            : "border-line-soft"
+            : "border-transparent"
         }`}
       >
         {children}

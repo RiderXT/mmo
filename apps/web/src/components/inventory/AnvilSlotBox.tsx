@@ -15,10 +15,10 @@ export function AnvilSlotBox({ children }: { children: ReactNode }) {
     <div className="flex flex-col items-center gap-1">
       <div
         ref={setNodeRef}
-        className={`relative flex h-20 w-20 items-center justify-center border-2 border-dashed shadow-[inset_0_1px_6px_rgba(0,0,0,0.5)] transition ${
+        className={`relative flex h-20 w-20 items-center justify-center border-2 shadow-[inset_0_1px_6px_rgba(0,0,0,0.5)] transition ${
           isOver
             ? "border-gold-bright bg-gold/30 shadow-[inset_0_1px_6px_rgba(0,0,0,0.5),0_0_20px_oklch(76%_0.09_85_/_0.75)]"
-            : "border-gold/40 shadow-[inset_0_1px_6px_rgba(0,0,0,0.5),0_0_6px_oklch(76%_0.09_85_/_0.15)]"
+            : "border-transparent shadow-[inset_0_1px_6px_rgba(0,0,0,0.5),0_0_6px_oklch(76%_0.09_85_/_0.15)]"
         }`}
       >
         {children}
