@@ -624,6 +624,13 @@ model Expedition {
   // threshold stay consistent even if the event has since ended. 1 = no event active.
   appliedExpMultiplier  Float @default(1)
   appliedGoldMultiplier Float @default(1)
+  // JSON: {slotIndex, itemId, quantity}[] — snapshot of the character's active item slots at the
+  // moment the fight was simulated. The whole fight (incl. potion consumption) is computed and
+  // applied atomically at start (see startExpedition), so live inventory already reflects the
+  // post-fight state for the entire time the "w toku" screen is open — this snapshot is what lets
+  // that screen still show what was actually equipped for THIS fight instead of an already-empty
+  // active slot. Default "[]" so expeditions in flight at deploy time keep working unmodified.
+  potionSlotsSnapshot String @default("[]")
 
   character   Character @relation("CharacterExpeditions", fields: [characterId], references: [id], onDelete: Cascade)
   zone        Zone      @relation(fields: [zoneId], references: [id])

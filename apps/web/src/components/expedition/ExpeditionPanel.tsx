@@ -258,7 +258,7 @@ export function ExpeditionPanel({
       <PanelFrame title="Ekspedycja w toku">
         {flaggedBanner}
         <p className="mt-1 text-sm text-parchment-dim">Kraina: {zoneNameFor(expedition.zoneId)}</p>
-        <ActivePotionsSummary characterId={characterId} />
+        <ActivePotionsSummary characterId={characterId} snapshot={expedition.potionSlotsSnapshot} itemFor={itemFor} />
         {isReadyToClaim ? (
           <button
             onClick={() => claimMutation.mutate(expedition.id)}

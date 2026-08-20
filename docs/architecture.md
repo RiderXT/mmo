@@ -2586,6 +2586,44 @@ Zweryfikowane w przeglądarce: hover na "Hełm Maga Wilków" we własnym ekwipun
 Twojej klasy (wymaga: Mag)"; hover na "Hełm Strażnika Twierdzy" pokazuje "+4 (+3)" względem
 założonego hełmu. `pnpm --filter web typecheck` czysto.
 
+### Fix: mikstury znikały z panelu podczas ekspedycji "w toku" (2026-08-20)
+
+User zgłosił, że podczas trwającej ekspedycji panel "Aktywne mikstury" pokazuje puste sloty, mimo
+że dziennik walki wyraźnie pokazuje ich zużycie. Przyczyna: cała walka jest symulowana i
+ROZSTRZYGNIĘTA ATOMOWO w `startExpedition` w momencie kliknięcia "Rozpocznij walkę" — łącznie ze
+zużyciem mikstur z aktywnych slotów (`tx.inventoryItem.delete`/`update` w tej samej transakcji, co
+tworzy `Expedition`). Ekran "Ekspedycja w toku" tylko ANIMUJE już gotowy wynik, odsłaniając zdarzenia
+stopniowo wg `elapsedSeconds` — ale `ActivePotionsSummary` odpytywał ŻYWY stan ekwipunku, który już
+w chwili startu odzwierciedla stan PO całej walce. Jeśli mikstura skończyła się w trakcie (cały stos
+zużyty → wiersz `InventoryItem` usunięty), slot pokazywał się jako pusty przez CAŁY czas oglądania
+animacji walki, mimo że log właśnie pokazywał jej użycie.
+
+Naprawione zrzutem stanu aktywnych slotów robionym PRZED zużyciem, przechowywanym niezależnie od
+żywego ekwipunku:
+- **Schemat** (`schema.prisma` + `schema.production.prisma`, addytywnie): `Expedition.potionSlotsSnapshot
+  String @default("[]")` — JSON `{slotIndex, itemId, quantity}[]`.
+- **Backend** (`modules/expeditions/service.ts`): `gatherCombatBuild` już i tak pobierał wszystkie
+  itemy z `activeSlotIndex` (do zbudowania listy mikstur do symulacji) — teraz dodatkowo zwraca z
+  tych samych danych gotowy snapshot (bez nowego zapytania do bazy), przekazywany przez
+  `buildAndSimulate` do `startExpedition` i zapisywany na rekordzie ekspedycji RÓWNOLEGLE z jej
+  utworzeniem, przed konsumpcją mikstur w tej samej transakcji. `getActiveExpedition` parsuje i
+  zwraca to pole w DTO.
+- **Frontend**: `ActivePotionsSummary.tsx` dostał opcjonalny prop `snapshot` — gdy podany (tylko
+  ekran "Ekspedycja w toku" w `ExpeditionPanel.tsx`), renderuje z zamrożonych danych zamiast z
+  żywego zapytania o ekwipunek, przez nowy lekki `SnapshotItemBox` (bo item mógł już fizycznie nie
+  istnieć w ekwipunku — nie da się użyć prawdziwego `ItemBox`, który wymaga realnego
+  `InventoryItemDto`; ikona/grafika rozwiązywana z katalogu przez `itemFor`, nie z żywego stanu).
+  Ekran planowania (przed startem) używa tego samego komponentu BEZ propsu `snapshot` — tam żywe
+  zapytanie jest poprawne i pożądane (pokazuje aktualny stan przed decyzją o starcie).
+
+Zweryfikowane bezpośrednio przez prawdziwy `startExpedition()` (nie przez UI-only mock): postać
+testowa z 1 miksturą (`hp_below`, próg 99%) w slocie 0 — po starcie walki wiersz `InventoryItem`
+faktycznie zniknął z bazy (potwierdzone `null` przy ponownym odpytaniu), ale `getActiveExpedition`
+nadal zwracał poprawny `potionSlotsSnapshot` z tą miksturą. W przeglądarce: ekran "Ekspedycja w
+toku" pokazał miksturę w slocie 1 (`1` na plakietce) mimo że log walki potwierdzał "Użyto:
+TestSnapshotPotion (+9)". Posprzątane (`leaveExpedition` + usunięcie testowego itemu). `pnpm -r
+typecheck` czysto dla `shared`/`api`/`web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

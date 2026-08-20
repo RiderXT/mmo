@@ -12,6 +12,11 @@ export interface ExpeditionDto {
   endsAt: string;
   result: null;
   events: CombatEvent[];
+  // Snapshot of the character's active item slots at the moment this fight was simulated — the
+  // whole fight (incl. potion consumption) is resolved atomically at start, so live inventory
+  // already reflects the post-fight state for the entire time this screen is open. Use this,
+  // not a live inventory query, to show what was actually equipped for THIS fight.
+  potionSlotsSnapshot: { slotIndex: number; itemId: string; quantity: number }[];
 }
 
 export interface ExpeditionLoot {

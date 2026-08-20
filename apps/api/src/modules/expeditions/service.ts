@@ -134,7 +134,13 @@ export async function gatherCombatBuild(characterId: string) {
       durationSeconds: inv.item.potionDurationSec,
     }));
 
-  return { character, core, equipmentStats, passiveSkills, activeSkills, potions };
+  const activeSlotsSnapshot = activePotionItems.map((inv) => ({
+    slotIndex: inv.activeSlotIndex!,
+    itemId: inv.itemId,
+    quantity: inv.quantity,
+  }));
+
+  return { character, core, equipmentStats, passiveSkills, activeSkills, potions, activeSlotsSnapshot };
 }
 
 /** Computes a character's current derived combat stats (HP/MP/attack/defense/...) from their build — independent of any zone, used for the character sheet readout outside of an expedition. */
@@ -172,8 +178,10 @@ async function buildAndSimulate(
   selectedMonsterIds: string[] = [],
   tactics?: BattleTacticsInput,
 ) {
-  const [{ character, core, equipmentStats, passiveSkills, activeSkills: allActiveSkills, potions: basePotions }, zone] =
-    await Promise.all([
+  const [
+    { character, core, equipmentStats, passiveSkills, activeSkills: allActiveSkills, potions: basePotions, activeSlotsSnapshot },
+    zone,
+  ] = await Promise.all([
       gatherCombatBuild(characterId),
       prisma.zone.findUnique({
         where: { id: zoneId },
@@ -260,7 +268,7 @@ async function buildAndSimulate(
     eventMultipliers.bonusDrop,
     personalBuffs.dropMultiplier,
   );
-  return { character, zone, stats, outcome, expMultiplier, goldMultiplier };
+  return { character, zone, stats, outcome, expMultiplier, goldMultiplier, activeSlotsSnapshot };
 }
 
 export async function startExpedition(
@@ -285,7 +293,7 @@ export async function startExpedition(
   }
 
   const durationMinutes = await getExpeditionDurationMinutes();
-  const { character, zone, outcome, expMultiplier, goldMultiplier } = await buildAndSimulate(
+  const { character, zone, outcome, expMultiplier, goldMultiplier, activeSlotsSnapshot } = await buildAndSimulate(
     input.characterId,
     input.zoneId,
     durationMinutes,
@@ -317,6 +325,7 @@ export async function startExpedition(
         result: JSON.stringify(outcome.result),
         eventLog: JSON.stringify(outcome.events),
         selectedMonsterIds: JSON.stringify(input.selectedMonsterIds),
+        potionSlotsSnapshot: JSON.stringify(activeSlotsSnapshot),
         appliedExpMultiplier: expMultiplier,
         appliedGoldMultiplier: goldMultiplier,
       },
@@ -424,6 +433,7 @@ export async function getActiveExpedition(characterId: string, userId: string) {
     endsAt: expedition.endsAt.toISOString(),
     result: null,
     events: expedition.eventLog ? (JSON.parse(expedition.eventLog) as CombatEvent[]) : [],
+    potionSlotsSnapshot: JSON.parse(expedition.potionSlotsSnapshot) as { slotIndex: number; itemId: string; quantity: number }[],
   };
 }
 
