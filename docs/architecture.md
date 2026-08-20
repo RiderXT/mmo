@@ -2572,6 +2572,20 @@ hover na hełm maga (inna klasa niż postać) pokazuje "Nie dla Twojej klasy (wy
 staty; kliknięcie kafelka nadal poprawnie otwiera `BuyItemModal` i realny zakup działa bez regresji.
 `pnpm --filter web typecheck` czysto.
 
+### Fix: to samo brakujące porównanie/ostrzeżenie o klasie, teraz w "Twój ekwipunek" w NPC (2026-08-20)
+
+User zauważył, że po redesignie sklepu (wyżej) własny ekwipunek gracza w zakładce NPC dalej nie
+pokazuje ostrzeżenia o klasie ani porównania statów, mimo że `ShopItemBox` to już miał. Ta sama
+przyczyna co wcześniejszy fix na `AnvilTab.tsx`: `ItemBox` w siatce "Twój ekwipunek" nigdy nie
+dostawał `equippedComparisonItem`/`characterClassId` — `NpcTab.tsx` w ogóle nie budował mapy
+`byEquipSlot` (nie renderuje lalki ekwipunku, więc jej wcześniej nie potrzebował). Naprawione tym
+samym wzorcem: nowy `EQUIPPABLE_TYPES` (lokalna kopia tej samej listy co w `AnvilTab`/`EquipmentTab`),
+`byEquipSlot` budowany obok `byGridSlot` w tej samej pętli po `items`, propsy dopisane do `ItemBox`.
+
+Zweryfikowane w przeglądarce: hover na "Hełm Maga Wilków" we własnym ekwipunku pokazuje "Nie dla
+Twojej klasy (wymaga: Mag)"; hover na "Hełm Strażnika Twierdzy" pokazuje "+4 (+3)" względem
+założonego hełmu. `pnpm --filter web typecheck` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

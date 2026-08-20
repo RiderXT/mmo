@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Character } from "@mmo/shared";
+import type { Character, EquipSlot } from "@mmo/shared";
 import { GridSlot } from "../../components/inventory/GridSlot";
 import { ItemBox } from "../../components/inventory/ItemBox";
 import { ShopItemBox } from "../../components/inventory/ShopItemBox";
@@ -16,6 +16,18 @@ import { listInventory, sellItem, discardItem, openChest, type InventoryItemDto 
 import { listNpcsForZone, buyFromNpc, type NpcShopItemPublicDto } from "../../lib/npcShopApi";
 import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
 
+const EQUIPPABLE_TYPES = new Set<string>([
+  "weapon",
+  "armor",
+  "helmet",
+  "boots",
+  "shield",
+  "necklace",
+  "earrings",
+  "ring",
+  "rod",
+  "pickaxe",
+]);
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
@@ -167,8 +179,10 @@ export function NpcTab({ character }: { character: Character }) {
 
   const items = inventoryQuery.data ?? [];
   const byGridSlot = new Map<number, InventoryItemDto>();
+  const byEquipSlot = new Map<EquipSlot, InventoryItemDto>();
   for (const item of items) {
-    if (!item.equippedSlot && item.activeSlotIndex === null) byGridSlot.set(item.slotIndex!, item);
+    if (item.equippedSlot) byEquipSlot.set(item.equippedSlot, item);
+    else if (item.activeSlotIndex === null) byGridSlot.set(item.slotIndex!, item);
   }
   const tabItemCounts = Array.from({ length: INVENTORY_TABS }, (_, tab) => {
     let count = 0;
@@ -239,6 +253,12 @@ export function NpcTab({ character }: { character: Character }) {
                     selected={selectMode && selection.has(cell.item.id)}
                     onSelect={() => (selectMode ? toggleSelected(cell.item!) : undefined)}
                     onContextMenu={handleItemContextMenu}
+                    equippedComparisonItem={
+                      EQUIPPABLE_TYPES.has(cell.item.item.type)
+                        ? byEquipSlot.get(cell.item.item.type as EquipSlot) ?? null
+                        : undefined
+                    }
+                    characterClassId={character.classId}
                   />
                 )}
               </GridSlot>
