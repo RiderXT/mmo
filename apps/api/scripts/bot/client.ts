@@ -277,6 +277,13 @@ export class GameClient {
     });
   }
 
+  sellItem(characterId: string, inventoryItemId: string) {
+    return this.request<{ goldEarned: number }>(`/api/inventory/${characterId}/sell`, {
+      method: "POST",
+      body: JSON.stringify({ inventoryItemId }),
+    });
+  }
+
   upgradeItem(characterId: string, inventoryItemId: string, catalystInventoryItemIds: string[] = []) {
     return this.request<UpgradeResult>(`/api/inventory/${characterId}/upgrade`, {
       method: "POST",

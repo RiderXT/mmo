@@ -116,7 +116,8 @@ async function spendSkillPoints(client: GameClient, report: BotReport, character
   return current;
 }
 
-async function equipStarterGear(client: GameClient, report: BotReport, characterId: string) {
+async function equipStarterGear(client: GameClient, report: BotReport, character: Character) {
+  const characterId = character.id;
   const EQUIPPABLE = new Set(["weapon", "armor", "helmet", "boots", "shield", "necklace", "earrings", "ring", "rod", "pickaxe"]);
   const [inventory, items] = await Promise.all([client.getInventory(characterId), client.listItems()]);
   const itemFor = (id: string) => items.find((i) => i.id === id);
@@ -125,6 +126,23 @@ async function equipStarterGear(client: GameClient, report: BotReport, character
     if (inv.equippedSlot) continue;
     const item = itemFor(inv.itemId);
     if (!item || !EQUIPPABLE.has(item.type)) continue;
+
+    // classId only restricts weapon/armor/helmet (see CreateItemSchema) — a drop for another
+    // class can never be equipped by this bot, so selling it immediately (instead of retrying the
+    // same failing equip call every cycle forever) both stops the error-log noise and actually
+    // frees the inventory slot for gold instead of leaving it as permanent dead weight.
+    if (item.classId && item.classId !== character.classId) {
+      try {
+        const sold = await client.sellItem(characterId, inv.id);
+        report.recordGoldEarned(character.level, sold.goldEarned);
+        report.log("sell_wrong_class", `Sprzedano ${item.name} (inna klasa) za ${sold.goldEarned}g`);
+      } catch (err) {
+        report.log("sell_skip", `Nie udało się sprzedać ${item.name}: ${err instanceof Error ? err.message : err}`);
+      }
+      await sleep(THINK_DELAY_MS);
+      continue;
+    }
+
     if (equippedSlots.has(item.type)) continue; // keep whatever's already worn — no stat comparison in v1
     try {
       await client.equipItem(characterId, inv.id, item.type);
@@ -339,7 +357,7 @@ export async function runBot(options: BotOptions): Promise<BotReport> {
 
     character = await spendStatPoints(client, report, character, cls);
     character = await spendSkillPoints(client, report, character, cls);
-    await equipStarterGear(client, report, character.id);
+    await equipStarterGear(client, report, character);
     character = await shopForPotions(client, report, character, zones);
     await tryUpgradeEquipped(client, report, character);
 

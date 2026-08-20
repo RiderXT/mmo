@@ -3020,6 +3020,33 @@ Zweryfikowane w przeglądarce: 192 `<img src=".../socket-corner...">` na stronie
 wszystkie `complete:true`, poprawne macierze transformacji (`scaleX(-1)`/`scale(-1,-1)`/
 `scaleY(-1)`). `pnpm --filter web exec tsc --noEmit` czysto.
 
+### Bot: sprzedaje loot złej klasy zamiast bez końca próbować go założyć (2026-08-20)
+
+Diagnoza realnego przebiegu na VPS (log jednego bota, patrz rozmowa) pokazała, że progres wcale
+nie był zablokowany — jedna ekspedycja legalnie trwała 30 minut (100 potworów w kolejce, event
+x10 realnie zadziałał: +15000 exp zamiast +1500). Jedyna prawdziwa nieefektywność: `equipStarterGear`
+([policy.ts](../apps/api/scripts/bot/policy.ts)) co cykl na nowo próbowała założyć KAŻDY
+niezałożony przedmiot pasującego typu, w tym loot innej klasy (drop nie jest filtrowany po
+klasie), zawsze dostając 400 "Ten przedmiot jest dostępny tylko dla innej klasy postaci" —
+nieszkodliwe dla postępu, ale zaśmiecało log błędów i trwale zajmowało miejsce w ekwipunku bez
+żadnej korzyści.
+
+Naprawione: `item.classId` (ograniczenie dotyczy tylko `weapon`/`armor`/`helmet`, patrz
+`CreateItemSchema`) sprawdzane PRZED próbą equip — przy niezgodności z klasą postaci bot od razu
+sprzedaje przedmiot (`POST /:characterId/sell`, nowa metoda `GameClient.sellItem`) zamiast w ogóle
+próbować go założyć. Zero dodatkowych błędów equip w logu dla tego przypadku, plus realny zwrot
+złota zamiast martwego balastu w ekwipunku.
+
+Przy okazji: sprzedaż wymaga `item.sellPrice > 0` ([inventory/service.ts](../apps/api/src/modules/inventory/service.ts)
+`sellItem`) — jedyny item w całej bazie z `sellPrice: 0` to nowo utworzony w tej sesji
+"Zapieczętowany Zwój" (quest). Na wyraźną prośbę usera ("każdy item ma mieć ustawioną symboliczną
+kwotę") poprawione na `sellPrice: 1` — zarówno w `dev.db`, jak i w
+[seed-item-images.ts](../apps/api/scripts/seed-item-images.ts) (żeby produkcyjna synchronizacja
+nie odtworzyła starej wartości). `pnpm --filter api exec tsc --noEmit` czysto; pełny przebieg
+bota na żywo (30+ minut do napotkania pierwszego dropu złej klasy) nie uruchomiony ponownie w
+tej sesji — logika zweryfikowana przeglądem kodu + już wcześniej potwierdzonym działaniem samego
+endpointu sprzedaży.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

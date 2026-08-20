@@ -199,7 +199,7 @@ const newItems: Array<{ icon: string; input: CreateItemInput }> = [
       upgradeRequirements: [],
       upgradeLevelConfigs: [],
       chestLoot: [],
-      sellPrice: 0,
+      sellPrice: 1,
       gridWidth: 1,
     },
   },
