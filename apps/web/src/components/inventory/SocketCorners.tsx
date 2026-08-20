@@ -1,34 +1,39 @@
-import type { CSSProperties } from "react";
+import cornerArt from "../../assets/frames/socket-corner.png";
 
-/** Small engraved corner bracket for item sockets (equip slots, inventory grid, active-item
- * slots, anvil slot) — the small-scale sibling of common/PanelCorners, same 4-corner treatment
- * and full-strength gold (not the old washed-out /70 two-corner version) for consistency with
- * the panels that frame them. Hand-authored to match the app's inline-SVG icon grammar (see
- * ItemTypeIcon.tsx/CombatIcon.tsx: currentColor stroke, no fill) instead of importing outside
- * artwork, and reuses the rotated-diamond motif already established in AppShell.tsx's
- * SectionTitle bullet. */
-function CornerBracket({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className={className} style={style} xmlns="http://www.w3.org/2000/svg">
-      <path d="M1.2 11V5.2C1.2 3 3 1.2 5.2 1.2H11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <rect x="0" y="0" width="2.6" height="2.6" rx="0.4" transform="rotate(45 1.2 1.2)" fill="currentColor" />
-    </svg>
-  );
-}
-
-export function SocketCorners({ size = 10 }: { size?: number }) {
+/** Corner bracket for item sockets (equip slots, inventory grid, active-item slots, anvil slot).
+ * Real AI-generated asset (user-provided, a thin bronze/gold picture-frame corner with a small
+ * leaf ornament) — a second attempt after common/OrnateCorners' more intricate engraved artwork
+ * was tried here first and reverted: at these ~56px squares that detailed asset rendered as a
+ * muddy blob, confirmed by compositing it at actual display size before shipping. This asset is
+ * thin-lined instead of densely engraved, so it stays legible far smaller — verified the same way
+ * before wiring in.
+ *
+ * Mirrored (scaleX/scaleY), not rotated — the source is one corner of a rectangular frame with
+ * straight border lines running along its right and bottom edges; a 90°/180° rotation would spin
+ * those lines to point the wrong way, while mirroring keeps every edge's line running along that
+ * edge at all 4 corners. */
+export function SocketCorners({ size = 20 }: { size?: number }) {
   const style = { width: size, height: size };
   return (
     <>
-      <CornerBracket className="pointer-events-none absolute -left-px -top-px text-gold" style={style} />
-      <CornerBracket className="pointer-events-none absolute -right-px -top-px rotate-90 text-gold" style={style} />
-      <CornerBracket
-        className="pointer-events-none absolute -bottom-px -right-px rotate-180 text-gold"
-        style={style}
+      <img src={cornerArt} alt="" className="pointer-events-none absolute -left-px -top-px" style={style} />
+      <img
+        src={cornerArt}
+        alt=""
+        className="pointer-events-none absolute -right-px -top-px"
+        style={{ ...style, transform: "scaleX(-1)" }}
       />
-      <CornerBracket
-        className="pointer-events-none absolute -bottom-px -left-px -rotate-90 text-gold"
-        style={style}
+      <img
+        src={cornerArt}
+        alt=""
+        className="pointer-events-none absolute -bottom-px -right-px"
+        style={{ ...style, transform: "scale(-1, -1)" }}
+      />
+      <img
+        src={cornerArt}
+        alt=""
+        className="pointer-events-none absolute -bottom-px -left-px"
+        style={{ ...style, transform: "scaleY(-1)" }}
       />
     </>
   );

@@ -2994,6 +2994,32 @@ która już istnieje), do uruchomienia bezpośrednio na VPS po ręcznym `scp` 17
 `Tymczasowe/ikony/clean/` do katalogu na serwerze (patrz docstring w pliku). Nie uruchomiony
 automatycznie w tej sesji — brak bezpośredniego dostępu do VPS z tego środowiska.
 
+### Ramka kwadratów itemów: druga próba, tym razem prawdziwym assetem (2026-08-20)
+
+Pierwsza próba: podmiana `SocketCorners` (róg gniazda itemu — sloty ekwipunku, siatka
+ekwipunku, aktywne sloty, slot kowadła; ~56px kwadraty) z prostego rysowanego SVG na to samo
+zdobione, grawerowane złoto co `OrnateCorners` (ramka mapy ekspedycji) — **cofnięta po
+wizualnej weryfikacji w realnym rozmiarze**: gęsto rzeźbiona grafika w 20px robi się rozmazaną
+plamą, dokładnie odwrotny problem niż przy mapie (tam było za dużo pustego miejsca na prosty
+rysunek, tu jest za mało miejsca na gęsty detal). Test wykonany PRZED wdrożeniem —
+`PIL.Image.alpha_composite` symulujący realny render 56px kwadratu z 20px rogiem, nie ocena
+"na oko" ze źródłowego pliku.
+
+User przesłał drugi, własny obraz — cieńszy, prostszy brązowo-złoty narożnik ramki z małym
+zdobieniem-listkiem (nie generowany od zera na to zamówienie, użytkownik wyciął go sam z
+własnej grafiki mikstury). Ten sam test przy 56px/20px wypadł czytelnie (cienkie linie, mały
+zwarty ornament — inaczej niż gęsty engraving). Wdrożony jako
+`apps/web/src/assets/frames/socket-corner.png` + przepisany `SocketCorners.tsx`.
+
+Różnica techniczna względem `OrnateCorners`: narożniki tu są **odbijane lustrzanie**
+(`scaleX`/`scaleY`), nie obracane — źródło to róg PROSTOKĄTNEGO obramowania z liniami
+biegnącymi wzdłuż prawej i dolnej krawędzi; obrót 90°/180° skierowałby te linie w złą stronę,
+odbicie zachowuje kierunek linii na każdym z 4 rogów.
+
+Zweryfikowane w przeglądarce: 192 `<img src=".../socket-corner...">` na stronie ekwipunku,
+wszystkie `complete:true`, poprawne macierze transformacji (`scaleX(-1)`/`scale(-1,-1)`/
+`scaleY(-1)`). `pnpm --filter web exec tsc --noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
