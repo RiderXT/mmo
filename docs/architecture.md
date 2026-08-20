@@ -2688,9 +2688,66 @@ faktycznie jest body); bot poprawnie ominął item zastrzeżony dla innej klasy,
 nieudaną próbę ulepszenia (za mało złota) jako zdarzenie w raporcie, a nie awarię. Raport Markdown
 wygenerował się poprawnie z tabelą per-poziom i pełnym dziennikiem.
 
-**Nieuruchomione celowo**: bot NIE został odpalony przeciw produkcyjnemu VPS-owi w tej sesji —
-mimo że user potwierdził chęć takiego trybu, realne obciążenie żywego serwera wymaga osobnej,
-jawnej zgody w momencie odpalenia, nie tylko ogólnej zgody na architekturę.
+**Nieuruchomione od razu**: bot celowo NIE został odpalony przeciw produkcyjnemu VPS-owi w tej
+samej turze co implementacja — mimo że user potwierdził chęć takiego trybu, realne obciążenie
+żywego serwera wymaga osobnej, jawnej zgody w momencie odpalenia, nie tylko ogólnej zgody na
+architekturę. User potwierdził wprost w kolejnej wiadomości ("odpal bota na vps") — uruchomiony
+przeciw `https://gra.riderx.ovh` (cel: poziom 10, limit 90 min / 300 ekspedycji), zdrowo ruszył
+(rejestracja, postać, podróż, zakup mikstury, pierwsza ekspedycja) — dalszy przebieg poza zakresem
+tej sesji.
+
+### Panel admina "Serwer": obciążenie per moduł + uruchamianie botów (2026-08-20)
+
+User poprosił o (1) narzędzie pokazujące obciążenie serwera per moduł ("co dokładnie sprawia
+najwięcej problemów"), (2) opcję w panelu admina do uruchamiania N botów, (3) rozróżnienie
+obciążenia TEJ aplikacji od obciążenia całego VPS-a przez inne rzeczy.
+
+**Śledzenie per moduł** (`apps/api/src/lib/serverLoad.ts`, nowy) — globalny hook Fastify
+`onResponse` (zarejestrowany jako PIERWSZY hook, żeby jego własny narzut nie obciążał losowo
+wybranej trasy, i żeby łapał też żądania kończące się błędem) mierzy `reply.elapsedTime` dla
+KAŻDEGO żądania, przypisuje do modułu wyliczonego z URL-a (`moduleForPath` — pierwszy segment
+ścieżki, a dla `/api/admin/*` pierwsze DWA segmenty, żeby ~15 różnych ekranów admina nie zlewało
+się w jeden worek). Agreguje w pamięci procesu (celowo nie w bazie — to telemetria operacyjna,
+nie dane gry, restart serwera ma prawo to zerować): licznik/śr./maks. czas/błędy per moduł
+(sortowalne wg ŁĄCZNEGO czasu — to jedna liczba, która realnie odpowiada na "co najbardziej
+obciąża serwer", bo rzadko-ale-wolno i często-ale-szybko mogą mieć tę samą liczbę żądań a bardzo
+różny wkład), plus rolling timeline co minutę (do 120 minut wstecz, per moduł).
+
+**Proces vs cały VPS** — osobny sampler co 5s (`setInterval`, `unref()`-owany żeby nie blokował
+zamknięcia procesu): `process.cpuUsage()`/`process.memoryUsage()` (WYŁĄCZNIE ten proces Node) i
+`perf_hooks.monitorEventLoopDelay()` (opóźnienie event-loopa — najlepszy dostępny sygnał "czy TEN
+proces jest przeciążony", niezależny od tego, co dzieje się gdzie indziej na maszynie) — obok
+`os.loadavg()`/`os.freemem()` (CAŁA maszyna, wliczając wszystko inne tam działające). Panel
+admina pokazuje obie kolumny osobno z wprost dopisaną instrukcją interpretacji: wysokie
+obciążenie systemu + niskie CPU/event-loop-delay procesu API = winne jest coś innego na VPS-ie,
+nie ta gra. `os.loadavg()` zwraca zawsze `[0,0,0]` na Windows (tylko Unix) — nieistotne w
+praktyce, docelowe środowisko to Ubuntu na VPS-ie.
+
+**Uruchamianie botów z panelu** (`apps/api/src/modules/admin/bots/`, nowy moduł) — `POST
+/api/admin/bots/launch` (`LaunchBotsSchema` w `packages/shared`, limit 1-20 na wywołanie, twardy
+serwerowy limit 20 działających naraz łącznie) spawnuje prawdziwe procesy potomne `npx tsx
+scripts/bot/run.ts` (ten sam bot z poprzedniego zadania, bez zmian) przez `child_process.spawn`
+z `shell: true` (żeby `npx`/`npx.cmd` rozwiązywało się poprawnie i na Windows dev, i na Linux
+prod, bez rozgałęzień w kodzie). **Kluczowe**: `BOT_BASE_URL` spawnowanych botów to zawsze
+`http://127.0.0.1:<PORT własnego procesu>` — boty odpalone z panelu ZAWSZE biją w serwer, na
+którym działa panel, przez lokalny port, nigdy w zewnętrzny adres; jeśli panel działa na VPS-ie,
+to jest to realne obciążenie TEGO VPS-a. Stan przebiegów (status, log stdout/stderr, kod wyjścia)
+trzymany w pamięci (`Map`, nie baza — tak samo ulotne jak same boty), z limitem 1000 linii logu na
+przebieg. `POST /:id/stop` zabija proces (`child.kill()`).
+
+**Frontend**: nowa zakładka "Serwer" w `AdminSettingsPage.tsx` (`ServerAdminPage.tsx`) — sekcja
+proces-vs-VPS, tabela obciążenia per moduł (z przyciskiem zerowania liczników — przydatne tuż
+przed świadomym testem, żeby nie mieszać wyniku ze zwykłym ruchem sprzed testu), formularz
+uruchamiania botów (liczba/klasa/docelowy poziom/limit czasu) + tabela przebiegów z rozwijanym
+podglądem logu na żywo (`refetchInterval` 2-5s na wszystkich zapytaniach tej strony) i przyciskiem
+zatrzymania działających.
+
+Zweryfikowane bezpośrednio w przeglądarce (lokalny dev, konto testowe posprzątane po teście):
+zakładka "Serwer" od razu pokazała realne dane (CPU/event-loop/pamięć procesu, obciążenie/wolna
+pamięć systemu, tabelę modułów z prawdziwym ruchem z samej nawigacji po panelu); uruchomienie
+bota z formularza faktycznie wystartowało proces potomny celujący we własny `127.0.0.1:4000`
+(potwierdzone w podglądzie logu), status poprawnie przeszedł "Działa" → "Zatrzymany" po kliknięciu
+"Zatrzymaj". `pnpm -r typecheck` czysto dla `shared`/`api`/`web`.
 
 ## Weryfikacja przeprowadzona
 

@@ -379,3 +379,61 @@ export const updatePassiveSkillType = (id: string, input: CreatePassiveSkillType
   apiFetch<PassiveSkillTypeDto>(`/api/admin/passive-skills/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deletePassiveSkillType = (id: string) =>
   apiFetch<void>(`/api/admin/passive-skills/${id}`, { method: "DELETE" });
+
+// Server load — per-module request stats + process/system resource samples (see
+// apps/api/src/lib/serverLoad.ts). In-memory on the server, resets on API restart.
+export interface ServerLoadModuleStat {
+  module: string;
+  count: number;
+  avgMs: number;
+  maxMs: number;
+  errorCount: number;
+  errorRatePct: number;
+  totalMs: number;
+}
+export interface ServerLoadSystemSample {
+  t: number;
+  rssMb: number;
+  heapUsedMb: number;
+  eventLoopDelayP50Ms: number;
+  eventLoopDelayP99Ms: number;
+  processCpuPercent: number;
+  systemLoadavg1m: number;
+  systemFreeMemPercent: number;
+}
+export interface ServerLoadSnapshotDto {
+  modules: ServerLoadModuleStat[];
+  timelineByModule: Record<string, { minuteStartMs: number; count: number; totalMs: number; errorCount: number }[]>;
+  systemSamples: ServerLoadSystemSample[];
+  latest: ServerLoadSystemSample | null;
+  cpuCount: number;
+  processUptimeSeconds: number;
+}
+export const getServerLoad = () => apiFetch<ServerLoadSnapshotDto>("/api/admin/server-load");
+export const resetServerLoad = () => apiFetch<void>("/api/admin/server-load/reset", { method: "POST" });
+
+// Bots — admin-triggered playtesting/load-test runs (see apps/api/scripts/bot/).
+export interface BotRunDto {
+  id: string;
+  name: string;
+  className: string;
+  targetLevel: number;
+  status: "running" | "completed" | "failed" | "stopped";
+  startedAt: string;
+  endedAt: string | null;
+  exitCode: number | null;
+}
+export interface BotRunLogDto extends BotRunDto {
+  logLines: string[];
+}
+export interface LaunchBotsInput {
+  count: number;
+  className: string;
+  targetLevel: number;
+  maxMinutes: number;
+}
+export const launchBots = (input: LaunchBotsInput) =>
+  apiFetch<BotRunDto[]>("/api/admin/bots/launch", { method: "POST", body: JSON.stringify(input) });
+export const listBotRuns = () => apiFetch<BotRunDto[]>("/api/admin/bots");
+export const getBotLog = (id: string) => apiFetch<BotRunLogDto>(`/api/admin/bots/${id}/log`);
+export const stopBot = (id: string) => apiFetch<void>(`/api/admin/bots/${id}/stop`, { method: "POST" });

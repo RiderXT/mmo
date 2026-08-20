@@ -7,6 +7,9 @@ import { isProd } from "./config/env.js";
 import { APP_VERSION } from "./lib/appVersion.js";
 import { registerSecurityPlugins } from "./plugins/security.js";
 import { registerErrorHandler } from "./plugins/errorHandler.js";
+import { serverLoadTracker, moduleForPath } from "./lib/serverLoad.js";
+import { serverLoadRoutes } from "./modules/admin/serverLoad/routes.js";
+import { botsRoutes } from "./modules/admin/bots/routes.js";
 import { authRoutes } from "./modules/auth/routes.js";
 import { logsRoutes } from "./modules/logs/routes.js";
 import { zonesRoutes } from "./modules/admin/zones/routes.js";
@@ -57,6 +60,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerSecurityPlugins(app);
   registerErrorHandler(app);
 
+  // Per-module request timing — deliberately the very first hook registered, so its own overhead
+  // isn't attributed to whichever route happens to run after it, and so it wraps every request
+  // (including ones that error out downstream) rather than only successful ones.
+  app.addHook("onResponse", async (request, reply) => {
+    serverLoadTracker.recordRequest(moduleForPath(request.url), reply.elapsedTime, reply.statusCode);
+  });
+
   // Uploaded item artwork — served from apps/api/uploads (relative to cwd, matching how this
   // project already resolves dev.db/.env: the API is always started with cwd at apps/api/).
   // Registering the file-size limit here (not per-route) is @fastify/multipart's only place to
@@ -105,6 +115,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(adminPassiveSkillsRoutes, { prefix: "/api/admin/passive-skills" });
   await app.register(accountRoutes, { prefix: "/api/account" });
   await app.register(dailyLoginRoutes, { prefix: "/api/daily-login" });
+  await app.register(serverLoadRoutes, { prefix: "/api/admin/server-load" });
+  await app.register(botsRoutes, { prefix: "/api/admin/bots" });
 
   return app;
 }

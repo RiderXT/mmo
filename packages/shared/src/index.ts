@@ -16,5 +16,6 @@ export * from "./schemas/friend.js";
 export * from "./schemas/gathering.js";
 export * from "./schemas/passiveSkill.js";
 export * from "./schemas/account.js";
+export * from "./schemas/bots.js";
 export * from "./lib/upgradeSuccess.js";
 export * from "./lib/leveling.js";

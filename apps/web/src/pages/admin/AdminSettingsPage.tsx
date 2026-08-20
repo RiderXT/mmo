@@ -12,6 +12,7 @@ import { NpcsAdminPage } from "./NpcsAdminPage";
 import { GatheringAdminPage } from "./GatheringAdminPage";
 import { PassiveSkillsAdminPage } from "./PassiveSkillsAdminPage";
 import { ReferralAdminPage } from "./ReferralAdminPage";
+import { ServerAdminPage } from "./ServerAdminPage";
 
 const TABS = [
   { key: "general", label: "Ogólne", Component: SettingsAdminPage },
@@ -26,6 +27,7 @@ const TABS = [
   { key: "referral", label: "Polecenia", Component: ReferralAdminPage },
   { key: "testing", label: "Testowanie", Component: GrantAdminPage },
   { key: "balance", label: "Statystyki balansu", Component: BalanceStatsPage },
+  { key: "server", label: "Serwer", Component: ServerAdminPage },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
