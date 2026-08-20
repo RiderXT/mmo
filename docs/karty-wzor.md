@@ -62,6 +62,45 @@ game asset, clean vector-style edges
 Podmień fragment w nawiasach na konkretny element. "transparent background" — najczęściej
 pomijany, najważniejszy fragment.
 
+## Prompty do ikon przedmiotów (broń, zbroja, itd.)
+
+Ten sam styl gry, ale inny układ niż ramka — pojedynczy przedmiot wyśrodkowany, widziany lekko
+z ukosa (3/4), jak ikona w ekwipunku, nie płaska ramka. Baza wspólna dla wszystkich typów:
+
+```
+single [ITEM], dark fantasy RPG game icon, 3/4 view centered on transparent background,
+museum brass plaque engraving style, warm torchlit gold and aged bronze/steel tones on
+near-black stone backdrop removed, dramatic rim lighting, intricate but restrained detail,
+no text, no hands, no character, isolated game inventory icon, clean silhouette,
+square composition
+```
+
+Podmień `[ITEM]` wg typu (te odpowiadają realnym typom przedmiotów w grze —
+`packages/shared/src/schemas/enums.ts`, `ItemTypeSchema`):
+
+| Typ w grze | `[ITEM]` do promptu |
+|---|---|
+| `weapon` | ornate one-handed sword with engraved crossguard |
+| `armor` | segmented plate chest armor, battle-worn |
+| `helmet` | horned steel helmet with etched visor |
+| `boots` | reinforced leather greaves with steel buckles |
+| `shield` | round kite shield with engraved gold rim emblem |
+| `necklace` | gold pendant necklace with a single dark gemstone |
+| `earrings` | pair of ornate gold dangling earrings |
+| `ring` | thick engraved gold signet ring with a gem |
+| `consumable` | glowing red potion in an ornate glass vial with cork |
+| `material` | rough uncut ore crystal cluster |
+| `chest` | ornate iron-bound treasure chest, closed |
+| `rod` (wędka) | wooden fishing rod with brass fittings and reel |
+| `pickaxe` | mining pickaxe with worn wooden handle and steel head |
+| `bait`/`catalyst` | small glowing alchemical vial with swirling liquid |
+| `book` | closed leather-bound spellbook with a gold clasp |
+
+Jedna generacja = jeden konkretny przedmiot (np. "krótki miecz z rubinem w rękojeści", nie cały
+wiersz tabeli naraz) — im bardziej szczegółowy opis w `[ITEM]`, tym bliżej finalnej grafiki,
+reszta promptu (styl/oświetlenie/transparent background) zostaje bez zmian dla spójności całego
+zestawu ikon.
+
 ## Checklista przed wysłaniem
 
 1. Tekst po polsku, w tonie reszty gry.
