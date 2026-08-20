@@ -12,7 +12,7 @@ import { OrnateCorners } from "./OrnateCorners";
  * of the screen (e.g. the selected-item stat readout) — thinner border, smaller/dimmer corners,
  * no heavy drop shadow, so it doesn't visually compete with the panels around it.
  *
- * `cornerStyle="ornate"` swaps in OrnateCorners (double-line bracket + curled tail) and an inset
+ * `cornerStyle="ornate"` swaps in OrnateCorners (real engraved-gold corner art) and an inset
  * secondary rule, for a heavier nested picture-frame look — opt-in per surface (currently just
  * the expedition map) rather than the app-wide default. */
 export function PanelFrame({
@@ -45,7 +45,7 @@ export function PanelFrame({
     >
       {ornate && <div className="pointer-events-none absolute inset-1 border border-gold/20" />}
       {ornate ? (
-        <OrnateCorners size={secondary ? 24 : 36} colorClassName={secondary ? "text-gold/60" : "text-gold"} />
+        <OrnateCorners size={secondary ? 56 : 84} opacity={secondary ? 0.6 : 1} />
       ) : (
         <PanelCorners size={secondary ? 13 : 20} colorClassName={secondary ? "text-gold/60" : "text-gold"} />
       )}

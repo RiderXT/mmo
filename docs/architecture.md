@@ -2832,6 +2832,45 @@ bazie (`prisma.user.findUnique` po fakcie zwrócił `null`); próba usunięcia w
 przez bezpośrednie zapytanie do API poprawnie odrzucona z 400. `pnpm -r typecheck` czysto,
 standalone typecheck `scripts/bot/*.ts` czysto.
 
+### Prawdziwa grafika zamiast CSS-owej aproksymacji ramki mapy ekspedycji (2026-08-20)
+
+Bezpośrednia kontynuacja `docs/karty-wzor.md` (wcześniej tego dnia) — user wygenerował przez AI
+narożnik wg promptu z tego dokumentu, przesłał plik, i poprosił o wdrożenie 1:1 zamiast dawnej
+ręcznie rysowanej aproksymacji SVG w `OrnateCorners.tsx`.
+
+**Problem z plikiem źródłowym**: PNG był w formacie RGBA (kanał alfa istnieje strukturalnie), ale
+każdy piksel miał `alpha=255` — czyli technicznie "ma kanał alfa", ale realnie białe, w pełni
+nieprzezroczyste tło (typowy efekt generatorów AI, które nie eksportują prawdziwej przezroczystości
+mimo zapisu w formacie RGBA). Bez obróbki wyglądałby jako biały prostokąt na ciemnym tle gry.
+
+**Usunięcie tła** — Python + Pillow (`pip install pillow`, brak innych zależności): próg wg
+odległości koloru piksela od bieli (`dist = sqrt((255-r)² + (255-g)² + (255-b)²)`), z pasmem
+przejściowym 25–85 dającym miękkie, antyaliasowane krawędzie zamiast twardego, postrzępionego
+cięcia — piksele blisko białego (`dist≤25`) w pełni przezroczyste, piksele wyraźnie kolorowe
+(`dist≥85`, np. jasne złote refleksy) zostają w pełni nieprzezroczyste, strefa pośrednia
+interpoluje liniowo. Zadziałało czysto na obu wariantach usera bez widocznej białej obwódki —
+zweryfikowane wizualnie przez złożenie na prawdziwym kolorze `ink` gry (`oklch(12% 0.02 45)`) i
+przesłanie tego podglądu userowi. Następnie przycięte do faktycznego bounding-boxa treści
+(`Image.getbbox()` na kanale alfa) — z 600×600 do 541×529, żeby rozmiar wizualny w kodzie
+odpowiadał faktycznej zawartości, nie pustemu marginesowi.
+
+**Integracja** — pierwszy w tym repo statyczny, budowany w kompilacji asset graficzny (`apps/web/src/assets/frames/corner-ornate.png`,
+importowany przez Vite jak zwykły moduł — brak wcześniejszego precedensu, wcześniej całość grafiki
+to albo ręcznie rysowane inline SVG, albo `imageUrl` wgrywane w runtime przez panel admina dla
+itemów). `OrnateCorners.tsx` przebudowany z komponentu rysującego SVG na cztery `<img>` tego
+samego pliku, obracane przez te same klasy CSS co poprzednio (`rotate-90`/`rotate-180`/
+`-rotate-90`) — bo cały czas był to jeden wzór narożnika powielony w 4 miejscach, więc jeden plik
+w pełni wystarcza na całą ramkę. `colorClassName` (tint przez `currentColor`, nie ma zastosowania
+do rastrowego PNG) zastąpiony przez `opacity` — `PanelFrame.tsx` zaktualizowany analogicznie.
+Rozmiar podniesiony z 36px/24px do 84px/56px (primary/secondary) — prawdziwa grafika ma dużo
+więcej detalu niż poprzednia prosta linia, przy starym rozmiarze drobne zdobienia byłyby
+nieczytelne.
+
+Zweryfikowane strukturalnie w przeglądarce (zrzut ekranu niedostępny w tej sesji — pane
+niewidoczny po stronie usera): wszystkie 4 `<img>` poprawnie się załadowały (`complete: true`,
+`naturalWidth/Height` zgodne z przyciętym plikiem), poprawnie pozycjonowane i obracane na każdym
+rogu panelu "Mapa ekspedycji". `pnpm --filter web typecheck` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
