@@ -39,6 +39,10 @@ function countRunning(): number {
   return n;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function appendLog(run: BotRun, text: string) {
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
@@ -81,8 +85,12 @@ export async function launchBots(
       logLines: [],
     };
 
-    // shell:true so this resolves npx.cmd on Windows dev and npx on Linux prod without branching.
-    const child = spawn("npx", ["tsx", "scripts/bot/run.ts"], {
+    // node_modules/.bin/tsx directly (not "npx tsx") — npx spawns its own child to resolve the
+    // package before delegating, so with N bots launched at once that was silently 2N processes
+    // starting their JS/TS runtime simultaneously, doubling the CPU/memory spike for no benefit
+    // (tsx is already a workspace dependency, nothing to resolve). shell:true still lets this
+    // resolve tsx.CMD on Windows dev and the posix shebang script on Linux prod without branching.
+    const child = spawn("node_modules/.bin/tsx", ["scripts/bot/run.ts"], {
       cwd: process.cwd(),
       shell: true,
       env: {
@@ -101,6 +109,16 @@ export async function launchBots(
       run.status = code === 0 ? "completed" : run.status === "stopped" ? "stopped" : "failed";
       run.exitCode = code;
       run.endedAt = new Date().toISOString();
+      // Persisted to GameLog (DB), unlike `runs` — survives a server restart, so a crash that
+      // wipes the in-memory run list (e.g. systemd restarting the whole API + child cgroup after
+      // an overload crash) still leaves a trail of which bots actually finished vs. got cut off.
+      void logAction({
+        module: "admin:bots",
+        action: "exit",
+        actorUserId,
+        requestId,
+        payload: { id, name: run.name, status: run.status, exitCode: code },
+      });
     });
     child.on("error", (err) => {
       run.status = "failed";
@@ -111,6 +129,13 @@ export async function launchBots(
     runs.set(id, run);
     processes.set(id, child);
     launched.push(run);
+
+    // Stagger launches instead of firing all N at once — each bot spins up its own tsx/Node
+    // runtime, so launching e.g. 20 simultaneously spikes CPU/memory hard enough to be a
+    // plausible cause of a real production crash (server restart wipes this whole run list, see
+    // docstring above). 250ms/bot spreads that spike without meaningfully changing total runtime
+    // for a test that's expected to take many minutes anyway.
+    if (i < input.count - 1) await sleep(250);
   }
 
   await logAction({

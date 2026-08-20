@@ -2918,6 +2918,39 @@ Zweryfikowane w przeglądarce: wszystkie ikony sidebaru (`nav img`) załadowały
 potwierdza podmianę, nie tylko podmianę pliku pod starą nazwą. `pnpm --filter web typecheck`
 czysto.
 
+### Diagnoza: 20 botów na VPS ubite w trakcie testu, panel admina pokazał zero (2026-08-20)
+
+User odpalił 20 botów celujących w poziom 50 — najwyższy osiągnięty poziom to 11, a panel admina
+("Panel Serwer" → Boty) po fakcie nie pokazywał ŻADNEGO uruchomionego bota, mimo że część
+powinna wciąż działać. Diagnoza z przeglądu kodu (bez bezpośredniego dostępu do VPS w tej
+sesji): `runs`/`processes` w [service.ts](../apps/api/src/modules/admin/bots/service.ts) to
+zwykłe `Map` w pamięci procesu API — z założenia (`docstring` pliku) nie przeżywają restartu
+serwera. `deploy/mmo-api.service.example` to jednostka systemd z `Restart=on-failure` i
+domyślnym `KillMode=control-group`, który przy restarcie zabija CAŁĄ cgroupę procesu, czyli
+także wszystkie procesy-dzieci (boty) uruchomione przez `spawn()`, nawet bez `detached:true`.
+Najbardziej prawdopodobny łańcuch zdarzeń: 20 równoczesnych `npx tsx scripts/bot/run.ts` to w
+praktyce ~40 procesów odpalających się jednocześnie (`npx` samo w sobie tworzy osobny proces do
+rozwiązania pakietu przed delegacją do `tsx`) — realny skok obciążenia CPU/RAM na skromnym VPS,
+prawdopodobnie crash API → restart przez systemd → cgroup kill zabija boty razem z restartem →
+`runs` Map startuje pusta w nowym procesie.
+
+Trzy niezależne poprawki w `service.ts`, bez zmiany API/kontraktu panelu:
+1. **`node_modules/.bin/tsx` zamiast `npx tsx`** — usuwa zbędny drugi proces per bota (`npx`
+   resolution), realnie połowa liczby jednocześnie startujących procesów przy tym samym `count`.
+2. **Stopniowanie startu** (`await sleep(250)` między kolejnymi `spawn()`) — rozkłada skok
+   obciążenia zamiast odpalać N procesów w jednej klatce zdarzeń.
+3. **Trwały log wyjścia bota przez `logAction`** (zapis do tabeli `GameLog`, przeżywa restart —
+   w przeciwieństwie do `runs` Map) — nawet gdy cały proces API padnie i zabierze ze sobą
+   pamięciowy stan panelu, w logu akcji zostaje ślad który bot wystartował i czy/jak się
+   zakończył, zamiast całkowitej ciszy jak w tym incydencie.
+
+Nie zmieniono (świadomie, poza zakresem tej poprawki): domyślny `MAX_CONCURRENT=20` — bez
+dostępu do realnych specyfikacji VPS nie ma podstawy do wyboru innej liczby, a stopniowanie +
+tańszy spawn powinny znacząco obniżyć szczytowe obciążenie przy tej samej liczbie botów.
+Ewentualne raporty ukończonych botów sprzed crasha mogą wciąż leżeć na VPS w
+`apps/api/scripts/bot/reports/*.md` (zapis na dysk, nie do pamięci procesu) — do sprawdzenia
+bezpośrednio na serwerze. `pnpm --filter api exec tsc --noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
