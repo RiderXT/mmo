@@ -208,6 +208,7 @@ export async function updateItem(
         gridWidth: input.gridWidth,
         ...potionData(input),
         ...gatherData(input),
+        ...bookData(input),
         ...catalystData(input),
         upgradeRequirements: {
           create: input.upgradeRequirements.map((r) => ({
