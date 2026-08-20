@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 import { PanelCorners } from "./PanelCorners";
 import { OrnateCorners } from "./OrnateCorners";
+import { OrnateEdges } from "./OrnateEdges";
+// Stone-texture fill (panel-fill.png) intentionally not wired in yet — the source file the user
+// sent got overwritten by their bg-removal tool reusing the same filename before it was copied
+// in here; waiting on a re-send. Corners + edges below don't depend on it.
 
 /** Ornate "window" panel — titled header + gold corner ornaments. Uses the shared `panel`
  * token (tailwind.config.js) for its background — a near-neutral stone grey (oklch chroma
@@ -12,14 +16,11 @@ import { OrnateCorners } from "./OrnateCorners";
  * of the screen (e.g. the selected-item stat readout) — thinner border, smaller/dimmer corners,
  * no heavy drop shadow, so it doesn't visually compete with the panels around it.
  *
- * `cornerStyle="ornate"` swaps in OrnateCorners (real engraved-gold corner art) — opt-in per
- * surface (currently just the expedition map) rather than the app-wide default. No plain CSS
- * `border` line at all here (tried keeping one, twice): a hairline line has nowhere near the
- * visual weight of the chunky engraved bracket art, so wherever they'd need to meet — the corner,
- * or the art's own transparent gaps — they read as two different frames stapled together, not
- * one. The corner art alone (plus `bg-panel` giving the panel body a real edge against `ink`)
- * carries the framing; this is the same "corners only, no continuous line" treatment already used
- * for item sockets (see inventory/SocketCorners.tsx). */
+ * `cornerStyle="ornate"` swaps in OrnateCorners (real engraved-gold corner art) and OrnateEdges
+ * (matching straight bands connecting them into an actual frame — see OrnateEdges.tsx for why a
+ * plain CSS `border` line never worked here, tried twice) — opt-in per surface (currently just
+ * the expedition map) rather than the app-wide default. Tiled stone-texture fill (replacing flat
+ * `bg-panel`) is planned but not wired in yet — see OrnateEdges.tsx's sibling note. */
 export function PanelFrame({
   title,
   headerRight,
@@ -42,6 +43,10 @@ export function PanelFrame({
 }) {
   const secondary = emphasis === "secondary";
   const ornate = cornerStyle === "ornate";
+  const cornerSize = secondary ? 56 : 84;
+  // Roughly matches the corner art's own arm thickness at that display size, so the edge band
+  // doesn't visibly jump in weight where it meets the corner.
+  const edgeThickness = secondary ? 11 : 16;
   return (
     <div
       className={`relative bg-panel ${ornate ? "" : "border"} ${
@@ -51,7 +56,10 @@ export function PanelFrame({
       } ${className}`}
     >
       {ornate ? (
-        <OrnateCorners size={secondary ? 56 : 84} opacity={secondary ? 0.6 : 1} />
+        <>
+          <OrnateEdges cornerSize={cornerSize} thickness={edgeThickness} opacity={secondary ? 0.7 : 1} />
+          <OrnateCorners size={cornerSize} opacity={secondary ? 0.6 : 1} />
+        </>
       ) : (
         <PanelCorners size={secondary ? 13 : 20} colorClassName={secondary ? "text-gold/60" : "text-gold"} />
       )}

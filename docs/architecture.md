@@ -3130,6 +3130,50 @@ linii") już zaakceptowany wcześniej dla kwadratów itemów (`SocketCorners`). 
 `getComputedStyle` na panelu "Mapa ekspedycji" pokazuje `borderWidth: 0px`. `pnpm --filter web
 exec tsc --noEmit` czysto.
 
+### Prawdziwa ramka 9-slice: narożnik + paski krawędzi (2026-08-20)
+
+User przesłał paski krawędzi (2 warianty: w pełni zdobiony vs zdobione końce + gładki środek) i
+teksturę wypełnienia — zbudowana prawdziwa ramka łącząca narożniki w spójną całość, zamiast
+samotnych rogów na płaskim tle.
+
+**Wybór wariantu paska**: zdobione-końce+gładki-środek (nie w-pełni-zdobiony) — narożnik
+(`corner-ornate.png`) już ma bogate zdobienia na swoich ramionach, więc pasek z ornamentem na
+CAŁEJ długości powielałby wzór dokładnie tam gdzie się stykają. Gładki środek to właściwy
+kandydat na powtarzalny łącznik.
+
+**Przygotowanie assetu** (skrypt roboczy w `Tymczasowe/`, nie w repo): usunięcie szachownicy z JPG
+(ten sam problem co przy ikonach itemów), przycięcie do realnej zawartości (pierwsza próba dała
+błędny bbox przez pojedynczy odizolowany artefakt-piksel wymuszający zbyt wysoki crop —
+naprawione filtrowaniem wierszy po gęstości nieprzezroczystych pikseli, nie samym bbox). Środkowy
+gładki fragment (organiczna, "brudna" tekstura metalu, nie geometryczny wzór) wygładzony technika
+"offset-and-heal" (przesunięcie o połowę szerokości + liniowe blendowanie pasa wokół nowego szwu w
+środku) — zmierzona różnica lewej/prawej krawędzi spadła do ~3.0/255, zweryfikowana wizualnie
+kafelkiem 3x bez widocznego twardego szwu.
+
+**Nowy komponent** [OrnateEdges.tsx](../apps/web/src/components/common/OrnateEdges.tsx) — 4 pasy
+(`absolute`, pozycjonowane między narożnikami) z `background-repeat: repeat-x`/`repeat-y`.
+Pionowe krawędzie używają OSOBNEGO, wstępnie obróconego o 90° pliku (`panel-edge-vertical.png`),
+nie transformacji CSS na powtarzającym się tle — obrót przez CSS wymagałby znajomości
+wyrenderowanej wysokości kontenera w czasie budowania stylu, obrócony plik działa niezależnie od
+wysokości panelu. **Ważne dla przyszłych zmian**: pozycjonowanie zależne od `cornerSize` jest przez
+inline `style`, NIE przez dynamiczne klasy Tailwind (`left-[${cornerSize}px]`) — skaner Tailwinda
+nie widzi dynamicznie budowanych stringów szablonowych i po cichu nie wygeneruje żadnego CSS,
+dokładnie ta sama klasa błędu co naprawiony wcześniej problem z kolorami oklch.
+
+**Tekstura wypełnienia — NIEwdrożona**: plik przesłany przez usera, wcześniej zweryfikowany
+pikselowo jako bezszwowy (`0.0` różnicy na krawędziach), okazał się przy faktycznym użyciu
+zawierać zupełnie inny obrazek (fiolkę mikstury) — narzędzie usera do usuwania tła nadpisało ten
+sam plik (powtarzalna nazwa UUID) między momentem weryfikacji a momentem kopiowania do repo.
+Złapane PRZED wysłaniem do usera dzięki złożeniu testowego mockupu całej ramki w Pillow przed
+zgłoszeniem gotowości — mockup pokazał powielone fiolki zamiast kamienia. `PanelFrame.tsx` w
+międzyczasie zostaje przy płaskim `bg-panel`; import tekstury i jej wpięcie do stylu inline
+świadomie wycofane (nie tylko zakomentowane) żeby build nie zależał od brakującego pliku.
+Zweryfikowane: mockup Pillow z narożnikami+paskami na płaskim tle (bez błędnej tekstury) wygląda
+spójnie — rogi płynnie łączą się z paskami, ta sama grubość linii. W przeglądarce: panel "Mapa
+ekspedycji" ma 10 dzieci (4 paski + 4 narożniki + nagłówek + treść), wszystkie 3 nowe pliki
+(`panel-edge.png`, `panel-edge-vertical.png`) ładują się 200 OK. `pnpm --filter web exec tsc
+--noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
