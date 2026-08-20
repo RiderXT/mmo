@@ -75,31 +75,40 @@ no text, no hands, no character, isolated game inventory icon, clean silhouette,
 square composition
 ```
 
-Podmień `[ITEM]` wg typu (te odpowiadają realnym typom przedmiotów w grze —
-`packages/shared/src/schemas/enums.ts`, `ItemTypeSchema`):
+Podmień `[ITEM]` wg typu. Kolejność poniżej = dokładnie kolejność `ItemTypeSchema` w
+`packages/shared/src/schemas/enums.ts` — generuj po kolei w tej kolejności, wtedy nazwa pliku
+(1, 2, 3…) jednoznacznie mapuje się na typ, bez zgadywania po wyglądzie później. `bait` i
+`catalyst` to dwie różne rzeczy w grze (przynęta wędkarska vs. ulepszacz kowadła) — rozdzielone
+na dwa różne opisy, żeby nie wyszły jak ten sam przedmiot.
 
-| Typ w grze | `[ITEM]` do promptu |
-|---|---|
-| `weapon` | ornate one-handed sword with engraved crossguard |
-| `armor` | segmented plate chest armor, battle-worn |
-| `helmet` | horned steel helmet with etched visor |
-| `boots` | reinforced leather greaves with steel buckles |
-| `shield` | round kite shield with engraved gold rim emblem |
-| `necklace` | gold pendant necklace with a single dark gemstone |
-| `earrings` | pair of ornate gold dangling earrings |
-| `ring` | thick engraved gold signet ring with a gem |
-| `consumable` | glowing red potion in an ornate glass vial with cork |
-| `material` | rough uncut ore crystal cluster |
-| `chest` | ornate iron-bound treasure chest, closed |
-| `rod` (wędka) | wooden fishing rod with brass fittings and reel |
-| `pickaxe` | mining pickaxe with worn wooden handle and steel head |
-| `bait`/`catalyst` | small glowing alchemical vial with swirling liquid |
-| `book` | closed leather-bound spellbook with a gold clasp |
+| # | Typ w grze | `[ITEM]` do promptu |
+|---|---|---|
+| 1 | `weapon` | ornate one-handed sword with engraved crossguard |
+| 2 | `armor` | segmented plate chest armor, battle-worn |
+| 3 | `helmet` | horned steel helmet with etched visor |
+| 4 | `boots` | reinforced leather greaves with steel buckles |
+| 5 | `shield` | round kite shield with engraved gold rim emblem |
+| 6 | `necklace` | gold pendant necklace with a single dark gemstone |
+| 7 | `earrings` | pair of ornate gold dangling earrings |
+| 8 | `ring` | thick engraved gold signet ring with a gem |
+| 9 | `consumable` | glowing red healing potion in a round glass vial with cork |
+| 10 | `material` | rough uncut ore crystal cluster |
+| 11 | `quest` | sealed wax-stamped parchment scroll tied with cord |
+| 12 | `chest` | ornate iron-bound treasure chest, closed |
+| 13 | `rod` (wędka) | wooden fishing rod with brass fittings and reel |
+| 14 | `pickaxe` | mining pickaxe with worn wooden handle and steel head |
+| 15 | `bait` (przynęta) | small cork-topped glass jar of glistening fishing lures and bait |
+| 16 | `catalyst` (ulepszacz kowadła) | small vial of swirling molten-gold forge essence with a rune-stamped stopper |
+| 17 | `book` | closed leather-bound spellbook with a gold clasp |
 
 Jedna generacja = jeden konkretny przedmiot (np. "krótki miecz z rubinem w rękojeści", nie cały
 wiersz tabeli naraz) — im bardziej szczegółowy opis w `[ITEM]`, tym bliżej finalnej grafiki,
 reszta promptu (styl/oświetlenie/transparent background) zostaje bez zmian dla spójności całego
 zestawu ikon.
+
+**Format wyjściowy generatora**: jeśli generator nie umie zapisać prawdziwej przezroczystości
+(np. eksport tylko do JPG), często rysuje szachownicę bezpośrednio w pikselach zamiast realnego
+kanału alfa — to trzeba wtedy usunąć osobno przed wdrożeniem (nie jest to błąd promptu).
 
 ## Checklista przed wysłaniem
 
