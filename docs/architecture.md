@@ -2767,6 +2767,29 @@ Naprawione retry z krótkim odczekaniem (do 5 prób, 500ms odstępu) WYŁĄCZNIE
 awarii). Zweryfikowane lokalnie (brak regresji — normalny przebieg nadal odbiera nagrodę za
 pierwszym razem, retry po prostu nigdy się nie uruchamia gdy zegary się zgadzają).
 
+### Zakładka "Serwer": drill-down w błędy per moduł (2026-08-20)
+
+User zapytał, patrząc na tabelę modułów: skoro widać "inventory: 4 błędy (5.2%)", skąd wiadomo
+CZEGO one dotyczą — tabela dotąd pokazywała tylko licznik, bez żadnych szczegółów.
+
+**Backend** (`lib/serverLoad.ts`): nowy rolling bufor `recentErrors` (maks. 300 wpisów łącznie,
+FIFO) — każdy wpis: znacznik czasu, moduł, metoda, ścieżka, kod statusu, i KOMUNIKAT wyciągnięty
+z treści odpowiedzi. Hook zmieniony z `onResponse` na `onSend` — to jedyny hook Fastify, który
+wciąż ma dostęp do treści odpowiedzi PRZED wysłaniem, więc dla statusów ≥400 parsuje JSON body i
+wyciąga pole `error` (potwierdzone: cały ten codebase jednolicie kształtuje błędy jako `{ error:
+"..." }` — globalny error handler, `requireAuth`/`requireRole`, notFoundHandler, i każdy route
+rzucający własny `*Error` — więc to pokrywa praktycznie każdy błąd 4xx/5xx w aplikacji, nie tylko
+niektóre). `reply.elapsedTime` dalej działa poprawnie w `onSend` (Fastify v5).
+
+**Frontend**: liczba błędów w tabeli modułów to teraz przycisk — klik rozwija wiersz ze
+szczegółową tabelką (kiedy/metoda/ścieżka/kod/komunikat) przefiltrowaną do tego jednego modułu,
+najnowsze u góry.
+
+Zweryfikowane w przeglądarce: moduł "other" (favicon/root — oczekiwany szum przeglądarki, nie
+prawdziwy problem) pokazał po rozwinięciu dokładnie `GET /favicon.ico 404 Nie znaleziono`, `GET /
+404`, `HEAD / 404` — dokładnie to pytanie usera ("skąd mam wiedzieć czego dotyczą") ma teraz
+bezpośrednią odpowiedź w UI zamiast suchej liczby. `pnpm -r typecheck` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

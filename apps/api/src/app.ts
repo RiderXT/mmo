@@ -62,9 +62,27 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Per-module request timing — deliberately the very first hook registered, so its own overhead
   // isn't attributed to whichever route happens to run after it, and so it wraps every request
-  // (including ones that error out downstream) rather than only successful ones.
-  app.addHook("onResponse", async (request, reply) => {
-    serverLoadTracker.recordRequest(moduleForPath(request.url), reply.elapsedTime, reply.statusCode);
+  // (including ones that error out downstream) rather than only successful ones. onSend (not
+  // onResponse) specifically so error responses' JSON body is still available to pull the
+  // `{ error: "..." }` message out of — this codebase's routes.ts files uniformly shape error
+  // bodies that way (see any `reply.code(err.statusCode).send({ error: err.message })`).
+  app.addHook("onSend", async (request, reply, payload) => {
+    const statusCode = reply.statusCode;
+    let message: string | undefined;
+    if (statusCode >= 400 && typeof payload === "string") {
+      try {
+        const parsed = JSON.parse(payload) as { error?: unknown };
+        if (typeof parsed.error === "string") message = parsed.error;
+      } catch {
+        // Not JSON (or not our error shape) — recorded without a message, still useful.
+      }
+    }
+    serverLoadTracker.recordRequest(moduleForPath(request.url), reply.elapsedTime, statusCode, {
+      method: request.method,
+      path: request.url,
+      message,
+    });
+    return payload;
   });
 
   // Uploaded item artwork — served from apps/api/uploads (relative to cwd, matching how this

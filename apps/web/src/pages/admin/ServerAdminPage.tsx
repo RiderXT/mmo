@@ -32,6 +32,7 @@ function StatusBadge({ status }: { status: BotRunDto["status"] }) {
 export function ServerAdminPage() {
   const queryClient = useQueryClient();
   const [expandedBotId, setExpandedBotId] = useState<string | null>(null);
+  const [expandedErrorsModule, setExpandedErrorsModule] = useState<string | null>(null);
   const [form, setForm] = useState({ count: 1, className: "", targetLevel: 10, maxMinutes: 60 });
   const [launchError, setLaunchError] = useState<string | null>(null);
 
@@ -177,18 +178,75 @@ export function ServerAdminPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line bg-ink">
-              {(load?.modules ?? []).map((m) => (
-                <tr key={m.module}>
-                  <td className="px-3 py-2 font-mono text-xs text-parchment">{m.module}</td>
-                  <td className="px-3 py-2 tabular-nums text-parchment-dim">{m.count}</td>
-                  <td className="px-3 py-2 tabular-nums text-parchment-dim">{fmtMs(m.avgMs)}</td>
-                  <td className="px-3 py-2 tabular-nums text-parchment-dim">{fmtMs(m.maxMs)}</td>
-                  <td className={`px-3 py-2 tabular-nums ${m.errorCount > 0 ? "text-red-400" : "text-parchment-dim"}`}>
-                    {m.errorCount} ({m.errorRatePct}%)
-                  </td>
-                  <td className="px-3 py-2 tabular-nums font-medium text-gold-bright">{fmtMs(m.totalMs)}</td>
-                </tr>
-              ))}
+              {(load?.modules ?? []).map((m) => {
+                const moduleErrors = (load?.recentErrors ?? []).filter((e) => e.module === m.module);
+                const isExpanded = expandedErrorsModule === m.module;
+                return (
+                  <Fragment key={m.module}>
+                    <tr>
+                      <td className="px-3 py-2 font-mono text-xs text-parchment">{m.module}</td>
+                      <td className="px-3 py-2 tabular-nums text-parchment-dim">{m.count}</td>
+                      <td className="px-3 py-2 tabular-nums text-parchment-dim">{fmtMs(m.avgMs)}</td>
+                      <td className="px-3 py-2 tabular-nums text-parchment-dim">{fmtMs(m.maxMs)}</td>
+                      <td className="px-3 py-2 tabular-nums">
+                        {m.errorCount > 0 ? (
+                          <button
+                            onClick={() => setExpandedErrorsModule(isExpanded ? null : m.module)}
+                            className="text-red-400 underline decoration-dotted hover:text-red-300"
+                          >
+                            {m.errorCount} ({m.errorRatePct}%)
+                          </button>
+                        ) : (
+                          <span className="text-parchment-dim">0</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums font-medium text-gold-bright">{fmtMs(m.totalMs)}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={6} className="bg-panel-raised px-3 py-2">
+                          <p className="mb-1 text-xs font-medium text-parchment-dim">
+                            Ostatnie błędy tego modułu (najnowsze u góry, maks. 300 w pamięci łącznie):
+                          </p>
+                          <div className="max-h-64 overflow-y-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="text-parchment-faint">
+                                <tr>
+                                  <th className="py-1 pr-3">Kiedy</th>
+                                  <th className="py-1 pr-3">Metoda</th>
+                                  <th className="py-1 pr-3">Ścieżka</th>
+                                  <th className="py-1 pr-3">Kod</th>
+                                  <th className="py-1">Komunikat</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-line/50">
+                                {moduleErrors.map((e, i) => (
+                                  <tr key={i}>
+                                    <td className="py-1 pr-3 text-parchment-faint">
+                                      {new Date(e.t).toLocaleTimeString()}
+                                    </td>
+                                    <td className="py-1 pr-3 font-mono text-parchment-dim">{e.method}</td>
+                                    <td className="py-1 pr-3 font-mono text-parchment-dim">{e.path}</td>
+                                    <td className="py-1 pr-3 text-red-400">{e.statusCode}</td>
+                                    <td className="py-1 text-parchment">{e.message ?? "—"}</td>
+                                  </tr>
+                                ))}
+                                {moduleErrors.length === 0 && (
+                                  <tr>
+                                    <td colSpan={5} className="py-2 text-parchment-faint">
+                                      Brak szczegółów w buforze (błędy sprzed resetu/startu serwera).
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {(load?.modules ?? []).length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">

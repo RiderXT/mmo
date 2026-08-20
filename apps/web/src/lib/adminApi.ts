@@ -401,9 +401,18 @@ export interface ServerLoadSystemSample {
   systemLoadavg1m: number;
   systemFreeMemPercent: number;
 }
+export interface ServerLoadErrorEntry {
+  t: number;
+  module: string;
+  method: string;
+  path: string;
+  statusCode: number;
+  message?: string;
+}
 export interface ServerLoadSnapshotDto {
   modules: ServerLoadModuleStat[];
   timelineByModule: Record<string, { minuteStartMs: number; count: number; totalMs: number; errorCount: number }[]>;
+  recentErrors: ServerLoadErrorEntry[];
   systemSamples: ServerLoadSystemSample[];
   latest: ServerLoadSystemSample | null;
   cpuCount: number;

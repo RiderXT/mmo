@@ -31,6 +31,19 @@ interface MinuteBucket {
 const MAX_TIMELINE_MINUTES = 120;
 const SYSTEM_SAMPLE_INTERVAL_MS = 5000;
 const MAX_SYSTEM_SAMPLES = 240; // 20 minutes at 5s resolution
+const MAX_RECENT_ERRORS = 300;
+
+export interface ErrorEntry {
+  t: number; // epoch ms
+  module: string;
+  method: string;
+  path: string;
+  statusCode: number;
+  // Extracted from the JSON response body's `error` field where present (this codebase's
+  // convention — see any routes.ts's `reply.code(...).send({ error: message })`). Absent when
+  // the body isn't that shape (e.g. a raw Fastify validation error, or a non-JSON response).
+  message?: string;
+}
 
 interface SystemSample {
   t: number; // epoch ms
@@ -55,6 +68,7 @@ interface SystemSample {
 class ServerLoadTracker {
   private byModule = new Map<string, RouteStats>();
   private timelineByModule = new Map<string, MinuteBucket[]>();
+  private recentErrors: ErrorEntry[] = [];
   private systemSamples: SystemSample[] = [];
   private eventLoopMonitor = monitorEventLoopDelay({ resolution: 20 });
   private lastCpuUsage = process.cpuUsage();
@@ -65,12 +79,28 @@ class ServerLoadTracker {
     setInterval(() => this.sampleSystem(), SYSTEM_SAMPLE_INTERVAL_MS).unref();
   }
 
-  recordRequest(module: string, durationMs: number, statusCode: number) {
+  recordRequest(
+    module: string,
+    durationMs: number,
+    statusCode: number,
+    request?: { method: string; path: string; message?: string },
+  ) {
     const stats = this.byModule.get(module) ?? { count: 0, totalMs: 0, maxMs: 0, errorCount: 0 };
     stats.count += 1;
     stats.totalMs += durationMs;
     stats.maxMs = Math.max(stats.maxMs, durationMs);
-    if (statusCode >= 400) stats.errorCount += 1;
+    if (statusCode >= 400) {
+      stats.errorCount += 1;
+      this.recentErrors.push({
+        t: Date.now(),
+        module,
+        method: request?.method ?? "?",
+        path: request?.path ?? "?",
+        statusCode,
+        message: request?.message,
+      });
+      while (this.recentErrors.length > MAX_RECENT_ERRORS) this.recentErrors.shift();
+    }
     this.byModule.set(module, stats);
 
     const minuteStartMs = Math.floor(Date.now() / 60_000) * 60_000;
@@ -136,6 +166,9 @@ class ServerLoadTracker {
     return {
       modules,
       timelineByModule,
+      // Newest first — that's what an admin scanning "what just broke" wants to see without
+      // scrolling.
+      recentErrors: [...this.recentErrors].reverse(),
       systemSamples: this.systemSamples,
       latest: this.systemSamples[this.systemSamples.length - 1] ?? null,
       cpuCount: os.cpus().length,
@@ -146,6 +179,7 @@ class ServerLoadTracker {
   reset() {
     this.byModule.clear();
     this.timelineByModule.clear();
+    this.recentErrors = [];
   }
 }
 
