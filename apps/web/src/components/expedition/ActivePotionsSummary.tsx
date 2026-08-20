@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { CombatEvent } from "@mmo/shared";
 import type { ItemDto } from "../../lib/adminApi";
 import { listInventory } from "../../lib/inventoryApi";
 import { API_URL } from "../../lib/apiClient";
@@ -27,6 +28,38 @@ function SnapshotItemBox({ item, quantity }: { item: ItemDto | undefined; quanti
   );
 }
 
+/** The combat sim only tags a `potion_used` event with the item's display name (not an id — see
+ * combat.ts), so slots are matched back by name. Consumption is distributed across slots holding
+ * the same-named item in slotIndex order (first slot depletes before the next starts) — a real
+ * edge case only when a player splits one item across two active slots, which the UI doesn't
+ * currently encourage. */
+function applyRevealedConsumption(
+  snapshot: { slotIndex: number; itemId: string; quantity: number }[],
+  revealedEvents: CombatEvent[] | undefined,
+  itemFor: ((itemId: string) => ItemDto | undefined) | undefined,
+): Map<number, number> {
+  const remaining = new Map(snapshot.map((s) => [s.slotIndex, s.quantity]));
+  if (!revealedEvents || !itemFor) return remaining;
+
+  const consumedByName = new Map<string, number>();
+  for (const event of revealedEvents) {
+    if (event.type !== "potion_used") continue;
+    consumedByName.set(event.itemName, (consumedByName.get(event.itemName) ?? 0) + 1);
+  }
+  if (consumedByName.size === 0) return remaining;
+
+  for (const entry of [...snapshot].sort((a, b) => a.slotIndex - b.slotIndex)) {
+    const name = itemFor(entry.itemId)?.name;
+    if (!name) continue;
+    const budget = consumedByName.get(name) ?? 0;
+    if (budget <= 0) continue;
+    const taken = Math.min(budget, remaining.get(entry.slotIndex) ?? 0);
+    remaining.set(entry.slotIndex, (remaining.get(entry.slotIndex) ?? 0) - taken);
+    consumedByName.set(name, budget - taken);
+  }
+  return remaining;
+}
+
 /** Read-only view of the character's active item slots (see EquipmentTab's "Aktywne itemy") —
  * shown in the expedition view so the player can check their potion loadout, exactly which
  * potions get auto-consumed during a fight, at a glance without switching to the Ekwipunek tab.
@@ -38,15 +71,21 @@ function SnapshotItemBox({ item, quantity }: { item: ItemDto | undefined; quanti
  * inventory query — the whole fight, including potion consumption, is resolved atomically at
  * start (see startExpedition), so a live query would already show the post-fight state — often
  * fully empty slots — for the entire time the "w toku" screen stays open. The snapshot is what
- * was actually equipped when this fight began. */
+ * was actually equipped when this fight began; `revealedEvents` (same array ExpeditionPanel
+ * already reveals into CombatLog/MonsterEncounterPanel as the fight's own clock ticks forward)
+ * lets this component count `potion_used` events that have happened SO FAR and subtract them
+ * live, instead of just showing the frozen start-of-fight count with a "may already be used"
+ * disclaimer. */
 export function ActivePotionsSummary({
   characterId,
   snapshot,
   itemFor,
+  revealedEvents,
 }: {
   characterId: string;
   snapshot?: { slotIndex: number; itemId: string; quantity: number }[];
   itemFor?: (itemId: string) => ItemDto | undefined;
+  revealedEvents?: CombatEvent[];
 }) {
   const inventoryQuery = useQuery({
     queryKey: ["inventory", characterId],
@@ -56,17 +95,17 @@ export function ActivePotionsSummary({
 
   if (snapshot) {
     const bySlot = new Map(snapshot.map((s) => [s.slotIndex, s]));
+    const remainingBySlot = applyRevealedConsumption(snapshot, revealedEvents, itemFor);
     return (
       <div className="mt-3 border-t border-line pt-3">
-        <p className="mb-2 text-xs font-medium text-parchment-dim">
-          Aktywne mikstury (stan na start tej walki — mogły już zostać zużyte)
-        </p>
+        <p className="mb-2 text-xs font-medium text-parchment-dim">Aktywne mikstury (na bieżąco w trakcie walki)</p>
         <div className="flex flex-wrap justify-center gap-3">
           {Array.from({ length: ACTIVE_SLOTS }, (_, slotIndex) => {
             const entry = bySlot.get(slotIndex);
+            const remaining = entry ? (remainingBySlot.get(slotIndex) ?? entry.quantity) : 0;
             return (
               <ActiveItemSlotBox key={slotIndex} slotIndex={slotIndex}>
-                {entry && <SnapshotItemBox item={itemFor?.(entry.itemId)} quantity={entry.quantity} />}
+                {entry && remaining > 0 && <SnapshotItemBox item={itemFor?.(entry.itemId)} quantity={remaining} />}
               </ActiveItemSlotBox>
             );
           })}

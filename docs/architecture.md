@@ -3088,6 +3088,34 @@ itemu z realną grafiką pokazuje teraz `oklch(0.62 0.09 250 / 0.5)` (border) i
 `oklch(0.62 0.09 250 / 0.1)` (tło) zamiast domyślnego `rgb(229, 231, 235)`/przezroczystego tła.
 `pnpm --filter web exec tsc --noEmit` czysto.
 
+### Podwójna ramka na mapie ekspedycji + mikstury realnie ubywają w trakcie walki (2026-08-20)
+
+**Narożniki mapy ekspedycji niespójne z ramką** — [PanelFrame.tsx](../apps/web/src/components/common/PanelFrame.tsx)
+przy `cornerStyle="ornate"` rysowało DWIE linie ramki naraz: zewnętrzną `border-gold/40` na całym
+panelu ORAZ dodatkową `inset-1 border-gold/20` (osobny div, 4px w głąb) leżącą bezpośrednio pod
+84px grafiką `OrnateCorners`. Ponieważ grafika narożnika ma własne przezroczyste prześwity (to nie
+pełny kwadrat, tylko wycięty kształt), prosta linia CSS pod spodem przebijała się przez te
+prześwity w innym miejscu niż własne linie rytego wzoru — dwie ramki nie na tej samej pozycji,
+efekt "nie pasują do siebie" widoczny na screenie usera. Usunięty osobny `inset-1` div — sama
+grafika narożnika + jedna zewnętrzna linia wystarczają, bez konkurującego elementu pod spodem.
+Zweryfikowane w przeglądarce: `insetDivCount: 0` na panelu "Mapa ekspedycji", tylko
+`border-gold/40` zostaje.
+
+**Pasek mikstur nie ubywał w trakcie walki** — to był świadomy uproszczony stan (etykieta wprost
+mówiła "mogły już zostać zużyte"), bo cała walka liczy się atomowo na starcie
+([expeditions/service.ts](../apps/api/src/modules/expeditions/service.ts)), więc żywe zapytanie o
+ekwipunek pokazywałoby od razu stan PO walce przez cały czas trwania ekranu "w toku". Rozwiązanie:
+symulacja walki już generuje zdarzenie `potion_used` z realnym znacznikiem czasu `t`
+([combat.ts](../apps/api/src/modules/expeditions/combat.ts)), a `ExpeditionPanel.tsx` już liczy
+`revealedEvents` (zdarzenia odsłonięte do bieżącego, tykającego czasu — używane m.in. przez
+`CombatLog`) — wystarczyło przekazać tę samą tablicę do `ActivePotionsSummary` i odjąć od
+snapshotu startowego te `potion_used`, które już "się wydarzyły" wg klienckiego zegara. Zdarzenie
+nie niesie `inventoryItemId` (tylko `itemName`), więc dopasowanie do slotu jest po nazwie, z
+rozdzielaniem zużycia po kolejności `slotIndex` gdyby dwa sloty trzymały ten sam item (rzadki
+przypadek). Pasek teraz realnie się zmniejsza w czasie rzeczywistym, znika przy 0 zamiast pokazywać
+"0" pusty kafelek; etykieta zmieniona na "na bieżąco w trakcie walki". `pnpm --filter web exec tsc
+--noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
