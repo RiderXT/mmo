@@ -62,6 +62,33 @@ game asset, clean vector-style edges
 Podmień fragment w nawiasach na konkretny element. "transparent background" — najczęściej
 pomijany, najważniejszy fragment.
 
+## Prompty do pełnej ramki panelu (narożnik + pasek krawędzi + wypełnienie)
+
+Sam narożnik (sekcja "Prompt startowy" niżej) nie tworzy spójnej ramki, jeśli reszta krawędzi to
+płaska linia CSS — zbyt cienka linia obok grubego, rytego narożnika zawsze wygląda jak dwa sklejone
+elementy. Pełna ramka 9-slice potrzebuje jeszcze dwóch assetów:
+
+**Pasek krawędzi** (łączy narożniki w ciągłą ramkę, jeden wystarczy — obracany o 90° pod boki):
+```
+seamless horizontal tileable border strip, dark fantasy RPG UI frame edge,
+museum brass plaque engraving style, warm torchlit gold on aged bronze,
+same engraved scrollwork motif and line weight as an ornate corner bracket,
+thin rectangular strip, repeats infinitely left-to-right with no visible seam,
+no text, no characters, isolated on transparent background, game asset,
+flat orthogonal view, consistent lighting across the whole strip
+```
+Musi się bezszwowo powtarzać w poziomie i mieć tę samą grubość linii/styl co narożnik.
+
+**Tekstura wypełnienia wnętrza** (zamiast płaskiego koloru tła panelu):
+```
+seamless tileable background texture, dark aged stone panel interior,
+subtle worn parchment-on-stone surface, very low contrast, muted warm
+brown-black tones, faint torchlit glow, no ornamentation, no text,
+repeats infinitely in all directions with no visible seam, flat even
+lighting, game UI panel background texture
+```
+Musi być bardzo stonowana — to tło POD tekstem/UI, nie może z nim konkurować kontrastem.
+
 ## Prompty do ikon przedmiotów (broń, zbroja, itd.)
 
 Ten sam styl gry, ale inny układ niż ramka — pojedynczy przedmiot wyśrodkowany, widziany lekko
