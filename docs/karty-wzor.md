@@ -71,13 +71,18 @@ elementy. Pełna ramka 9-slice potrzebuje jeszcze dwóch assetów:
 **Pasek krawędzi** (łączy narożniki w ciągłą ramkę, jeden wystarczy — obracany o 90° pod boki):
 ```
 seamless horizontal tileable border strip, dark fantasy RPG UI frame edge,
-museum brass plaque engraving style, warm torchlit gold on aged bronze,
+museum brass plaque engraving style, warm gold on aged bronze,
 same engraved scrollwork motif and line weight as an ornate corner bracket,
 thin rectangular strip, repeats infinitely left-to-right with no visible seam,
-no text, no characters, isolated on transparent background, game asset,
-flat orthogonal view, consistent lighting across the whole strip
+flat even diffuse studio lighting across the entire strip, no vignette,
+no spotlight, no brightness gradient, identical tone at both ends,
+orthographic product-photography style, no text, no characters,
+isolated on transparent background, game asset
 ```
 Musi się bezszwowo powtarzać w poziomie i mieć tę samą grubość linii/styl co narożnik.
+**Unikaj słowa "torchlit"/podobnych** — sugeruje generatorowi punktowe źródło światła obok paska,
+przez co jasność spada nierówno od środka ku krawędziom i w miejscu złączenia dwóch kopii widać
+wyraźny skok (sprawdzone: pierwsza wersja tego prompta generowała dokładnie taki efekt).
 
 **Tekstura wypełnienia wnętrza** (zamiast płaskiego koloru tła panelu):
 ```
