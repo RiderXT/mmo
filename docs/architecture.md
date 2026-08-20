@@ -2749,6 +2749,24 @@ bota z formularza faktycznie wystartowało proces potomny celujący we własny `
 (potwierdzone w podglądzie logu), status poprawnie przeszedł "Działa" → "Zatrzymany" po kliknięciu
 "Zatrzymaj". `pnpm -r typecheck` czysto dla `shared`/`api`/`web`.
 
+### Fix: bot padał na claim po realnym teście na VPS — clock skew (2026-08-20)
+
+Bot uruchomiony przeciw `https://gra.riderx.ovh` faktycznie zagrał ~30 minut realnej gry (poziom
+1→4, prawdziwe walki po 10-19 minut, zakupy, ulepszenia na kowadle, odblokowywanie umiejętności —
+dokładnie taki raport, o jaki chodziło), po czym padł z `ApiError: Ekspedycja jeszcze trwa` (409)
+na trzeciej próbie odebrania nagrody. Przyczyna: pętla oczekiwania w `runExpeditionCycle` decyduje
+"czas minął" porównując `active.endsAt` (z serwera) z WŁASNYM zegarem bota (`Date.now()` na
+maszynie, z której bot jest odpalony) — przy realnym rozjeździe zegarów między maszyną bota a
+VPS-em (nawet ułamek sekundy) bot może uznać "koniec" chwilę PRZED tym, jak zgodzi się z tym
+zegar serwera, więc `claimExpedition` odbija się o server-side'ową walidację "jeszcze nie". To
+realny, spodziewany rodzaj problemu przy testowaniu przeciw prawdziwemu serwerowi z innej maszyny
+— nie występuje na dev (bot i serwer na tym samym zegarze), stąd nie złapany wcześniej.
+
+Naprawione retry z krótkim odczekaniem (do 5 prób, 500ms odstępu) WYŁĄCZNIE na 409 z
+`claimExpedition` — każdy inny błąd nadal przerywa bota natychmiast (nie maskujemy prawdziwych
+awarii). Zweryfikowane lokalnie (brak regresji — normalny przebieg nadal odbiera nagrodę za
+pierwszym razem, retry po prostu nigdy się nie uruchamia gdy zegary się zgadzają).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

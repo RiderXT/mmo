@@ -257,7 +257,24 @@ async function runExpeditionCycle(client: GameClient, report: BotReport, charact
   }
 
   const levelDuringFight = current.level;
-  const claimResult = await client.claimExpedition(started.id);
+  // The wait-loop above trusts its OWN clock to decide "endsAt has passed" (active.endsAt vs
+  // Date.now()) — against a real server there can be enough clock skew between this machine and
+  // the API host that the bot decides it's time a beat before the server's own check agrees,
+  // and claimExpedition 409s with "Ekspedycja jeszcze trwa". A few short retries absorbs that
+  // instead of crashing the whole run over what's really just a race with the wall clock.
+  let claimResult: Awaited<ReturnType<typeof client.claimExpedition>> | null = null;
+  for (let attempt = 0; attempt < 5 && claimResult === null; attempt++) {
+    try {
+      claimResult = await client.claimExpedition(started.id);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && attempt < 4) {
+        await sleep(500);
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (!claimResult) throw new Error("Nie udało się odebrać nagrody z ekspedycji po kilku próbach");
   report.recordGoldEarned(levelDuringFight, claimResult.result.goldGained);
   report.log(
     "expedition_claim",
