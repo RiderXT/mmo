@@ -233,11 +233,39 @@ async function seedWorldContent() {
   console.log("Utworzono przykładową zawartość świata: itemy, potiony, potwora i krainę.");
 }
 
+/**
+ * Bez tego świeżo zasiana baza (nowe wdrożenie) nie ma żadnej krainy `isTown:true` — AnvilTab.tsx
+ * i NpcTab.tsx sprawdzają `currentZone?.isTown` przez `zones.find(z => z.id === character.currentZoneId)`,
+ * więc bez realnej krainy-miasta Kowadło/NPC są nieosiągalne dla każdego gracza (zgłoszone i
+ * potwierdzone w docs/architecture.md, notatka przy Etapie "restyling kowalstwa"). Osobno od
+ * `seedWorldContent()` (i nie gated za `zone.count() > 0`) żeby dało się bezpiecznie douruchomić
+ * na już zasianej bazie (dev.db albo produkcja), której brakuje samego miasta.
+ */
+async function seedTownZone() {
+  const existing = await prisma.zone.findFirst({ where: { isTown: true } });
+  if (existing) {
+    console.log(`Kraina-miasto już istnieje (${existing.name}), pomijam.`);
+    return;
+  }
+
+  await prisma.zone.create({
+    data: {
+      name: "Miasto",
+      minLevel: 1,
+      maxLevel: 1,
+      travelTimeSeconds: 20,
+      isTown: true,
+    },
+  });
+  console.log("Utworzono krainę-miasto startowe (Kowadło/NPC dostępne od razu po utworzeniu postaci).");
+}
+
 async function main() {
   await seedAdmin();
   await seedClasses();
   await seedPassiveSkills();
   await seedWorldContent();
+  await seedTownZone();
 }
 
 main()

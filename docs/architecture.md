@@ -2513,6 +2513,43 @@ faktycznie zmniejszyło ilość katalizatora o 1, materiału o wymaganą ilość
 przedmiot do +1, i wyczyściło sloty katalizatorów po próbie. `pnpm -r typecheck` czysto dla
 `shared`/`api`/`web`.
 
+## Kraina-miasto w seed.ts + nowa postać startuje w mieście (naprawa zgłoszenia w tle)
+
+### Kontekst
+
+Zadanie w tle zgłoszone przy Etapie z katalizatorami (patrz notatka wyżej): `seed.ts` nie tworzył
+żadnej krainy `isTown:true`, więc na świeżo zasianej bazie (nowe wdrożenie) `AnvilTab.tsx`/`NpcTab.tsx`
+— które sprawdzają `zones.find(z => z.id === character.currentZoneId)?.isTown` — nigdy nie widziały
+postaci jako "w mieście", bo takiej krainy w ogóle nie było. Do tego `createCharacter` w
+`modules/characters/service.ts` nigdy nie ustawiał `currentZoneId`, więc nowa postać lądowała z
+`currentZoneId: null` — wirtualną "wioską" sprzed Etapu 21, która i tak nigdy nie liczyła się jako
+miasto (ten sam problem opisany wyżej w "Powrót z ekspedycji donikąd"). Efekt: Kowadło i NPC są
+nieosiągalne dla każdego nowego gracza od pierwszej sekundy, bez ręcznej interwencji admina.
+
+### Zmiany
+
+- `prisma/seed.ts` — nowa `seedTownZone()`: jeśli żadna kraina `isTown:true` jeszcze nie istnieje,
+  tworzy `Zone` "Miasto" (`minLevel/maxLevel: 1`, bez potworów). Celowo NIE jest gated za
+  `zone.count() > 0` jak `seedWorldContent()` — ma się dać bezpiecznie douruchomić na bazie, która
+  ma już inną zawartość świata (np. `dev.db` po `seed-zones.ts`), ale wciąż brakuje jej miasta.
+  Wywołana na końcu `main()`.
+- `modules/characters/service.ts` (`createCharacter`) — przed utworzeniem postaci szuka
+  `prisma.zone.findFirst({ where: { isTown: true } })` i ustawia `currentZoneId` na jej `id`. Brak
+  skonfigurowanej krainy-miasta (baza bez `seedTownZone()`) po prostu zostawia `currentZoneId: null`
+  jak dawniej — brak twardej zależności.
+
+Zero zmian schematu — `Zone.isTown` i `Character.currentZoneId` już istniały; to czysto zmiana
+danych/logiki seeda i tworzenia postaci.
+
+Zweryfikowane end-to-end na osobnej, świeżo zasianej testowej bazie (odizolowanej od `dev.db`
+używanej w innej sesji — osobny port API/web, dane usunięte po teście): `prisma db push` + `pnpm seed`
+na pustej bazie utworzyło krainę "Miasto" (`isTown:true`); nowo utworzona postać (curl
+`POST /api/characters`) dostała `currentZoneId` wskazujące na tę krainę; w przeglądarce sidebar od
+razu pokazał klikalne "Kowadło"/"NPC" (nie wyszarzone), zakładka Kowadło wyrenderowała pełny UI
+(bez komunikatu "Kowadło jest dostępne tylko w mieście"), zakładka NPC wyrenderowała panel handlu
+(pusty — świeża baza nie ma jeszcze skonfigurowanych NPC-handlarzy w mieście, co jest osobną,
+oczekiwaną sprawą — admin dodaje ich ręcznie przez panel).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

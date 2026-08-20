@@ -77,6 +77,13 @@ export async function createCharacter(
     throw new CharacterError("Nie znaleziono wybranej klasy postaci", 400);
   }
 
+  // Nowa postać startuje w mieście, a nie w wirtualnym `currentZoneId: null` sprzed Etapu 21 —
+  // isTown jest dziś sprawdzane wszędzie przez `zones.find(z => z.id === currentZoneId)`, więc
+  // `null` nigdy nie liczyłby się jako bycie w mieście (patrz docs/architecture.md, notatka
+  // "Powrót z ekspedycji donikąd"). Brak skonfigurowanej krainy-miasta (baza bez `seedTownZone()`)
+  // po prostu zostawia postać bez lokalizacji jak dawniej.
+  const townZone = await prisma.zone.findFirst({ where: { isTown: true } });
+
   const character = await prisma.$transaction(async (tx) => {
     const created = await tx.character.create({
       data: {
@@ -84,6 +91,7 @@ export async function createCharacter(
         name: input.name,
         classId: characterClass.id,
         gold: characterClass.startingGold,
+        currentZoneId: townZone?.id,
       },
     });
     for (const starter of characterClass.starterItems) {
