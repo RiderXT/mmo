@@ -3047,6 +3047,47 @@ bota na żywo (30+ minut do napotkania pierwszego dropu złej klasy) nie uruchom
 tej sesji — logika zweryfikowana przeglądem kodu + już wcześniej potwierdzonym działaniem samego
 endpointu sprzedaży.
 
+### Produkcja miała itemy z sellPrice=0 — nowy skrypt naprawczy (2026-08-20)
+
+Po odpaleniu poprawionego bota (sprzedaje loot złej klasy) na VPS, log serwera pokazał 400 "Ten
+przedmiot nie ma ustalonej wartości sprzedaży" — czyli produkcyjny katalog itemów ma co najmniej
+jeden przedmiot z `sellPrice <= 0`, którego `dev.db` NIE ma (lokalnie tylko jeden item miał tę
+wartość, już naprawiony). Bez dostępu do bazy produkcyjnej z tej sesji nie da się ustalić który
+to konkretnie item — dodany [fix-sell-prices.ts](../apps/api/scripts/fix-sell-prices.ts), prosty
+idempotentny skrypt (`UPDATE items SET sellPrice=1 WHERE sellPrice<=0`, wypisuje co poprawił) do
+uruchomienia na VPS: `npx tsx scripts/fix-sell-prices.ts`. Nie wymaga plików ikon (w
+przeciwieństwie do `seed-item-images.ts`) — można odpalić od razu, niezależnie od kolejności z
+synchronizacją grafik.
+
+### Bug w całej apce: kolory oklch nie wspierały modyfikatora przezroczystości (2026-08-20)
+
+Zgłoszenie "itemy w eq mają białe ramki" doprowadziło do dużo szerszego znaleziska niż same
+itemy. `apps/web/tailwind.config.js` definiował kolory jako gołe stringi (`gold: { DEFAULT:
+"oklch(76% 0.09 85)" }` itd.) — Tailwind 3 potrafi automatycznie wstrzyknąć kanał alfa dla
+modyfikatora `/NN` (np. `border-gold/40`) tylko dla kolorów w formacie hex/rgb; dla dowolnego
+innego formatu CSS (w tym `oklch()`) po prostu **cicho nie generuje żadnej reguły** dla wariantu
+z `/NN` — bez błędu, bez ostrzeżenia. Efekt: KAŻDA klasa `coś-token/NN` w całej aplikacji
+(`border-gold/40`, `bg-rarity-rare/10`, dziesiątki miejsc) nie miała żadnego efektu, element
+padał na domyślny kolor obramowania przeglądarki/Tailwina (blady szary, stąd "białe ramki").
+Niezauważone wcześniej, bo generyczna ikona typu + cienka ramka nie kontrastowały wystarczająco
+żeby to rzucało się w oczy — dopiero prawdziwa, kolorowa grafika itemu to uwidoczniła.
+
+Naprawa u źródła: każdy kolor w configu zamieniony na funkcję `({opacityValue}) =>` (oficjalny,
+udokumentowany sposób Tailwina na kolory w formatach spoza hex/rgb) zamiast gołego stringa —
+dotyczy WSZYSTKICH tokenów (`ink`, `panel`, `panel-raised`, `line`, `line-soft`, `gold`,
+`parchment`, `hp`, `mp`, `rarity`), nie tylko tych użytych w Item Box. Naprawia to każde miejsce
+w aplikacji używające tej składni, nie tylko zgłoszony przypadek.
+
+**Ważne dla przyszłych zmian configu**: sama zmiana `tailwind.config.js` + HMR ("page reload"
+w logu Vite) NIE wystarczyła — Tailwind/PostCSS trzymał stary, przeliczony config w pamięci
+procesu i nie przegenerował klas mimo sygnału przeładowania strony. Wymagany był pełny restart
+procesu dev servera (`preview_stop` + `preview_start`), dopiero po nim `oklch(76% 0.09 85)` w
+wygenerowanym CSS zamieniło się na `oklch(0.62 0.09 250 / var(--tw-border-opacity, 1))` z
+realną obsługą `/NN`. Zweryfikowane bezpośrednio w przeglądarce: `getComputedStyle` na kwadracie
+itemu z realną grafiką pokazuje teraz `oklch(0.62 0.09 250 / 0.5)` (border) i
+`oklch(0.62 0.09 250 / 0.1)` (tło) zamiast domyślnego `rgb(229, 231, 235)`/przezroczystego tła.
+`pnpm --filter web exec tsc --noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
