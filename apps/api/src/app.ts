@@ -10,6 +10,7 @@ import { registerErrorHandler } from "./plugins/errorHandler.js";
 import { serverLoadTracker, moduleForPath } from "./lib/serverLoad.js";
 import { serverLoadRoutes } from "./modules/admin/serverLoad/routes.js";
 import { botsRoutes } from "./modules/admin/bots/routes.js";
+import { adminUsersRoutes } from "./modules/admin/users/routes.js";
 import { authRoutes } from "./modules/auth/routes.js";
 import { logsRoutes } from "./modules/logs/routes.js";
 import { zonesRoutes } from "./modules/admin/zones/routes.js";
@@ -135,6 +136,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dailyLoginRoutes, { prefix: "/api/daily-login" });
   await app.register(serverLoadRoutes, { prefix: "/api/admin/server-load" });
   await app.register(botsRoutes, { prefix: "/api/admin/bots" });
+  await app.register(adminUsersRoutes, { prefix: "/api/admin/users" });
 
   return app;
 }

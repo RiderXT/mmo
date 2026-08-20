@@ -6,6 +6,9 @@ export const LaunchBotsSchema = z.object({
   count: z.number().int().min(1).max(20),
   className: z.string().min(1),
   targetLevel: z.number().int().min(2).max(200).default(10),
-  maxMinutes: z.number().int().min(1).max(600).default(60),
+  // The bot's real stopping condition is targetLevel — this is just a safety cap on top, since
+  // higher targets take longer per level in ways that are hard to guess up front. 0 = no time
+  // limit at all (bot only stops at targetLevel or the server-side max-expeditions backstop).
+  maxMinutes: z.number().int().min(0).max(10080).default(0),
 });
 export type LaunchBotsInput = z.infer<typeof LaunchBotsSchema>;

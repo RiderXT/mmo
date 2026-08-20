@@ -2790,6 +2790,48 @@ prawdziwy problem) pokazał po rozwinięciu dokładnie `GET /favicon.ico 404 Nie
 404`, `HEAD / 404` — dokładnie to pytanie usera ("skąd mam wiedzieć czego dotyczą") ma teraz
 bezpośrednią odpowiedź w UI zamiast suchej liczby. `pnpm -r typecheck` czysto.
 
+### Usuwanie kont z panelu admina + boty bez sztywnego limitu czasu (2026-08-20)
+
+Dwie prośby usera, jedna z nich wywołana bezpośrednio przez to, co się właśnie stało: admin
+odpalił z panelu bota celującego w poziom 50 na VPS-ie i trafił na `429 Rate limit exceeded, retry
+in 6 minutes` przy REJESTRACJI — bo `/api/auth/register` ma dedykowany, ostrzejszy limit (10/10min,
+`modules/auth/routes.ts`) niż globalny (200/min), a wszystkie boty odpalone z panelu łączą się z
+tego samego adresu co sam serwer (`127.0.0.1`), więc dzielą jedną pulę limitu.
+
+**Fix rate-limitu** (`plugins/security.ts`) — `allowList: ["127.0.0.1", "::1"]` na globalnym
+rejestracji pluginu. Bezpieczne: prawdziwy ruch graczy zawsze idzie przez nginx, który przekazuje
+prawdziwe IP klienta (`X-Forwarded-For`, honorowane przez `trustProxy: true` w `app.ts`) — więc to
+NIGDY nie zwalnia z limitu realnego ruchu z internetu, tylko połączenia bezpośrednio na loopback,
+czyli praktycznie wyłącznie własne narzędzia serwera (boty).
+
+**Usuwanie kont** (`modules/admin/users/`, nowy moduł) — `GET /` (lista wszystkich kont: e-mail,
+rola, liczba postaci, daty), `DELETE /:id` (natychmiastowe, trwałe — bez 30-dniowego okresu
+karencji, jaki ma samoobsługowa prośba gracza w `modules/auth`). Sama operacja to
+`prisma.user.delete()` — cały cascade (postacie, ekwipunek, ekspedycje, tokeny odświeżania,
+zaproszenia do znajomych, polecenia) już był poprawnie zadeklarowany w schemacie
+(`onDelete: Cascade` na każdej relacji wskazującej na User/Character), więc nie trzeba było ręcznie
+kasować nic po kolei. Guard: admin nie może usunąć WŁASNEGO konta z tego panelu (400). Nowa sekcja
+"Konta" w zakładce "Serwer" — szukajka po e-mailu (przydatna do namierzenia `@bot.test.local`),
+`ConfirmModal` przed usunięciem.
+
+**Boty bez sztywnego limitu czasu** — prawdziwy problem: bot i tak zawsze zatrzymuje się na
+`targetLevel`, ale admin nie ma jak z góry zgadnąć, ile realnie zajmie dobicie do wysokiego
+poziomu (obserwacja z wcześniejszego przebiegu: poziom 7→8 zajął już 30 minut), więc sztywny limit
+czasu (poprzedni default: 60 min, twardy sufit: 600 min) po prostu ucinał bota w połowie drogi,
+zanim doszedł do celu. `LaunchBotsSchema.maxMinutes` — teraz `min(0)` (0 = bez limitu, nowy
+default), sufit podniesiony do 10080 (7 dni) dla tych, którzy jednak chcą ograniczony czas.
+`scripts/bot/run.ts`: `maxMinutes > 0 ? maxMinutes * 60_000 : Infinity` — `Infinity` przechodzi
+przez porównanie w pętli `policy.ts` bez żadnej specjalnej obsługi. Drugi, niezależny limit
+bezpieczeństwa (`maxExpeditions`, domyślnie 200) zostaje zawsze aktywny — prawdziwy backstop
+przeciwko faktycznie zapętlonemu botu, niezależnie od ustawienia czasu. Formularz w panelu: pole
+liczby minut + checkbox "bez limitu" (domyślnie zaznaczony, wyłącza pole).
+
+Zweryfikowane bezpośrednio: rejestracja z `127.0.0.1` już nie łapie 429 (potwierdzone przez realny
+test lokalny); usunięcie jednorazowego konta testowego przez UI faktycznie skasowało wiersz w
+bazie (`prisma.user.findUnique` po fakcie zwrócił `null`); próba usunięcia własnego konta admina
+przez bezpośrednie zapytanie do API poprawnie odrzucona z 400. `pnpm -r typecheck` czysto,
+standalone typecheck `scripts/bot/*.ts` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

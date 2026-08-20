@@ -8,10 +8,13 @@ import {
   getBotLog,
   stopBot,
   listClasses,
+  listUsers,
+  deleteUserAccount,
   type BotRunDto,
 } from "../../lib/adminApi";
 import { ApiError } from "../../lib/apiClient";
 import { Field, inputClass } from "../../components/admin/Field";
+import { ConfirmModal } from "../../components/common/ConfirmModal";
 
 function fmtMs(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -33,8 +36,11 @@ export function ServerAdminPage() {
   const queryClient = useQueryClient();
   const [expandedBotId, setExpandedBotId] = useState<string | null>(null);
   const [expandedErrorsModule, setExpandedErrorsModule] = useState<string | null>(null);
-  const [form, setForm] = useState({ count: 1, className: "", targetLevel: 10, maxMinutes: 60 });
+  const [form, setForm] = useState({ count: 1, className: "", targetLevel: 10, maxMinutes: 0 });
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [confirmingDeleteUser, setConfirmingDeleteUser] = useState<{ id: string; email: string } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadQuery = useQuery({
     queryKey: ["admin-server-load"],
@@ -47,6 +53,7 @@ export function ServerAdminPage() {
     refetchInterval: 3000,
   });
   const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const usersQuery = useQuery({ queryKey: ["admin-users"], queryFn: listUsers });
   const logQuery = useQuery({
     queryKey: ["admin-bot-log", expandedBotId],
     queryFn: () => getBotLog(expandedBotId!),
@@ -73,10 +80,23 @@ export function ServerAdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-bot-runs"] }),
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: string) => deleteUserAccount(id),
+    onSuccess: () => {
+      setDeleteError(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć konta"),
+  });
+
   const load = loadQuery.data;
   const bots = botsQuery.data ?? [];
   const runningCount = bots.filter((b) => b.status === "running").length;
   const classOptions = classesQuery.data ?? [];
+  const users = usersQuery.data ?? [];
+  const filteredUsers = userSearch.trim()
+    ? users.filter((u) => u.email.toLowerCase().includes(userSearch.trim().toLowerCase()))
+    : users;
 
   return (
     <div className="space-y-8">
@@ -303,16 +323,33 @@ export function ServerAdminPage() {
             />
           </Field>
           <Field label="Limit czasu (min)">
-            <input
-              type="number"
-              min={1}
-              max={600}
-              className={inputClass}
-              value={form.maxMinutes}
-              onChange={(e) => setForm({ ...form, maxMinutes: Number(e.target.value) })}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={10080}
+                disabled={form.maxMinutes === 0}
+                className={`${inputClass} disabled:opacity-40`}
+                value={form.maxMinutes === 0 ? "" : form.maxMinutes}
+                placeholder="bez limitu"
+                onChange={(e) => setForm({ ...form, maxMinutes: Number(e.target.value) || 1 })}
+              />
+              <label className="flex shrink-0 items-center gap-1 text-xs text-parchment-dim">
+                <input
+                  type="checkbox"
+                  checked={form.maxMinutes === 0}
+                  onChange={(e) => setForm({ ...form, maxMinutes: e.target.checked ? 0 : 60 })}
+                />
+                bez limitu
+              </label>
+            </div>
           </Field>
         </div>
+        <p className="mt-2 text-xs text-parchment-faint">
+          Bot zawsze zatrzymuje się na docelowym poziomie — limit czasu to tylko dodatkowe
+          zabezpieczenie. "Bez limitu" (domyślnie) ma sens, gdy nie wiadomo, ile realnie zajmie
+          dobicie do wysokiego poziomu — i tak jest drugi, twardy limit ~200 ekspedycji na bota.
+        </p>
         <button
           onClick={() => launchMutation.mutate()}
           disabled={launchMutation.isPending || !form.className}
@@ -392,6 +429,91 @@ export function ServerAdminPage() {
           </table>
         </div>
       </section>
+
+      {/* Accounts */}
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-parchment">Konta</h2>
+        <p className="mb-3 text-xs text-parchment-faint">
+          Natychmiastowe, trwałe usunięcie — bez 30-dniowego okresu karencji, jaki ma
+          samoobsługowa prośba gracza o usunięcie konta. Kasuje konto i wszystko, co do niego
+          należy (postacie, ekwipunek, ekspedycje). Przydatne m.in. do sprzątania testowych kont
+          botów (`@bot.test.local`).
+        </p>
+        <input
+          className={`${inputClass} mb-2 max-w-xs`}
+          placeholder="Szukaj po e-mailu..."
+          value={userSearch}
+          onChange={(e) => setUserSearch(e.target.value)}
+        />
+        {deleteError && (
+          <p role="alert" className="mb-2 text-sm text-red-400">
+            {deleteError}
+          </p>
+        )}
+        <div className="overflow-x-auto panel">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-panel text-parchment-dim">
+              <tr>
+                <th className="px-3 py-2">E-mail</th>
+                <th className="px-3 py-2">Rola</th>
+                <th className="px-3 py-2">Postacie</th>
+                <th className="px-3 py-2">Założone</th>
+                <th className="px-3 py-2">Ostatnio widziany</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line bg-ink">
+              {filteredUsers.map((u) => (
+                <tr key={u.id}>
+                  <td className="px-3 py-2 text-parchment">
+                    {u.email}
+                    {u.deletionRequestedAt && (
+                      <span className="ml-2 text-xs text-gold-bright">(zaplanowane usunięcie)</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-parchment-dim">{u.role}</td>
+                  <td className="px-3 py-2 tabular-nums text-parchment-dim">{u.characterCount}</td>
+                  <td className="px-3 py-2 text-xs text-parchment-faint">
+                    {new Date(u.createdAt).toLocaleDateString("pl-PL")}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-parchment-faint">
+                    {u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString("pl-PL") : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => setConfirmingDeleteUser({ id: u.id, email: u.email })}
+                      disabled={deleteUserMutation.isPending}
+                      className="text-xs text-red-400 hover:underline disabled:opacity-50"
+                    >
+                      Usuń konto
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-parchment-faint">
+                    {userSearch ? "Brak wyników." : "Brak kont."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {confirmingDeleteUser && (
+        <ConfirmModal
+          title="Usunąć konto?"
+          message={`Trwale usunąć konto "${confirmingDeleteUser.email}" i wszystko, co do niego należy (postacie, ekwipunek, ekspedycje)? Tej operacji nie da się cofnąć.`}
+          danger
+          onConfirm={() => {
+            deleteUserMutation.mutate(confirmingDeleteUser.id);
+            setConfirmingDeleteUser(null);
+          }}
+          onCancel={() => setConfirmingDeleteUser(null)}
+        />
+      )}
     </div>
   );
 }

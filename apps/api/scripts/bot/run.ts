@@ -6,9 +6,14 @@
  *   BOT_NAME          default Bot<timestamp> — also becomes the character name and the bot's
  *                      throwaway login email (<name>@bot.test.local).
  *   BOT_CLASS         default Wojownik — must match a CharacterClass.name exactly (see /api/classes).
- *   BOT_TARGET_LEVEL  default 10
- *   BOT_MAX_MINUTES   default 60 — safety cap so a stuck/looping bot can't run forever.
- *   BOT_MAX_EXPEDITIONS default 200 — second independent safety cap.
+ *   BOT_TARGET_LEVEL  default 10 — the bot's real stopping condition; it keeps going until it
+ *                      gets here regardless of how long that takes (higher levels take longer
+ *                      fights — don't guess a time budget for a target you haven't measured yet).
+ *   BOT_MAX_MINUTES   default 60 — safety cap so a stuck/looping bot can't run forever. Set to 0
+ *                      for NO time limit — the bot then only stops at BOT_TARGET_LEVEL or
+ *                      BOT_MAX_EXPEDITIONS, whichever comes first.
+ *   BOT_MAX_EXPEDITIONS default 200 — second independent safety cap (always active, even with
+ *                      BOT_MAX_MINUTES=0 — a real backstop against a truly runaway/stuck bot).
  *
  * Writes both a human-readable Markdown report and a machine-readable JSON dump to
  * scripts/bot/reports/<name>-<timestamp>.{md,json} (gitignored — this is test output, not source).
@@ -24,7 +29,10 @@ const targetLevel = Number(process.env.BOT_TARGET_LEVEL ?? 10);
 const maxMinutes = Number(process.env.BOT_MAX_MINUTES ?? 60);
 const maxExpeditions = Number(process.env.BOT_MAX_EXPEDITIONS ?? 200);
 
-console.log(`Start bota "${botName}" (${className}) przeciw ${baseUrl}, cel: poziom ${targetLevel}`);
+console.log(
+  `Start bota "${botName}" (${className}) przeciw ${baseUrl}, cel: poziom ${targetLevel}` +
+    (maxMinutes > 0 ? `, limit czasu: ${maxMinutes} min` : ", bez limitu czasu"),
+);
 if (/riderx\.ovh|gra\./i.test(baseUrl)) {
   console.log("!! UWAGA: BOT_BASE_URL wygląda na środowisko produkcyjne — to prawdziwe obciążenie żywego serwera.");
 }
@@ -34,7 +42,7 @@ const report = await runBot({
   botName,
   className,
   targetLevel,
-  maxWallClockMs: maxMinutes * 60_000,
+  maxWallClockMs: maxMinutes > 0 ? maxMinutes * 60_000 : Infinity,
   maxExpeditions,
 });
 

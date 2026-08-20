@@ -446,3 +446,17 @@ export const launchBots = (input: LaunchBotsInput) =>
 export const listBotRuns = () => apiFetch<BotRunDto[]>("/api/admin/bots");
 export const getBotLog = (id: string) => apiFetch<BotRunLogDto>(`/api/admin/bots/${id}/log`);
 export const stopBot = (id: string) => apiFetch<void>(`/api/admin/bots/${id}/stop`, { method: "POST" });
+
+// Accounts — admin listing + hard delete (immediate, unlike the 30-day player self-service
+// request flow in modules/account).
+export interface AdminUserDto {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  deletionRequestedAt: string | null;
+  characterCount: number;
+}
+export const listUsers = () => apiFetch<AdminUserDto[]>("/api/admin/users");
+export const deleteUserAccount = (id: string) => apiFetch<void>(`/api/admin/users/${id}`, { method: "DELETE" });
