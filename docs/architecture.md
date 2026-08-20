@@ -2536,6 +2536,42 @@ Przy okazji, przy tym samym teście, naprawiono własną pomyłkę z poprzedniej
 po teście katalizatorów odjął złoto postaci testowej o więcej niż wcześniej dodał, zostawiając ją na
 -100 złota — zresetowane do 0.
 
+### Zakładka NPC: sztywne kwadraty ekwipunku + sklep w stylu ItemBox (2026-08-20)
+
+User zgłosił dwie rzeczy w zakładce NPC: (1) siatka "Twój ekwipunek" ma za duże odstępy, (2)
+towar handlarza powinien wyglądać jak ekwipunek gracza (małe kwadraty), z opcją pokazania itemu
+jako już zestackowanego (np. 200 mikstur).
+
+**Przyczyna (1)**: `NpcTab.tsx` używał `grid grid-cols-5` (tak jak `EquipmentTab.tsx`/`AnvilTab.tsx`),
+ale w tamtych dwóch zakładkach panel z siatką siedzi w płaskim `flex flex-wrap` (panel kurczy się
+do szerokości treści), a w NpcTab panele są w `grid lg:grid-cols-2` — każda kolumna dostaje SZTYWNO
+50% szerokości strony, więc panel "Twój ekwipunek" rozciąga się dużo szerzej niż potrzebuje 5×56px
+siatka. `grid-cols-5` dzieli tę szerokość na 5 RÓWNYCH części (`1fr` każda, ~82px zamiast 56px),
+a każdy `GridSlot` (sztywne `w-14`) zostaje wyrównany do lewej wewnątrz dużo szerszego toru — stąd
+wizualnie "za duże odstępy" (potwierdzone pomiarem `getBoundingClientRect` przed i po). Naprawione
+zamianą na `grid-cols-[repeat(5,3.5rem)]` — sztywne tory 56px niezależnie od szerokości panelu,
+sloty pakują się ciasno, nadmiar miejsca zostaje pustym marginesem z prawej, nie rozjeżdża siatki.
+
+**Przyczyna (2) / redesign sklepu**: `ShopItemBox.tsx` (nowy) — 56×56px kwadrat w dokładnie tej
+samej gramatyce co `ItemBox`: grafika itemu (`imageUrl`) albo `ItemTypeIcon`, cena w lewym górnym
+rogu, `entry.stock` jako odznaka w prawym dolnym rogu (DOKŁADNIE tak jak plakietka ilości na
+zestackowanym itemie w ekwipunku) — **żadne nowe pole w bazie nie było potrzebne**: `NpcShopItem.stock`
+już istniało i już było edytowalne w `NpcsAdminPage.tsx` (puste = bez limitu/bez odznaki, liczba np.
+200 = pokazuje się jako odznaka "200", dokładnie spełniając prośbę "żeby mikstury były już
+zestackowane"; malejąca w miarę wykupywania, jak prawdziwy stack). Użyty prawdziwy `ItemTooltip`
+(ten sam komponent co w ekwipunku) — hover pokazuje nazwę, typ, staty PRZY +0 (`interpolateUpgrade`
+z poziomem ulepszenia 0, bo towar w sklepie jeszcze nie jest kupiony/ulepszony), oraz **ostrzeżenie
+o niezgodności klasy** (nowa zapytanie `listPlayerClasses()` w `NpcTab.tsx`, budujące mapę
+`classId → nazwa` — sklep dotąd tego nie sprawdzał wcale). Stary duży card (`rounded-xl`, 64px
+ikona na szrafowanym tle, pełny opis pod spodem) usunięty, `ICON_BG` (był używany tylko tam) też.
+
+Zweryfikowane w przeglądarce (tymczasowy testowy NPC z 2 towarami — mikstura ze `stock:200`,
+hełm maga z `stock:null` — usunięty po teście): siatka "Twój ekwipunek" ma teraz `gridTemplateColumns:
+"56px 56px 56px 56px 56px"` (wcześniej ~82px każda); kafelek mikstury pokazuje odznaki "200"/"10";
+hover na hełm maga (inna klasa niż postać) pokazuje "Nie dla Twojej klasy (wymaga: Mag)" + realne
+staty; kliknięcie kafelka nadal poprawnie otwiera `BuyItemModal` i realny zakup działa bez regresji.
+`pnpm --filter web typecheck` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

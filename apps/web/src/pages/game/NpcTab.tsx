@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Character, ItemType } from "@mmo/shared";
+import type { Character } from "@mmo/shared";
 import { GridSlot } from "../../components/inventory/GridSlot";
 import { ItemBox } from "../../components/inventory/ItemBox";
+import { ShopItemBox } from "../../components/inventory/ShopItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
-import { ItemTypeIcon } from "../../components/inventory/ItemTypeIcon";
 import { BuyItemModal } from "../../components/expedition/BuyItemModal";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
 import { listPlayerZones } from "../../lib/zonesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
+import { listPlayerClasses } from "../../lib/classesApi";
 import { listInventory, sellItem, discardItem, openChest, type InventoryItemDto } from "../../lib/inventoryApi";
 import { listNpcsForZone, buyFromNpc, type NpcShopItemPublicDto } from "../../lib/npcShopApi";
 import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
@@ -18,20 +19,6 @@ import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventory
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
 const INVENTORY_TABS = 4;
 const TAB_LABELS = ["I", "II", "III", "IV"];
-
-const ICON_BG: Record<string, string> = {
-  weapon: "oklch(45% 0.15 25)",
-  armor: "oklch(30% 0.03 250)",
-  helmet: "oklch(30% 0.03 250)",
-  boots: "oklch(30% 0.03 250)",
-  necklace: "oklch(45% 0.1 85)",
-  earrings: "oklch(45% 0.1 85)",
-  ring: "oklch(45% 0.1 85)",
-  consumable: "oklch(45% 0.15 25)",
-  material: "oklch(35% 0.02 60)",
-  quest: "oklch(45% 0.12 300)",
-  chest: "oklch(50% 0.14 145)",
-};
 
 export function NpcTab({ character }: { character: Character }) {
   const characterId = character.id;
@@ -60,8 +47,10 @@ export function NpcTab({ character }: { character: Character }) {
     queryFn: () => listNpcsForZone(currentZone!.id),
     enabled: !!currentZone && inTown,
   });
+  const classesQuery = useQuery({ queryKey: ["player-classes"], queryFn: listPlayerClasses });
 
   const itemFor = (itemId: string) => itemsQuery.data?.find((i) => i.id === itemId);
+  const classNameFor = (classId: string) => classesQuery.data?.find((c) => c.id === classId)?.name ?? null;
 
   function invalidateAfterTrade() {
     queryClient.invalidateQueries({ queryKey: ["character", characterId] });
@@ -240,7 +229,7 @@ export function NpcTab({ character }: { character: Character }) {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-5 gap-2">
+          <div className="mt-3 grid grid-cols-[repeat(5,3.5rem)] gap-2">
             {layoutGridTab(byGridSlot, activeTab * GRID_SLOTS).map((cell) => (
               <GridSlot key={cell.slotIndex} slotIndex={cell.slotIndex} height={cell.height}>
                 {cell.item && (
@@ -312,37 +301,19 @@ export function NpcTab({ character }: { character: Character }) {
               {activeNpc.shopItems.length === 0 ? (
                 <p className="text-xs text-parchment-faint">Brak towaru.</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-[repeat(auto-fill,3.5rem)] gap-2">
                   {activeNpc.shopItems.map((entry) => {
-                    const outOfStock = entry.stock !== null && entry.stock <= 0;
-                    const iconBg = ICON_BG[entry.item.type] ?? "oklch(35% 0.02 60)";
+                    const fullItem = itemFor(entry.itemId);
+                    const classMismatch = !!fullItem?.classId && fullItem.classId !== character.classId;
                     return (
-                      <button
+                      <ShopItemBox
                         key={entry.id}
-                        onClick={() => !outOfStock && setBuyTarget(entry)}
-                        disabled={outOfStock}
-                        className="flex flex-col items-center gap-2 rounded-xl border border-line-soft bg-panel-raised p-3.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-gold/50 hover:shadow-[0_0_10px_oklch(76%_0.09_85_/_0.2)] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <div
-                          className="flex h-16 w-16 items-center justify-center border border-gold/30 shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)]"
-                          style={{
-                            backgroundImage: `repeating-linear-gradient(45deg, ${iconBg} 0, ${iconBg} 6px, oklch(18% 0.02 45) 6px, oklch(18% 0.02 45) 12px)`,
-                          }}
-                        >
-                          <ItemTypeIcon type={entry.item.type as ItemType} className="h-8 w-8 text-parchment" />
-                        </div>
-                        <span className="line-clamp-2 text-center text-xs font-medium text-parchment">
-                          {entry.item.name}
-                        </span>
-                        {entry.stock !== null && (
-                          <span className="text-[10px] text-parchment-faint">zapas: {entry.stock}</span>
-                        )}
-                        <span className="flex items-center gap-1 font-display text-sm font-bold text-gold">
-                          <span className="h-2.5 w-2.5 rounded-full bg-gold" />
-                          {entry.goldPrice}
-                        </span>
-                        {outOfStock && <span className="text-[10px] text-parchment-faint">Wyprzedane</span>}
-                      </button>
+                        entry={entry}
+                        fullItem={fullItem}
+                        restrictedToClassName={fullItem?.classId ? classNameFor(fullItem.classId) : null}
+                        classMismatch={classMismatch}
+                        onSelect={() => setBuyTarget(entry)}
+                      />
                     );
                   })}
                 </div>
