@@ -17,3 +17,11 @@ export const setGatheringSettingsAdmin = (input: GatheringSettings) =>
     method: "PUT",
     body: JSON.stringify(input),
   });
+
+export const getBotsMaxConcurrentSetting = () => apiFetch<{ count: number }>("/api/admin/settings/bots-max-concurrent");
+
+export const setBotsMaxConcurrentSetting = (count: number) =>
+  apiFetch<{ count: number }>("/api/admin/settings/bots-max-concurrent", {
+    method: "PUT",
+    body: JSON.stringify({ count }),
+  });

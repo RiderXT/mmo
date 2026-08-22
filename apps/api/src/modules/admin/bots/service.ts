@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import crypto from "node:crypto";
 import { logAction } from "../../../lib/gameLog.js";
+import { getBotsMaxConcurrent } from "../../settings/service.js";
 
 /** Spawns real `scripts/bot/run.ts` child processes (see apps/api/scripts/bot/README.md) against
  * this server's own localhost port — same HTTP+auth path as a real browser, just triggered from
@@ -28,7 +29,6 @@ interface BotRun {
   logLines: string[];
 }
 
-const MAX_CONCURRENT = 20;
 const MAX_LOG_LINES = 1000;
 const runs = new Map<string, BotRun>();
 const processes = new Map<string, ChildProcess>();
@@ -56,12 +56,13 @@ export async function launchBots(
   actorUserId: string,
   requestId?: string,
 ): Promise<BotRun[]> {
-  if (!Number.isInteger(input.count) || input.count < 1 || input.count > MAX_CONCURRENT) {
-    throw new BotError(`Liczba botów musi być całkowita, między 1 a ${MAX_CONCURRENT}`, 400);
+  const maxConcurrent = await getBotsMaxConcurrent();
+  if (!Number.isInteger(input.count) || input.count < 1 || input.count > maxConcurrent) {
+    throw new BotError(`Liczba botów musi być całkowita, między 1 a ${maxConcurrent}`, 400);
   }
-  if (countRunning() + input.count > MAX_CONCURRENT) {
+  if (countRunning() + input.count > maxConcurrent) {
     throw new BotError(
-      `Zbyt wiele botów naraz — obecnie działa ${countRunning()}, limit łączny to ${MAX_CONCURRENT}`,
+      `Zbyt wiele botów naraz — obecnie działa ${countRunning()}, limit łączny to ${maxConcurrent}`,
       400,
     );
   }

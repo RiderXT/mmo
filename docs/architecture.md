@@ -3193,6 +3193,29 @@ wysłaniem — kolejny mockup Pillow (narożnik + paski + prawdziwa tekstura raz
 poprawną fakturę kamienia, nie pomyłkowy plik jak poprzednio. W przeglądarce: `background-image`
 panelu wskazuje na `panel-fill.png`, request 200 OK. `pnpm --filter web exec tsc --noEmit` czysto.
 
+### Limit jednoczesnych botów: ze stałej w kodzie na ustawienie admina (2026-08-21)
+
+User poprosił o podniesienie limitu z 20 na 100, potem doprecyzował: lepiej jako ustawienie, które
+admin może sam zmieniać, niż kolejna sztywna liczba w kodzie wymagająca redeploya za każdym razem.
+
+Nowy klucz w istniejącym mechanizmie `Settings` (ten sam wzorzec co
+`expedition.defaultDurationMinutes`/`gathering.settings`/`referral.settings`) —
+`bots.maxConcurrent` w [settings/service.ts](../apps/api/src/modules/settings/service.ts),
+domyślnie 20 (bez zmiany zachowania dla kogoś kto nigdy tego nie ustawi), z twardym pułapem 500
+w walidacji (zabezpieczenie przed przypadkowym wpisaniem absurdalnej liczby, w świetle
+wcześniejszego incydentu przeciążenia VPS przy 20 botach). `modules/admin/bots/service.ts`
+(`launchBots`) czyta ten limit dynamicznie zamiast stałej `MAX_CONCURRENT=20` — jedyna zmiana w
+logice uruchamiania. `LaunchBotsSchema.count` (walidacja Zod, statyczna z natury) poluzowana z
+`max(20)` na `max(500)` żeby móc w ogóle wysłać wyższą wartość do backendu — rzeczywisty limit
+i tak wymuszany dynamicznie w serwisie, nie w schemacie.
+
+Panel admina (Serwer → Boty): nowe pole "Limit jednoczesnych botów" z przyciskiem Zapisz obok
+formularza uruchamiania, `max` na polu "Liczba botów" i opis "Maks. N działających naraz" czytają
+teraz wartość z ustawienia zamiast sztywnej liczby. Zweryfikowane w przeglądarce: zmiana 20→100,
+zapis, natychmiastowe odświeżenie opisu na "Maks. 100 działających naraz" (round-trip PUT→GET
+przez React Query invalidation). `pnpm --filter shared build` (dist musi być przebudowany, api/web
+importują skompilowany JS, nie źródło TS) + `tsc --noEmit` czysto na `shared`/`api`/`web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

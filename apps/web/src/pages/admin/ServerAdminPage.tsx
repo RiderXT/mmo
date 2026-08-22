@@ -12,6 +12,7 @@ import {
   deleteUserAccount,
   type BotRunDto,
 } from "../../lib/adminApi";
+import { getBotsMaxConcurrentSetting, setBotsMaxConcurrentSetting } from "../../lib/adminSettingsApi";
 import { ApiError } from "../../lib/apiClient";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
@@ -38,6 +39,8 @@ export function ServerAdminPage() {
   const [expandedErrorsModule, setExpandedErrorsModule] = useState<string | null>(null);
   const [form, setForm] = useState({ count: 1, className: "", targetLevel: 10, maxMinutes: 0 });
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const [maxConcurrentDraft, setMaxConcurrentDraft] = useState<number | null>(null);
+  const [maxConcurrentError, setMaxConcurrentError] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState("");
   const [confirmingDeleteUser, setConfirmingDeleteUser] = useState<{ id: string; email: string } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export function ServerAdminPage() {
     refetchInterval: 3000,
   });
   const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
+  const maxConcurrentQuery = useQuery({ queryKey: ["admin-bots-max-concurrent"], queryFn: getBotsMaxConcurrentSetting });
   const usersQuery = useQuery({ queryKey: ["admin-users"], queryFn: listUsers });
   const logQuery = useQuery({
     queryKey: ["admin-bot-log", expandedBotId],
@@ -75,6 +79,16 @@ export function ServerAdminPage() {
     onError: (err) => setLaunchError(err instanceof ApiError ? err.message : "Nie udało się uruchomić botów"),
   });
 
+  const maxConcurrentMutation = useMutation({
+    mutationFn: (count: number) => setBotsMaxConcurrentSetting(count),
+    onSuccess: () => {
+      setMaxConcurrentError(null);
+      setMaxConcurrentDraft(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-bots-max-concurrent"] });
+    },
+    onError: (err) => setMaxConcurrentError(err instanceof ApiError ? err.message : "Nie udało się zapisać limitu"),
+  });
+
   const stopMutation = useMutation({
     mutationFn: (id: string) => stopBot(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-bot-runs"] }),
@@ -93,6 +107,7 @@ export function ServerAdminPage() {
   const bots = botsQuery.data ?? [];
   const runningCount = bots.filter((b) => b.status === "running").length;
   const classOptions = classesQuery.data ?? [];
+  const maxConcurrent = maxConcurrentQuery.data?.count ?? 20;
   const users = usersQuery.data ?? [];
   const filteredUsers = userSearch.trim()
     ? users.filter((u) => u.email.toLowerCase().includes(userSearch.trim().toLowerCase()))
@@ -284,15 +299,34 @@ export function ServerAdminPage() {
         <h2 className="mb-2 text-sm font-medium text-parchment">Boty (test obciążenia / balansu)</h2>
         <p className="mb-3 text-xs text-parchment-faint">
           Uruchamia prawdziwe boty grające przez to samo API co przeglądarka (patrz
-          apps/api/scripts/bot/README.md) — realne obciążenie, nie symulacja. Maks. 20 działających
-          naraz.
+          apps/api/scripts/bot/README.md) — realne obciążenie, nie symulacja. Maks. {maxConcurrent}{" "}
+          działających naraz.
         </p>
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          <span className="text-parchment-dim">Limit jednoczesnych botów:</span>
+          <input
+            type="number"
+            min={1}
+            max={500}
+            className={`${inputClass} w-24 py-1`}
+            value={maxConcurrentDraft ?? maxConcurrent}
+            onChange={(e) => setMaxConcurrentDraft(Number(e.target.value))}
+          />
+          <button
+            onClick={() => maxConcurrentMutation.mutate(maxConcurrentDraft ?? maxConcurrent)}
+            disabled={maxConcurrentMutation.isPending || maxConcurrentDraft === null}
+            className="rounded-md border border-line-soft px-2 py-1 text-parchment-dim hover:bg-panel-raised disabled:opacity-40"
+          >
+            Zapisz
+          </button>
+          {maxConcurrentError && <span className="text-red-400">{maxConcurrentError}</span>}
+        </div>
         <div className="panel grid gap-3 p-3 sm:grid-cols-4">
           <Field label="Liczba botów">
             <input
               type="number"
               min={1}
-              max={20}
+              max={maxConcurrent}
               className={inputClass}
               value={form.count}
               onChange={(e) => setForm({ ...form, count: Number(e.target.value) })}

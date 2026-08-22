@@ -49,6 +49,43 @@ export async function setExpeditionDurationMinutes(
   return minutes;
 }
 
+// Admin-adjustable ceiling for apps/api/scripts/bot/ launches (see modules/admin/bots/service.ts)
+// — was a hardcoded MAX_CONCURRENT=20 constant. The 500 hard cap here is a safety backstop
+// against a fat-fingered value that could genuinely overload the VPS (see docs/architecture.md,
+// the 2026-08-20 bot-crash incident), not a value anyone should actually approach casually.
+export const BOTS_MAX_CONCURRENT_KEY = "bots.maxConcurrent";
+const BOTS_MAX_CONCURRENT_DEFAULT = 20;
+const BOTS_MAX_CONCURRENT_HARD_CAP = 500;
+
+export async function getBotsMaxConcurrent(): Promise<number> {
+  const row = await prisma.settings.findUnique({ where: { key: BOTS_MAX_CONCURRENT_KEY } });
+  if (!row) return BOTS_MAX_CONCURRENT_DEFAULT;
+  const value = JSON.parse(row.value) as unknown;
+  return typeof value === "number" ? value : BOTS_MAX_CONCURRENT_DEFAULT;
+}
+
+export async function setBotsMaxConcurrent(count: number, actorUserId: string, requestId?: string): Promise<number> {
+  if (!Number.isInteger(count) || count < 1 || count > BOTS_MAX_CONCURRENT_HARD_CAP) {
+    throw new SettingsError(`Limit botów musi być liczbą całkowitą 1-${BOTS_MAX_CONCURRENT_HARD_CAP}`, 400);
+  }
+
+  await prisma.settings.upsert({
+    where: { key: BOTS_MAX_CONCURRENT_KEY },
+    create: { key: BOTS_MAX_CONCURRENT_KEY, value: JSON.stringify(count) },
+    update: { value: JSON.stringify(count) },
+  });
+
+  await logAction({
+    module: "admin:settings",
+    action: "update",
+    actorUserId,
+    requestId,
+    payload: { key: BOTS_MAX_CONCURRENT_KEY, count },
+  });
+
+  return count;
+}
+
 export const GATHERING_SETTINGS_KEY = "gathering.settings";
 const GATHERING_SETTINGS_DEFAULT: GatheringSettings = {
   fishing: { minSeconds: 8, maxSeconds: 20 },

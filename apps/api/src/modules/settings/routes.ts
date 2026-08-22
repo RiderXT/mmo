@@ -9,10 +9,13 @@ import {
   setGatheringSettings,
   getReferralSettings,
   setReferralSettings,
+  getBotsMaxConcurrent,
+  setBotsMaxConcurrent,
   SettingsError,
 } from "./service.js";
 
 const UpdateDurationSchema = z.object({ minutes: z.number().int() });
+const UpdateBotsMaxConcurrentSchema = z.object({ count: z.number().int() });
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   // Public (any authenticated user) — players need this to know how long an expedition takes.
@@ -52,5 +55,20 @@ export async function adminSettingsRoutes(app: FastifyInstance): Promise<void> {
     const input = ReferralSettingsSchema.parse(request.body);
     const saved = await setReferralSettings(input, request.user!.sub, request.id);
     return reply.send(saved);
+  });
+
+  app.get("/bots-max-concurrent", { preHandler: requireRole("admin") }, async (_request, reply) => {
+    return reply.send({ count: await getBotsMaxConcurrent() });
+  });
+
+  app.put("/bots-max-concurrent", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const { count } = UpdateBotsMaxConcurrentSchema.parse(request.body);
+    try {
+      const saved = await setBotsMaxConcurrent(count, request.user!.sub, request.id);
+      return reply.send({ count: saved });
+    } catch (err) {
+      if (err instanceof SettingsError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
   });
 }
