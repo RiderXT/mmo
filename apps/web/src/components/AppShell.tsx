@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/authStore";
 import { useCharacterStore } from "../store/characterStore";
 import { getCharacter } from "../lib/charactersApi";
 import { listPlayerZones } from "../lib/zonesApi";
+import { getUnreadMailCount } from "../lib/mailApi";
 import { UpdateBanner } from "./UpdateBanner";
 import { ActiveBuffsBar } from "./expedition/ActiveBuffsBar";
 
@@ -246,6 +247,10 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const { user, clearSession } = useAuthStore();
+  // 30s poll — frequent enough that an unread badge feels current without hammering the API the
+  // way ServerAdminPage's 2-5s dashboards do (those are admin-only and already accepted as busy).
+  const unreadMailQuery = useQuery({ queryKey: ["mail-unread-count"], queryFn: getUnreadMailCount, refetchInterval: 30000 });
+  const unreadMailCount = unreadMailQuery.data?.count ?? 0;
 
   async function handleLogout() {
     try {
@@ -275,6 +280,39 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <>
                 <NavIconImg src="/icons/nav/znajomi.png" alt="" active={isActive} />
                 Znajomi
+              </>
+            )}
+          </NavLink>
+          {/* Brak jeszcze dedykowanej grafiki dla Poczty/Zgłoś problem/Changelog (Tymczasowe/rpg_menu_design
+             miał tylko puste placeholdery dla poczty) — reużyte istniejące ikony tymczasowo. */}
+          <NavLink to="/mail" className={navLinkClass} onClick={onNavigate}>
+            {({ isActive }) => (
+              <>
+                <span className="relative">
+                  <NavIconImg src="/icons/nav/znajomi.png" alt="" active={isActive} />
+                  {unreadMailCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-bright px-1 text-[10px] font-bold text-ink">
+                      {unreadMailCount > 9 ? "9+" : unreadMailCount}
+                    </span>
+                  )}
+                </span>
+                Poczta
+              </>
+            )}
+          </NavLink>
+          <NavLink to="/support" className={navLinkClass} onClick={onNavigate}>
+            {({ isActive }) => (
+              <>
+                <NavIconImg src="/icons/nav/npc.png" alt="" active={isActive} />
+                Zgłoś problem
+              </>
+            )}
+          </NavLink>
+          <NavLink to="/changelog" className={navLinkClass} onClick={onNavigate}>
+            {({ isActive }) => (
+              <>
+                <NavIconImg src="/icons/nav/ranking.png" alt="" active={isActive} />
+                Co nowego
               </>
             )}
           </NavLink>

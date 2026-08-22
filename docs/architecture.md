@@ -3235,6 +3235,53 @@ na elemencie spoza panelu admina). Wymagał pełnego restartu dev servera (ta sa
 poprzednia poprawka kolorów — Tailwind trzyma przeliczony config w pamięci procesu). `pnpm
 --filter web exec tsc --noEmit` czysto.
 
+### Nowe moduły: Poczta, tickety wsparcia, changelog (2026-08-22)
+
+User poprosił o trzy niezależne moduły w jednym zgłoszeniu: prywatne wiadomości między graczami,
+system ticketów do administracji (zgłaszanie bugów, pełna obsługa z odpowiedziami i statusem po
+stronie admina), oraz changelog widoczny dla graczy. Dopytane i ustalone przed implementacją:
+changelog nie ma żadnego mechanizmu automatyzacji z gita (w repo brak `.github/workflows` i
+aktywnych `.git/hooks`) — "automatycznie" oznacza w praktyce prosty formularz w panelu admina,
+który ja (Claude) uzupełniam po każdej większej zmianie w tej i przyszłych sesjach; to manualny
+krok, nie pipeline. Panel ticketów w adminie użył tego samego wzorca rozwijanego wiersza co log
+bota w Serwer → Boty (`ServerAdminPage.tsx`), zamiast osobnego widoku/modala.
+
+**Model danych** (`Message`, `SupportTicket`+`SupportTicketReply`, `ChangelogEntry` — nowe
+modele w obu plikach schematu na raz, jak zawsze): `Message` ma miękkie usuwanie
+(`deletedBySender`/`deletedByRecipient` osobno, żeby usunięcie z jednej strony nie ukryło
+wiadomości drugiej stronie) zamiast twardego kasowania. `SupportTicket.status` to zwykły
+`String @default("open")` (ten sam wzorzec co `role`/`FriendRequest.status` w tym projekcie) —
+poprawność wartości pilnuje `TicketStatusSchema` w Zod, nie enum w Prisma.
+
+**Backend** — trzy nowe moduły wzorowane na już istniejącym `modules/friends`: `modules/mail`,
+`modules/support` (gracz), `modules/admin/support` (admin, `requireRole("admin","moderator")`),
+`modules/admin/changelog` (CRUD, `requireRole("admin")`) + `modules/changelog` (publiczny odczyt,
+`requireAuth`, limit 50 najnowszych). Wyszukiwanie odbiorcy poczty po nazwie postaci identyczne
+jak przy wysyłaniu zaproszenia do znajomych (`prisma.character.findUnique`, 404/400 analogicznie).
+Każda mutacja woła `logAction` jak reszta modułów. Pięć nowych rejestracji w `app.ts`
+(`/api/mail`, `/api/support`, `/api/admin/support`, `/api/changelog`, `/api/admin/changelog`).
+
+**Frontend** — `MailPage.tsx` (Odebrane/Wysłane, kompozycja, klik = oznacz jako przeczytane),
+`SupportPage.tsx` (zgłoszenie + wątek + odpowiedź, ukryta gdy status="closed"),
+`ChangelogPage.tsx` (chronologiczna lista publiczna), `admin/SupportAdminPage.tsx` (rozwijany
+wiersz z wątkiem + odpowiedź admina + zmiana statusu, wzorem loga bota), `admin/ChangelogAdminPage.tsx`
+(CRUD wzorem `EventsAdminPage.tsx`, `ConfirmModal` przed usunięciem). Odznaka liczby
+nieprzeczytanych wiadomości w `AppShell.tsx` — osobny lekki `useQuery` z `refetchInterval: 30000`
+(30s, świadomie rzadziej niż 2-5s polling dashboardu admina, bo to działa dla każdej zalogowanej
+sesji gracza, nie tylko admina).
+
+**Tymczasowe ikony nawigacji**: dla Poczty/Zgłoś problem/Co nowego nie ma jeszcze dedykowanej
+grafiki w paczce `Tymczasowe/rpg_menu_design/icons/` (`poczta.png` to pusty placeholder) —
+na razie reużyte istniejące ikony (`znajomi.png`, `npc.png`, `ranking.png`) jako tymczasowe
+zamienniki, oznaczone komentarzem w kodzie, do podmiany gdy user dostarczy właściwe assety.
+
+Zweryfikowane w przeglądarce end-to-end dwoma świeżo zarejestrowanymi kontami testowymi: wysłanie
+wiadomości między postaciami + odczyt w Odebrane/Wysłane + zniknięcie odznaki nieprzeczytanych po
+otwarciu; zgłoszenie ticketu jako gracz → widoczny w panelu admina → odpowiedź admina + zmiana
+statusu na "Rozwiązany" → widoczne z powrotem po stronie gracza z odpowiedzią; dodanie wpisu
+changelogu w adminie → widoczny na publicznej stronie "Co nowego" → edycja → usunięcie z
+potwierdzeniem. `tsc --noEmit` czysto na `shared`/`api`/`web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

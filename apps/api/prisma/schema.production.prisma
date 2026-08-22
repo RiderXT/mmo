@@ -47,6 +47,11 @@ model User {
   friendRequestsReceived FriendRequest[] @relation("FriendRequestsReceived")
   referralsMade     Referral[] @relation("ReferralsMade")
   referralReceived  Referral?  @relation("ReferralReceived")
+  messagesSent          Message[]             @relation("MessagesSent")
+  messagesReceived      Message[]             @relation("MessagesReceived")
+  supportTickets        SupportTicket[]
+  supportTicketReplies  SupportTicketReply[]
+  changelogEntries      ChangelogEntry[]
 
   @@index([role])
 }
@@ -768,4 +773,68 @@ model GatherSession {
   character   Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
   fishingSpot FishingSpot? @relation("GatherFishingSpot", fields: [fishingSpotId], references: [id], onDelete: Cascade)
   mine        Mine?        @relation("GatherMine", fields: [mineId], references: [id], onDelete: Cascade)
+}
+
+// Prywatna wiadomość między dwoma kontami (nie postaciami — jak FriendRequest, adresowana przez
+// nazwę postaci przy wysyłce, ale relacja żyje na poziomie User). Usuwanie miękkie: każda strona
+// ma własną flagę "deletedBy*", więc usunięcie przez jedną stronę nie zabiera wiadomości drugiej.
+model Message {
+  id                 String   @id @default(cuid())
+  senderId           String
+  recipientId        String
+  subject            String
+  body               String
+  read               Boolean  @default(false)
+  deletedBySender    Boolean  @default(false)
+  deletedByRecipient Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  sender    User @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("MessagesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, read])
+  @@index([senderId])
+}
+
+// Zgłoszenie do administracji (bug, pytanie itd.) — treść startowa w samym tickecie, dalsza
+// wymiana w SupportTicketReply. Valid values status: open | in_progress | resolved | closed.
+model SupportTicket {
+  id           String   @id @default(cuid())
+  authorUserId String
+  subject      String
+  body         String
+  status       String   @default("open")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  author  User                 @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  replies SupportTicketReply[]
+
+  @@index([authorUserId])
+  @@index([status])
+}
+
+model SupportTicketReply {
+  id           String   @id @default(cuid())
+  ticketId     String
+  authorUserId String
+  body         String
+  createdAt    DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+// Wpis changelogu — wyłącznie ręcznie dodawany przez admina przez panel (patrz docs/architecture.md),
+// nie ma tu żadnej automatyzacji z commitów gita.
+model ChangelogEntry {
+  id           String   @id @default(cuid())
+  title        String
+  body         String
+  authorUserId String
+  createdAt    DateTime @default(now())
+
+  author User @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
 }

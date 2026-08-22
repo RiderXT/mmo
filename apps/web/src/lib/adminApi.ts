@@ -19,6 +19,10 @@ import type {
   CreatePassiveSkillTypeInput,
   GatherKind,
   SkillCategory,
+  CreateChangelogEntryInput,
+  UpdateChangelogEntryInput,
+  TicketStatus,
+  ReplyToTicketInput,
 } from "@mmo/shared";
 import { apiFetch, API_URL, ApiError } from "./apiClient";
 import { useAuthStore } from "../store/authStore";
@@ -460,3 +464,51 @@ export interface AdminUserDto {
 }
 export const listUsers = () => apiFetch<AdminUserDto[]>("/api/admin/users");
 export const deleteUserAccount = (id: string) => apiFetch<void>(`/api/admin/users/${id}`, { method: "DELETE" });
+
+// Changelog — admin CRUD. Manually maintained (see docs/architecture.md), not auto-generated
+// from git — an entry only shows up once an admin adds it here.
+export interface ChangelogEntryDto {
+  id: string;
+  title: string;
+  body: string;
+  authorUserId: string;
+  createdAt: string;
+}
+export const listChangelogEntriesAdmin = () => apiFetch<ChangelogEntryDto[]>("/api/admin/changelog");
+export const createChangelogEntry = (input: CreateChangelogEntryInput) =>
+  apiFetch<ChangelogEntryDto>("/api/admin/changelog", { method: "POST", body: JSON.stringify(input) });
+export const updateChangelogEntry = (id: string, input: UpdateChangelogEntryInput) =>
+  apiFetch<ChangelogEntryDto>(`/api/admin/changelog/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteChangelogEntry = (id: string) =>
+  apiFetch<void>(`/api/admin/changelog/${id}`, { method: "DELETE" });
+
+// Support tickets — admin side. Player side lives in lib/supportApi.ts.
+export interface SupportTicketReplyDto {
+  id: string;
+  body: string;
+  authorEmail: string;
+  isAdminReply: boolean;
+  createdAt: string;
+}
+export interface SupportTicketAdminDto {
+  id: string;
+  subject: string;
+  body: string;
+  status: TicketStatus;
+  authorEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  replies: SupportTicketReplyDto[];
+}
+export const listAllTickets = (status?: TicketStatus) =>
+  apiFetch<SupportTicketAdminDto[]>(`/api/admin/support${status ? `?status=${status}` : ""}`);
+export const replyToTicketAsAdmin = (ticketId: string, input: ReplyToTicketInput) =>
+  apiFetch<SupportTicketReplyDto>(`/api/admin/support/${ticketId}/replies`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+export const updateTicketStatus = (ticketId: string, status: TicketStatus) =>
+  apiFetch<SupportTicketAdminDto>(`/api/admin/support/${ticketId}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  });

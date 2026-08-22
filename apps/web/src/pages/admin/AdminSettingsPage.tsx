@@ -13,6 +13,8 @@ import { GatheringAdminPage } from "./GatheringAdminPage";
 import { PassiveSkillsAdminPage } from "./PassiveSkillsAdminPage";
 import { ReferralAdminPage } from "./ReferralAdminPage";
 import { ServerAdminPage } from "./ServerAdminPage";
+import { SupportAdminPage } from "./SupportAdminPage";
+import { ChangelogAdminPage } from "./ChangelogAdminPage";
 
 const TABS = [
   { key: "general", label: "Ogólne", Component: SettingsAdminPage },
@@ -28,6 +30,8 @@ const TABS = [
   { key: "testing", label: "Testowanie", Component: GrantAdminPage },
   { key: "balance", label: "Statystyki balansu", Component: BalanceStatsPage },
   { key: "server", label: "Serwer", Component: ServerAdminPage },
+  { key: "support", label: "Tickety", Component: SupportAdminPage },
+  { key: "changelog", label: "Changelog", Component: ChangelogAdminPage },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];

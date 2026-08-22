@@ -7,6 +7,9 @@ import { GamePage } from "./pages/GamePage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { AccountSettingsPage } from "./pages/AccountSettingsPage";
 import { FriendsPage } from "./pages/FriendsPage";
+import { MailPage } from "./pages/MailPage";
+import { SupportPage } from "./pages/SupportPage";
+import { ChangelogPage } from "./pages/ChangelogPage";
 import { RankingPage } from "./pages/RankingPage";
 import { AdminLogsPage } from "./pages/AdminLogsPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
@@ -70,6 +73,30 @@ export function App() {
         element={
           <ProtectedRoute>
             <FriendsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/mail"
+        element={
+          <ProtectedRoute>
+            <MailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/support"
+        element={
+          <ProtectedRoute>
+            <SupportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/changelog"
+        element={
+          <ProtectedRoute>
+            <ChangelogPage />
           </ProtectedRoute>
         }
       />

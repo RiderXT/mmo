@@ -41,6 +41,11 @@ import { adminPassiveSkillsRoutes } from "./modules/admin/passiveSkills/routes.j
 import { minesRoutes } from "./modules/admin/mines/routes.js";
 import { accountRoutes } from "./modules/account/routes.js";
 import { dailyLoginRoutes } from "./modules/dailyLogin/routes.js";
+import { mailRoutes } from "./modules/mail/routes.js";
+import { supportRoutes } from "./modules/support/routes.js";
+import { supportAdminRoutes } from "./modules/admin/support/routes.js";
+import { changelogRoutes } from "./modules/changelog/routes.js";
+import { changelogAdminRoutes } from "./modules/admin/changelog/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -137,6 +142,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(serverLoadRoutes, { prefix: "/api/admin/server-load" });
   await app.register(botsRoutes, { prefix: "/api/admin/bots" });
   await app.register(adminUsersRoutes, { prefix: "/api/admin/users" });
+  await app.register(mailRoutes, { prefix: "/api/mail" });
+  await app.register(supportRoutes, { prefix: "/api/support" });
+  await app.register(supportAdminRoutes, { prefix: "/api/admin/support" });
+  await app.register(changelogRoutes, { prefix: "/api/changelog" });
+  await app.register(changelogAdminRoutes, { prefix: "/api/admin/changelog" });
 
   return app;
 }

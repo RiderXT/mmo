@@ -17,5 +17,8 @@ export * from "./schemas/gathering.js";
 export * from "./schemas/passiveSkill.js";
 export * from "./schemas/account.js";
 export * from "./schemas/bots.js";
+export * from "./schemas/mail.js";
+export * from "./schemas/supportTicket.js";
+export * from "./schemas/changelog.js";
 export * from "./lib/upgradeSuccess.js";
 export * from "./lib/leveling.js";
