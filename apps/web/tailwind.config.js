@@ -15,7 +15,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: oklch("12%", "0.02", "45"),
+        // Neutral (chroma 0) — matches what admin pages already showed via index.css's
+        // .admin-scope override (oklch(12% 0 0), "#1d1d1d"-ish). Making the base token itself
+        // neutral means every page gets the same flat background with no per-scope override
+        // needed; cards (panel/panel-raised) intentionally untouched, still warm-toned.
+        ink: oklch("12%", "0", "0"),
         panel: oklch("23%", "0.006", "45"),
         "panel-raised": oklch("28%", "0.007", "45"),
         line: oklch("40%", "0.035", "45"),

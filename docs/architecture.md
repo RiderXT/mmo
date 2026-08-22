@@ -3216,6 +3216,25 @@ zapis, natychmiastowe odświeżenie opisu na "Maks. 100 działających naraz" (r
 przez React Query invalidation). `pnpm --filter shared build` (dist musi być przebudowany, api/web
 importują skompilowany JS, nie źródło TS) + `tsc --noEmit` czysto na `shared`/`api`/`web`.
 
+### Tło strony ujednolicone do neutralnego #1d1d1d wszędzie (2026-08-21)
+
+Panel admina i reszta gry miały RÓŻNE kolory tła strony: gra używała ciepłego `ink`
+(`oklch(12% 0.02 45)`, część "Torchlit Arena Ledger"), admin miał osobny override w
+`index.css` (`.admin-scope { background-color: oklch(12% 0 0) }`, neutralna szarość — to co
+user nazwał "#1d1d1d"). User poprosił o ujednolicenie tła NA CAŁEJ stronie do wariantu admina —
+dopytany wprost czy to ma też objąć karty (`panel`/`bg-panel`, cieplejsze i jaśniejsze), odpowiedź:
+nie, tylko tło strony, karty zostają jak są (osobny temat na przyszłość).
+
+Zmiana: `ink` w `tailwind.config.js` zmieniony z `oklch(12% 0.02 45)` na `oklch(12% 0 0)` —
+skoro to JEDEN token używany wszędzie przez `bg-ink` (AppShell), zmiana u źródła ujednoliciła tło
+automatycznie na każdej stronie/zakładce bez dotykania pojedynczych komponentów. Usunięty stał się
+zbędny osobny override w `.admin-scope` dla `ink`/`bg-ink` (ta sama wartość co nowy globalny
+token) — zostawiony tylko override dla `.panel`/`.bg-panel` (karty, świadomie nietknięte).
+Zweryfikowane w przeglądarce: `.bg-ink` liczy się teraz na `oklch(0.12 0 0)` wszędzie (sprawdzone
+na elemencie spoza panelu admina). Wymagał pełnego restartu dev servera (ta sama przyczyna co
+poprzednia poprawka kolorów — Tailwind trzyma przeliczony config w pamięci procesu). `pnpm
+--filter web exec tsc --noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
