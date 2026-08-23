@@ -3395,6 +3395,70 @@ jeśli po tym fixie i ponownym uruchomieniu skryptu migracyjnego nadal zostanie 
 doszło do sięgania po slot 297 wcześniej) — trzeba zrobić miejsce (wyrzucić/sprzedać coś w
 widocznych zakładkach) zanim ten konkretny osierocony stos "sztaba1" będzie mógł wrócić do EQ.
 
+### Skala problemu na produkcji: 17488 osieroconych przedmiotów na 113 postaciach + zabezpieczenie na przyszłość (2026-08-23)
+
+Po wdrożeniu powyższych fixów user uruchomił `deploy.sh` na produkcji — skrypt migracyjny zgłosił
+"Przeniesiono: 24, bez miejsca (bez zmian): 17488". Zanim cokolwiek ruszono dalej, zweryfikowano
+wspólnie z userem czy to nie błąd w moim kodzie (np. `MAX_INVENTORY_SLOTS` źle się wczytujące na
+produkcji, przez co skrypt oznaczałby prawie WSZYSTKO jako osierocone) — bezpośrednie zapytanie SQL
+(`SELECT COUNT(*) WHERE "slotIndex" >= 140`) potwierdziło dokładnie 17488, czyli liczba jest
+prawdziwa, nie artefakt buga. 113 dotkniętych postaci, po dopytaniu usera, to konta botów
+testowych (load-testing z wieloma jednocześnie działającymi botami przez wiele dni — patrz
+"Bot gracza — playtesting balansu..." 2026-08-20) — potwierdzone jako bezpieczne do usunięcia.
+
+**Sprzątanie**: nowy jednorazowy skrypt (NIE wpięty w `deploy.sh` — w przeciwieństwie do
+`relocate-orphaned-inventory-slots.ts`, który tylko przenosi-albo-zostawia, ten kasuje, więc musi
+być uruchamiany świadomie, ręcznie)
+[apps/api/scripts/_delete_orphaned_inventory_items.ts](../apps/api/scripts/_delete_orphaned_inventory_items.ts)
+— usuwa wszystko co nadal ma `slotIndex >= MAX_INVENTORY_SLOTS` po tym jak skrypt relokujący już
+dostał szansę przenieść co się dało, z wypisaniem podsumowania per-postać przed skasowaniem i
+wpisem do `GameLog` (`module: "inventory"`, `action: "orphaned_items_purged"`) jako trwały ślad co
+i kiedy zostało usunięte. Przetestowany lokalnie (utworzenie sztucznego osieroconego wiersza →
+usunięcie → potwierdzenie że drugi przebieg jest no-opem).
+
+**Zabezpieczenie na przyszłość** — user zażądał wprost: zanim gra "odbierze" graczowi przedmiot
+który nie mieści się w EQ, gracz musi dostać szansę zrobić miejsce (funkcja discard/sell już
+istnieje) zamiast cichej utraty. Zdecydowano na prostszy z dwóch wariantów: całkowicie zablokować
+akcję czytelnym błędem (zamiast budować UI do wyboru "co odrzucić").
+
+- **Ekspedycje** ([expeditions/service.ts](../apps/api/src/modules/expeditions/service.ts),
+  `applyExpeditionReward`): wcześniej `allowPartial: true` cicho gubił loot który się nie zmieścił
+  (raportowane tylko w `overflowLoot` — pole ISTNIAŁO w UI od dawna, `ExpeditionPanel.tsx` pokazywało
+  "Ekwipunek był pełny — zgubiono część łupu", ale PO fakcie, nagroda i tak była już utracona).
+  Teraz: jeśli cokolwiek się nie mieści, cała transakcja (exp/gold/loot) rzuca `ExpeditionError`
+  409 i robi rollback atomowo — gracz nic nie traci, dostaje czytelny błąd, może zrobić miejsce i
+  odebrać nagrodę ponownie. Martwy kod usunięty: pole `overflowLoot` (nigdy już niepuste w praktyce)
+  wycięte z powrotu funkcji, `ExpeditionPanel.tsx`, `expeditionsApi.ts` i bota (`bot/client.ts`).
+- **Zbieractwo** ([gathering/service.ts](../apps/api/src/modules/gathering/service.ts)) — INNA
+  architektura niż ekspedycje: `resolveGatherSession` leniwie "dogania" WIELE zaległych faz naraz
+  w pętli (mogło zebrać się np. 20 cykli od ostatniego sprawdzenia), z istniejącym już wcześniej
+  komentarzem-ostrzeżeniem "a full bag must not crash the lazy phase-resolution loop" — rzucenie
+  zwykłego błędu tutaj rozwaliłoby całą pętlę dogrywania (i prawdopodobnie samo ładowanie zakładki
+  Zbieractwo) zamiast tylko jednej akcji gracza. Rozwiązanie zamiast prostego throw: nowy wewnętrzny
+  sygnał `GatherInventoryFullSignal` — rzucany WEWNĄTRZ transakcji danej fazy (rollback tej jednej
+  fazy atomowo, nic nie ginie), złapany przez pętlę dogrywania w `resolveGatherSession`, która
+  PAUZUJE sesję dokładnie na tej fazie (bez usuwania sesji — inaczej niż istniejący wcześniej
+  mechanizm `maxCyclesPerResolve`, który sesję kasuje) i loguje `auto_paused_inventory_full`. Gdy
+  gracz zrobi miejsce, kolejne leniwe rozwiązanie sesji poprawnie dokończy dokładnie tę fazę.
+- **Poleceni** ([referralRewards.ts](../apps/api/src/lib/referralRewards.ts)) — świadomie
+  WYŁĄCZONY z blokowania: ta nagroda to efekt uboczny działania INNEJ postaci (poleconego LUB
+  polecającego), więc rzucenie błędu tutaj zablokowałoby całkowicie niepowiązane żądanie gracza
+  (np. odbiór ekspedycji) z powodu pełnego EQ osoby trzeciej. Zostaje `allowPartial`, ale teraz
+  przynajmniej zalogowane (`module: "referral"`, `action: "reward_overflow"`) zamiast ginąć bez
+  śladu.
+- **Boty testowe** ([bot/policy.ts](../apps/api/scripts/bot/policy.ts)) — skoro `claimExpedition`
+  teraz 409-uje na pełnym EQ, a boty właśnie to (masowe nazbieranie lootu bez zarządzania
+  ekwipunkiem) robiły najczęściej — dodano `BotStopSignal`: istniejąca pętla retry (dla wyścigu z
+  zegarem serwera przy "Ekspedycja jeszcze trwa") rozróżnia teraz ten konkretny komunikat
+  ("Ekwipunek jest pełny") i od razu zatrzymuje bota tym samym, już istniejącym, eleganckim
+  mechanizmem co limit czasu/liczby ekspedycji (`report.log("stop", ...)` + zakończenie), zamiast
+  wyczerpywać 5 prób i crashować cały przebieg bota niezłapanym wyjątkiem.
+
+`tsc --noEmit` czysto na `api`/`web`. Zweryfikowane w przeglądarce dla ścieżki adminowego grantu
+(ten sam kontrakt `addLootToInventory`/`overflow`, patrz wpis wyżej) — pełna weryfikacja UI klawiu
+"Odbierz nagrody" na naprawdę zapełnionym EQ nie została wykonana (wymagałoby ręcznego zapełnienia
+140 slotów), fix opiera się na tej samej, już zweryfikowanej ścieżce.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

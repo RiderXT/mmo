@@ -548,16 +548,22 @@ export async function applyExpeditionReward(
   const leveledUp = newLevel > character.level;
   const levelsGained = Math.max(0, newLevel - character.level);
 
-  // Background reward — a full bag must not swallow the exp/gold/rest-of-loot too, so overflow is
-  // dropped and reported instead of aborting the whole transaction (see addLootToInventory).
-  const overflowLoot: { itemId: string; quantity: number }[] = [];
-
+  // If any drop doesn't fit, block the whole claim (rolled back atomically below) rather than
+  // silently dropping that loot — the player sees a clear error and can free up space, instead
+  // of losing an item with no indication anything went wrong. See docs/architecture.md,
+  // "Ekwipunek: backend pozwalal na 500 slotow..." (2026-08-23) for why this matters — the old
+  // "grant what fits, drop the rest" behavior is exactly what let orphaned loot pile up unnoticed.
   await prisma.$transaction(async (tx) => {
     for (const loot of result.loot) {
       const { overflow } = await addLootToInventory(tx, character.id, loot.itemId, loot.quantity, {
         allowPartial: true,
       });
-      if (overflow > 0) overflowLoot.push({ itemId: loot.itemId, quantity: overflow });
+      if (overflow > 0) {
+        throw new ExpeditionError(
+          "Ekwipunek jest pełny — zrób miejsce w EQ, żeby odebrać całą nagrodę z tej ekspedycji, i spróbuj ponownie.",
+          409,
+        );
+      }
     }
     await tx.character.update({
       where: { id: character.id },
@@ -575,18 +581,6 @@ export async function applyExpeditionReward(
     });
   });
 
-  if (overflowLoot.length > 0) {
-    await logAction({
-      module: "expeditions",
-      level: "warn",
-      action: "loot_overflow",
-      actorUserId: userId,
-      actorCharacterId: character.id,
-      requestId,
-      payload: { expeditionId, overflowLoot },
-    });
-  }
-
   if (leveledUp) {
     await tryPayReferralReward(character.id);
   }
@@ -600,7 +594,7 @@ export async function applyExpeditionReward(
     payload: { expeditionId, ...result, leveledUp, newLevel, levelsGained },
   });
 
-  return { result, leveledUp, newLevel, overflowLoot };
+  return { result, leveledUp, newLevel };
 }
 
 export async function claimExpedition(expeditionId: string, userId: string, requestId?: string) {

@@ -123,7 +123,6 @@ export interface ExpeditionClaimResult {
   result: { expGained: number; goldGained: number; monstersDefeated: number; loot: { itemId: string; quantity: number }[] };
   leveledUp: boolean;
   newLevel: number;
-  overflowLoot: { itemId: string; quantity: number }[];
 }
 
 export interface UpgradeResult {

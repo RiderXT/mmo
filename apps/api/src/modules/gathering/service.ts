@@ -17,6 +17,15 @@ export class GatheringError extends Error {
   }
 }
 
+/** Internal control-flow signal only — never sent to the client. Thrown inside resolveOnePhase's
+ * transaction to roll back that phase's XP/loot atomically when the drop doesn't fit in EQ, then
+ * caught by resolveGatherSession's catch-up loop to pause (not delete) the session at the phase
+ * that didn't fit — nothing is lost, the player just needs to free up EQ space and check back;
+ * the same phase resolves normally next time. Keeps the "lazy multi-cycle catch-up must never
+ * crash" invariant (see resolveGatherSession's docstring) while still refusing to silently drop
+ * loot the way addLootToInventory's allowPartial used to (see docs/architecture.md, 2026-08-23). */
+class GatherInventoryFullSignal extends Error {}
+
 type GatherSessionRow = NonNullable<Awaited<ReturnType<typeof prisma.gatherSession.findUnique>>>;
 type DropRow = { itemId: string; dropChance: number; minQty: number; maxQty: number };
 
@@ -215,12 +224,17 @@ async function resolveOnePhase(
     const awarded = rollDrops(spot.drops, chanceBonusPct, dropChanceMultiplier);
     // Transaction runs on EVERY catching attempt (not just successful ones) — grantGatherXp
     // rewards the attempt itself; loot/gatherSuccessCount stay conditional on awarded.length as
-    // before. allowPartial: a full bag must not crash the lazy phase-resolution loop.
+    // before. allowPartial: a full bag must not crash the lazy phase-resolution loop — but if
+    // nothing fit, roll back this phase's XP/loot atomically (GatherInventoryFullSignal) instead
+    // of silently dropping the catch; resolveGatherSession pauses the session there, un-lost.
     await prisma.$transaction(async (tx) => {
       await grantGatherXp(tx, session.characterId, "fishing");
       if (awarded.length > 0) {
         for (const a of awarded) {
-          await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
+          const { overflow } = await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, {
+            allowPartial: true,
+          });
+          if (overflow > 0) throw new GatherInventoryFullSignal();
         }
         if (toolInventoryItemId) {
           await tx.inventoryItem.update({
@@ -254,7 +268,10 @@ async function resolveOnePhase(
       await grantGatherXp(tx, session.characterId, "mining");
       if (awarded.length > 0) {
         for (const a of awarded) {
-          await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, { allowPartial: true });
+          const { overflow } = await addLootToInventory(tx, session.characterId, a.itemId, a.quantity, {
+            allowPartial: true,
+          });
+          if (overflow > 0) throw new GatherInventoryFullSignal();
         }
         if (toolInventoryItemId) {
           await tx.inventoryItem.update({
@@ -330,14 +347,31 @@ async function resolveGatherSession(session: GatherSessionRow): Promise<GatherSe
       });
       return null;
     }
-    current = await resolveOnePhase(
-      current,
-      settings,
-      speedBonusPct,
-      chanceBonusPct,
-      tool?.toolInventoryItemId,
-      dropChanceMultiplier,
-    );
+    try {
+      current = await resolveOnePhase(
+        current,
+        settings,
+        speedBonusPct,
+        chanceBonusPct,
+        tool?.toolInventoryItemId,
+        dropChanceMultiplier,
+      );
+    } catch (err) {
+      if (err instanceof GatherInventoryFullSignal) {
+        // Pause, don't delete — nothing was lost (the transaction that hit this rolled back), the
+        // session just stays at this unresolved phase until the player frees up EQ space, at
+        // which point the next lazy-resolve call picks up exactly here and grants it normally.
+        await logAction({
+          module: "gathering",
+          level: "warn",
+          action: "auto_paused_inventory_full",
+          actorCharacterId: current.characterId,
+          payload: { kind: current.kind, cyclesResolved: cycles },
+        });
+        return current;
+      }
+      throw err;
+    }
     cycles++;
   }
   return current;

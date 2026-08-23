@@ -5,6 +5,13 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Signals runBot's main loop to stop gracefully (same idiom as the wall-clock/expedition-count
+ * limits) instead of the run crashing uncaught. Thrown when a character's EQ is genuinely full —
+ * claimExpedition now blocks that claim with a 409 (see docs/architecture.md, 2026-08-23) rather
+ * than silently dropping the loot, and unlike a transient clock-skew 409 ("Ekspedycja jeszcze
+ * trwa"), a full inventory won't resolve itself by retrying. */
+class BotStopSignal extends Error {}
+
 const THINK_DELAY_MS = 250; // small pause between unrelated actions — not a real constraint, just avoids hammering the server in a tight sync loop for no reason.
 const ACTIVE_POTION_SLOT = 0;
 const MIN_POTIONS_TO_CARRY = 5;
@@ -285,6 +292,11 @@ async function runExpeditionCycle(client: GameClient, report: BotReport, charact
     try {
       claimResult = await client.claimExpedition(started.id);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && err.message.includes("Ekwipunek jest pełny")) {
+        // Persistent, not transient — retrying won't make room appear. Stop this bot's run
+        // cleanly instead of burning the retry budget and crashing on the 5th attempt.
+        throw new BotStopSignal(`Ekwipunek postaci "${character.name}" jest pełny — bot zatrzymany.`);
+      }
       if (err instanceof ApiError && err.status === 409 && attempt < 4) {
         await sleep(500);
         continue;
@@ -362,7 +374,15 @@ export async function runBot(options: BotOptions): Promise<BotReport> {
     await tryUpgradeEquipped(client, report, character);
 
     const levelBefore = character.level;
-    character = await runExpeditionCycle(client, report, character, zones);
+    try {
+      character = await runExpeditionCycle(client, report, character, zones);
+    } catch (err) {
+      if (err instanceof BotStopSignal) {
+        report.log("stop", err.message);
+        break;
+      }
+      throw err;
+    }
     expeditionsRun += 1;
 
     if (character.level > levelBefore) {

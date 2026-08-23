@@ -11,9 +11,22 @@ async function grantReward(tx: Tx, characterId: string, settings: ReferralSettin
   if (settings.rewardKind === "gold") {
     await tx.character.update({ where: { id: characterId }, data: { gold: { increment: settings.goldAmount } } });
   } else if (settings.rewardKind === "item" && settings.itemId) {
-    // allowPartial: a referral reward landing in a full bag shouldn't fail the whole payout —
-    // grant what fits, same philosophy as expedition/gathering rewards.
-    await addLootToInventory(tx, characterId, settings.itemId, settings.itemQuantity, { allowPartial: true });
+    // allowPartial, and deliberately NOT thrown on overflow (unlike expedition/gathering) — this
+    // runs as a side effect of another character's action (e.g. the REFERRER's bag, while the
+    // REFERRED character is the one claiming an expedition) and must never fail that unrelated
+    // caller's request. Still logged so an overflow here is diagnosable, not silently lost.
+    const { overflow } = await addLootToInventory(tx, characterId, settings.itemId, settings.itemQuantity, {
+      allowPartial: true,
+    });
+    if (overflow > 0) {
+      await logAction({
+        module: "referral",
+        level: "warn",
+        action: "reward_overflow",
+        actorCharacterId: characterId,
+        payload: { itemId: settings.itemId, overflow },
+      });
+    }
   }
 }
 
