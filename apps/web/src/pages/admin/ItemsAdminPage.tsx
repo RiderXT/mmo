@@ -10,6 +10,7 @@ import {
 } from "@mmo/shared";
 import { Field, MiniField, inputClass } from "../../components/admin/Field";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
+import { Modal } from "../../components/common/Modal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
 import { ApiError } from "../../lib/apiClient";
@@ -359,11 +360,8 @@ export function ItemsAdminPage() {
       )}
 
       {editingId !== null && (
-        <div className="mt-6 space-y-4 panel p-4">
-          <h2 className="font-medium text-parchment">
-            {editingId === "new" ? "Nowy item" : "Edycja itemu"}
-          </h2>
-
+        <Modal title={editingId === "new" ? "Nowy item" : "Edycja itemu"} onClose={() => setEditingId(null)}>
+        <div className="space-y-4">
           <div>
             <p className="mb-2 text-xs font-medium text-parchment-dim">Grafika itemu</p>
             {editingId === "new" ? (
@@ -1157,6 +1155,7 @@ export function ItemsAdminPage() {
             </button>
           </div>
         </div>
+        </Modal>
       )}
 
       {confirmDeleteId && (

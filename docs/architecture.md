@@ -3727,6 +3727,27 @@ istniejącego rozmówcy trafiło do tego samego wątku (nie zduplikowało konwer
 konwersacji wyczyściło widok nadawcy przy zachowaniu widoku odbiorcy. Konta testowe usunięte po
 teście. `tsc --noEmit` czysto na `api`, `web` i `shared` (przebudowany po zmianie schematu Zod).
 
+### Edycja itemu w panelu admina jako wyskakujące okno
+
+Formularz edycji/tworzenia itemu (bardzo długi — grafika, staty bazowe, losowe zakresy, wymagania
+ulepszeń, loot ze skrzyni, itd.) renderował się jako zwykły `<div>` DOKLEJONY POD całą tabelą
+itemów w [ItemsAdminPage.tsx](../apps/web/src/pages/admin/ItemsAdminPage.tsx) — trzeba było
+scrollować w dół po każdym kliknięciu "Edytuj", tracąc z oczu listę.
+
+Nowy generyczny [Modal.tsx](../apps/web/src/components/common/Modal.tsx) (w `components/common`,
+obok `ConfirmModal.tsx` — ten sam wzorzec przyciemnionego tła + `useEscapeKey`, ale szerszy,
+wysokościowo ograniczony do `90vh` i przewijany wewnątrz, do dużej zawartości zamiast krótkiego
+komunikatu). Sam formularz w środku — WSZYSTKIE pola i logika — bez zmian, tylko przeniesiony z
+`<div className="mt-6 ...">` w `<Modal title={...} onClose={...}>`; nagłówek "Nowy
+item"/"Edycja itemu" przeniesiony z wewnętrznego `<h2>` do paska tytułowego Modala (z przyciskiem
+×), przycisk "Anuluj" na dole formularza został jako dodatkowy sposób zamknięcia.
+
+Zweryfikowane w przeglądarce (konto testowe promowane do roli admin): "Edytuj" i "+ Nowy item"
+oba otwierają formularz jako wycentrowane okno nad przyciemnioną listą (tabela dalej w DOM, tylko
+wizualnie przysłonięta), wszystkie trzy sposoby zamknięcia działają (× w rogu, Escape, klik w
+tło), zapis persystuje zmianę (potwierdzone przez API) i zamyka okno. Item testowy przywrócony do
+stanu sprzed testu, konto testowe usunięte. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
