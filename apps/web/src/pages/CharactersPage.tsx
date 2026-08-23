@@ -17,10 +17,6 @@ const STAT_LABELS: Record<CoreStatKey, string> = {
   intelligence: "Inteligencja",
 };
 const CORE_STATS = Object.keys(STAT_LABELS) as CoreStatKey[];
-// Stats grow without an upper bound as a character levels — this is a purely decorative scale
-// for the bar's width, not a real cap, chosen so early/mid-game values still read as visually
-// distinct from each other instead of all pinning near 100%.
-const STAT_BAR_SOFT_CAP = 150;
 
 /** Decorative "no artwork yet" backdrop for the portrait area — same honest-placeholder spirit
  * as ItemTypeIcon/SkillSygil (plain, not a fake image) using the existing panel tokens so it
@@ -258,21 +254,30 @@ export function CharactersPage() {
               className="absolute right-4 top-4 hidden w-56 sm:block"
             >
               <div className="flex flex-col gap-2.5">
-                {CORE_STATS.map((stat) => {
-                  const value = selectedCharacter[stat];
-                  return (
-                    <div key={stat}>
-                      <div className="mb-1 flex justify-between text-[11px] uppercase tracking-wide text-parchment-faint">
-                        <span>{STAT_LABELS[stat]}</span>
-                        <span className="tabular-nums text-parchment-dim">{value}</span>
+                {(() => {
+                  // Stats grow without an upper bound, and players allocate every point
+                  // themselves — a fixed scale either pins a heavily-specialized veteran's
+                  // stats near 100% (making everything else invisible) or leaves a fresh
+                  // level-1 character's bars as barely-visible slivers. Scaling each bar
+                  // against this character's OWN total across all four stats keeps the bars
+                  // an honest picture of their build's shape at any stage of progression.
+                  const total = CORE_STATS.reduce((sum, stat) => sum + selectedCharacter[stat], 0) || 1;
+                  return CORE_STATS.map((stat) => {
+                    const value = selectedCharacter[stat];
+                    return (
+                      <div key={stat}>
+                        <div className="mb-1 flex justify-between text-[11px] uppercase tracking-wide text-parchment-faint">
+                          <span>{STAT_LABELS[stat]}</span>
+                          <span className="tabular-nums text-parchment-dim">{value}</span>
+                        </div>
+                        <ProgressBar
+                          pct={(value / total) * 100}
+                          barClassName="bg-gradient-to-r from-gold/70 to-gold-bright"
+                        />
                       </div>
-                      <ProgressBar
-                        pct={(value / STAT_BAR_SOFT_CAP) * 100}
-                        barClassName="bg-gradient-to-r from-gold/70 to-gold-bright"
-                      />
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </PanelFrame>
 
