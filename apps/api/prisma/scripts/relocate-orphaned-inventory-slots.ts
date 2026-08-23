@@ -33,17 +33,20 @@ async function main() {
     return;
   }
 
-  console.log(`Znaleziono ${orphaned.length} przedmiot(ow) poza widocznym zakresem (>= slot ${MAX_INVENTORY_SLOTS}):`);
-  for (const o of orphaned) {
-    console.log(`  - char ${o.characterId} | ${o.item.name} x${o.quantity} @ slot ${o.slotIndex}`);
-  }
-
   const byCharacter = new Map<string, typeof orphaned>();
   for (const o of orphaned) {
     const list = byCharacter.get(o.characterId) ?? [];
     list.push(o);
     byCharacter.set(o.characterId, list);
   }
+  // Deliberately no per-item listing here — with thousands of long-stuck rows (e.g. bot/test
+  // characters whose visible inventory is genuinely full) this ran on EVERY deploy and could
+  // flood the deploy log with the exact same thousands of lines every single time. Only actual
+  // relocations are logged per-item below (rare, meaningful); stuck items get one summary line
+  // per character instead of one per item — see docs/architecture.md, "Ekwipunek: backend
+  // pozwalal na 500 slotow..." for why these accumulate and how to clear them for good
+  // (scripts/_delete_orphaned_inventory_items.ts, run manually once).
+  console.log(`Znaleziono ${orphaned.length} przedmiot(ow) poza widocznym zakresem na ${byCharacter.size} postaciach.`);
 
   let relocated = 0;
   let stuck = 0;
@@ -60,6 +63,8 @@ async function main() {
       }
     }
 
+    let stuckForThisCharacter = 0;
+
     for (const o of items) {
       let target: number | null = null;
       for (let i = 0; i < MAX_INVENTORY_SLOTS; i++) {
@@ -73,7 +78,7 @@ async function main() {
       }
 
       if (target === null) {
-        console.log(`  BRAK MIEJSCA: ${o.item.name} x${o.quantity} (char ${characterId}, obecnie slot ${o.slotIndex}) - zostaje bez zmian, wymaga recznej decyzji.`);
+        stuckForThisCharacter += 1;
         stuck += 1;
         continue;
       }
@@ -81,6 +86,10 @@ async function main() {
       await prisma.inventoryItem.update({ where: { id: o.id }, data: { slotIndex: target } });
       console.log(`  Przeniesiono: ${o.item.name} x${o.quantity} (char ${characterId}) slot ${o.slotIndex} -> ${target}`);
       relocated += 1;
+    }
+
+    if (stuckForThisCharacter > 0) {
+      console.log(`  BRAK MIEJSCA: char ${characterId} - ${stuckForThisCharacter} przedmiot(ow) zostaje bez zmian (widoczny EQ pelny).`);
     }
   }
 
