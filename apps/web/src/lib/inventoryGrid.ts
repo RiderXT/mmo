@@ -1,7 +1,7 @@
-import { INVENTORY_GRID_COLS, INVENTORY_GRID_SLOTS_PER_TAB, inventoryOccupiedRange } from "@mmo/shared";
+import { INVENTORY_GRID_COLS, INVENTORY_GRID_SLOTS_PER_TAB, INVENTORY_TABS, inventoryOccupiedRange } from "@mmo/shared";
 import type { InventoryItemDto } from "./inventoryApi";
 
-export { INVENTORY_GRID_COLS, INVENTORY_GRID_SLOTS_PER_TAB };
+export { INVENTORY_GRID_COLS, INVENTORY_GRID_SLOTS_PER_TAB, INVENTORY_TABS };
 
 export interface GridCell {
   slotIndex: number;

@@ -3298,12 +3298,13 @@ wiersz loota. Problem: [grantToCharacter](../apps/api/src/modules/admin/characte
 transakcja i tak kończyła się sukcesem (bo `character.update` na exp/gold się wykonywał), więc
 front dostawał 200 OK i pokazywał "Wykonano." mimo że w tabeli `InventoryItem` nic nie przybyło.
 `quantity <= 0` jest już zablokowane wcześniej przez Zod (`AdminGrantItemSchema.quantity.min(1)`,
-widoczny błąd "Nieprawidłowe dane") — więc realnym wyzwalaczem cichego `{granted:0}` może być
-tylko druga gałąź w `addLootToInventory`: `if (!item ...) return {granted:0, overflow:0}`, czyli
-`itemId` który w momencie transakcji nie wskazuje na istniejący rekord (mimo że pre-check w
-`grantToCharacter` sprawdza istnienie przed transakcją — więc to zawężone okno, np. edycja/kasowanie
-itemu między odświeżeniem listy w panelu a kliknięciem "Wykonaj"). Item "sztaba1" nie istniał w
-lokalnym `dev.db`, więc nie dało się tego 1:1 odtworzyć — zdarzenie miało miejsce na produkcji.
+widoczny błąd "Nieprawidłowe dane"). Pierwsza hipoteza (nieistniejący `itemId` w momencie
+transakcji, druga gałąź `if (!item...)`) okazała się błędna po sprawdzeniu produkcyjnych logów z
+userem: item "sztaba1" istniał przez cały czas, a `InventoryItem` z tym itemem FAKTYCZNIE powstał
+w bazie (quantity zgadzała się dokładnie z sumą wielokrotnych prób grantu). Prawdziwa przyczyna —
+osobna, poważniejsza — opisana niżej w osobnym wpisie ("Ekwipunek: backend pozwalał..."). Ta
+sekcja (`overflow` check) zostaje jako wartościowe zabezpieczenie ogólne (patrz decyzja o `!item`
+poniżej), ale NIE była źródłem zgłoszonego zdarzenia.
 
 Fix: `grantToCharacter` teraz sprawdza `{granted, overflow}` z każdego wywołania
 `addLootToInventory` i rzuca `AdminCharacterError` (co robi rollback całej transakcji, łącznie z
@@ -3318,6 +3319,53 @@ tworzeniu postaci), [inventory/service.ts:617](../apps/api/src/modules/inventory
 sam wzorzec (`if (overflow > 0) throw ...`). Zweryfikowane w przeglądarce: normalny grant nadal
 działa (3× "Kilof Górnika" trafiło do EQ), tworzenie nowej postaci nadal działa (przedmioty
 startowe bez zmian). `tsc --noEmit` czysto.
+
+### Ekwipunek: backend pozwalał na 500 slotów, front pokazywał tylko 140 — item "gubił się" bez błędu (2026-08-23)
+
+Prawdziwa przyczyna zdarzenia z "sztaba1" opisanego wyżej, znaleziona dopiero po analizie logów
+produkcyjnych razem z userem (payload `GameLog` pokazał 4 identyczne próby grantu tego samego
+itemu pod rząd — ślad kogoś, kto klika "Wykonaj", sprawdza EQ, nic nie widzi, próbuje ponownie —
+a `InventoryItem` w bazie miał dokładnie sumę tych prób: dowód, że backend za każdym razem
+faktycznie zapisywał item poprawnie).
+
+`findNextFreeSlotIndex` w [inventory/service.ts](../apps/api/src/modules/inventory/service.ts)
+szukał wolnego slotu aż do `MAX_SLOTS = 500` (stała lokalna, nigdzie niepowiązana z resztą gry).
+`EquipmentTab.tsx` renderuje i pozwala przełączać tylko `INVENTORY_TABS = 4` zakładek × 35 slotów
+(`INVENTORY_GRID_COLS`×`INVENTORY_GRID_ROWS`) = **140 widocznych slotów** — też stała lokalna,
+zdefiniowana niezależnie, w ogóle nieznana backendowi. Te dwie liczby nigdy nie były tym samym
+źródłem prawdy. Postać z incydentu miała już ok. 297 zajętych slotów (dużo testowania) — backend
+poprawnie znalazł "wolne miejsce" na slocie 297, ale UI nie ma żadnej kontrolki żeby dotrzeć do
+zakładki poza czwartą, więc item stał się faktycznie, trwale niewidzialny mimo że istniał w
+bazie. "Kilof" nie miał tego problemu, bo trafia w dedykowany slot ekwipunku (zawsze widoczny),
+nie do siatki inwentarza.
+
+Dopytany wprost, czy podnieść widoczną pojemność (front pokazuje więcej zakładek, dopasowane do
+istniejącego limitu 500 w backendzie) czy przyciąć backend do obecnych 4 zakładek — wybór:
+**przyciąć backend**, żeby przy prawdziwym zapełnieniu 4 zakładek gracz dostawał realny błąd
+"Ekwipunek jest pełny" zamiast cichego przepełnienia w niewidzialne sloty; pojemność EQ zostaje
+bez zmian.
+
+Fix: nowa stała `MAX_INVENTORY_SLOTS` (= `INVENTORY_TABS × INVENTORY_GRID_SLOTS_PER_TAB` = 140) w
+[packages/shared/src/schemas/inventory.ts](../packages/shared/src/schemas/inventory.ts) — jedno
+źródło prawdy. `findNextFreeSlotIndex` używa jej zamiast lokalnego `MAX_SLOTS = 500`.
+`EquipmentTab.tsx` importuje `INVENTORY_TABS` z `@mmo/shared` zamiast trzymać własną kopię;
+`TAB_LABELS` (rzymskie cyfry na przyciskach zakładek) teraz generowane z `INVENTORY_TABS` zamiast
+sztywnej tablicy `["I","II","III","IV"]`, żeby ten sam rodzaj rozjazdu (stała vs. tablica) nie
+mógł się powtórzyć przy przyszłej zmianie pojemności.
+
+Sprzątanie istniejących "osieroconych" przedmiotów (już zapisanych na slotach ≥140 na produkcji,
+sprzed tego fixu): jednorazowy skrypt
+[apps/api/scripts/_relocate_orphaned_inventory_slots.ts](../apps/api/scripts/_relocate_orphaned_inventory_slots.ts)
+— znajduje wszystkie `InventoryItem` ze slotem ≥140, dla każdej postaci próbuje przenieść je na
+pierwszy wolny widoczny slot (ta sama logika co `findNextFreeSlotIndex`, żeby zachować spójność z
+`gridWidth`); jeśli naprawdę brak miejsca (4 zakładki faktycznie pełne), zostawia bez zmian i
+wypisuje do ręcznej decyzji zamiast czegokolwiek nadpisywać. Przetestowany lokalnie na sztucznie
+spreparowanym przypadku (item ręcznie przesunięty na slot 250) — poprawnie wrócił na slot 0,
+zweryfikowany też w przeglądarce (poprawił się licznik przedmiotów w zakładce I). Do uruchomienia
+na produkcji jednorazowo, po wdrożeniu tego fixu (`cd /var/www/mmo && npx tsx apps/api/scripts/_relocate_orphaned_inventory_slots.ts`
+z katalogu `apps/api` lub odpowiednio dopasowaną ścieżką).
+
+`tsc --noEmit` czysto na `shared`/`api`/`web`, `pnpm --filter shared build` (dist przebudowany).
 
 ## Weryfikacja przeprowadzona
 

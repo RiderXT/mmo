@@ -10,6 +10,13 @@ const INVENTORY_GRID_COLS = 5;
 const INVENTORY_GRID_ROWS = 7;
 const INVENTORY_GRID_SLOTS_PER_TAB = INVENTORY_GRID_COLS * INVENTORY_GRID_ROWS;
 
+// Number of inventory tabs the player-facing grid renders (EquipmentTab.tsx). The server's
+// free-slot search MUST stay capped at exactly this many tabs' worth of slots — otherwise it can
+// place an item past what the UI can ever show (no tab control exists to reach it), silently
+// "losing" the item despite the grant/purchase/drop having genuinely succeeded server-side.
+const INVENTORY_TABS = 4;
+const MAX_INVENTORY_SLOTS = INVENTORY_TABS * INVENTORY_GRID_SLOTS_PER_TAB;
+
 export const MoveItemSchema = z.object({
   inventoryItemId: z.string(),
   toSlotIndex: z.number().int().min(0).max(9999),
@@ -93,7 +100,14 @@ export const InventoryItemSchema = z.object({
 });
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
-export { ACTIVE_SLOT_COUNT, INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, INVENTORY_GRID_SLOTS_PER_TAB };
+export {
+  ACTIVE_SLOT_COUNT,
+  INVENTORY_GRID_COLS,
+  INVENTORY_GRID_ROWS,
+  INVENTORY_GRID_SLOTS_PER_TAB,
+  INVENTORY_TABS,
+  MAX_INVENTORY_SLOTS,
+};
 
 /** Cells occupied by an item of `height` (Item.gridWidth — number of grid cells, stacked
  * vertically) starting at `slotIndex` (tab-relative or absolute — works either way since the

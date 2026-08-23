@@ -6,6 +6,7 @@ import {
   defaultUpgradeSuccessChance,
   defaultUpgradeGoldCost,
   inventoryOccupiedRange,
+  MAX_INVENTORY_SLOTS,
   type EquipSlot,
   type ItemType,
   type StatRange,
@@ -761,8 +762,9 @@ async function findNextFreeSlotIndex(
     }
   }
 
-  const MAX_SLOTS = 500;
-  for (let i = 0; i < MAX_SLOTS; i++) {
+  // Must match INVENTORY_TABS in EquipmentTab.tsx (via MAX_INVENTORY_SLOTS) — placing an item
+  // past what the UI can show would silently "lose" it despite the grant/purchase succeeding.
+  for (let i = 0; i < MAX_INVENTORY_SLOTS; i++) {
     const range = inventoryOccupiedRange(i, width);
     if (!range) continue; // would spill past this row — not a valid start position
     if (range.every((cell) => !occupied.has(cell))) return i;

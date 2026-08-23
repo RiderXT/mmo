@@ -21,7 +21,7 @@ import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
 import { getPlayerClass } from "../../lib/classesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
-import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB } from "../../lib/inventoryGrid";
+import { layoutGridTab, INVENTORY_GRID_SLOTS_PER_TAB, INVENTORY_TABS } from "../../lib/inventoryGrid";
 import {
   listInventory,
   moveItem,
@@ -68,8 +68,10 @@ const EQUIPPABLE_TYPES = new Set<string>([
   ...RIGHT_EQUIP_SLOTS,
   ...TOOL_EQUIP_SLOTS,
 ]);
-const INVENTORY_TABS = 4;
-const TAB_LABELS = ["I", "II", "III", "IV"];
+// Roman numerals up to INVENTORY_TABS — generated rather than a literal array so this can never
+// drift out of sync with the shared tab count again (see MAX_INVENTORY_SLOTS in packages/shared).
+const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+const TAB_LABELS = Array.from({ length: INVENTORY_TABS }, (_, i) => ROMAN_NUMERALS[i] ?? String(i + 1));
 
 // Polish labels for the "Użyto: +X% ..." toast after a personal buff item is consumed — see
 // useBuffItemMutation below.
