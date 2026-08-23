@@ -3748,6 +3748,39 @@ wizualnie przysłonięta), wszystkie trzy sposoby zamknięcia działają (× w r
 tło), zapis persystuje zmianę (potwierdzone przez API) i zamyka okno. Item testowy przywrócony do
 stanu sprzed testu, konto testowe usunięte. `tsc --noEmit` czysto na `web`.
 
+### Nowa zakładka "Mapa świata" (osobna od Ekspedycji)
+
+Mockup Claude Design (sekcja "WORLD MAP PAGE", ten sam projekt co Postać/Znajomi/wybór postaci)
+pokazuje eksplorowalną mapę: piny regionów na ilustracji, klik pokazuje kartę wybranego regionu
+(nazwa, typ, poziom, opis) + pełną listę regionów obok. User poprosił o wdrożenie tego jako
+CAŁKIEM NOWĄ, osobną zakładkę (nie zamianę Ekspedycji) — z dopiskiem że może kiedyś w przyszłości
+zastąpi mapę w Ekspedycjach, ale nie teraz.
+
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx) — nowa zakładka pod `/game/world-map`,
+zarejestrowana w [GamePage.tsx](../apps/web/src/pages/GamePage.tsx) (`TabKey` union +
+warunek renderowania) i [AppShell.tsx](../apps/web/src/components/AppShell.tsx) (link nawigacji
+zaraz po Ekspedycjach). Celowo BEZ przycisku podróży — to zakładka do przeglądania/eksploracji
+(lore, poziomy, wrogowie, łupy), nie duplikat logiki podróży/walki, którą w całości posiada już
+`ExpeditionPanel.tsx`/`ZoneMapPath.tsx`. Prawdziwe dane krain (`listPlayerZones`, ten sam endpoint
+co Ekspedycje) zamiast fikcyjnych regionów z mockupu — karta szczegółów to bezpośrednio reużyty
+[ZoneInfoCard.tsx](../apps/web/src/components/expedition/ZoneInfoCard.tsx) (już renderuje
+nazwę/opis/poziom/wrogów/łupy, więc nic nie trzeba było pisać od nowa).
+
+Mockup miał zaszyte na sztywno pozycje pinów (5 konkretnych, nazwanych regionów). Ten projekt nie
+ma w ogóle grafiki mapy (ten sam brak "art pipeline", o którym już wspomina komentarz w
+`ZoneMapPath.tsx`) i krainy są konfigurowalne w adminie (dowolna liczba, aktualnie 10) — więc
+zamiast sztywnych współrzędnych, `pinPosition(index, total)` liczy pozycje deterministycznie:
+piny rozjeżdżają się po przekątnej od lewego-dolnego do prawego-górnego rogu w kolejności poziomu
+(`minLevel` rosnąco), z lekką falą sinusoidalną dla organicznego rozrzutu zamiast sztywnej linii.
+Tło mapy to ten sam paskowany placeholder "brak grafiki" co `PortraitBackdrop`
+(`CharactersPage.tsx`) — nie udaje gotowej ilustracji.
+
+Zweryfikowane w przeglądarce: konto testowe, 10 realnych krain z dev.db wyrenderowanych jako piny
+w granicach obszaru mapy bez nakładania się (potwierdzone `getBoundingClientRect()`), klik pinu
+poprawnie pokazuje `ZoneInfoCard` (w tym "Wymagany poziom X-Y" dla krainy poza zasięgiem
+poziomu postaci), lista "Wszystkie krainy" zsynchronizowana z wyborem na mapie. Brak przelewania
+w poziomie na 375px. Konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

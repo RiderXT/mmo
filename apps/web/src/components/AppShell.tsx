@@ -181,6 +181,14 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
           label="Ekspedycje"
           onNavigate={onNavigate}
         />
+        {/* No dedicated map icon exists yet — reuses the Ekspedycje icon as a placeholder, same
+            precedent as Poczta borrowing the Znajomi icon before its own art was ready. */}
+        <TabNavLink
+          tab="world-map"
+          icon="/icons/nav/ekspedycje.png"
+          label="Mapa świata"
+          onNavigate={onNavigate}
+        />
         <TabNavLink
           tab="skills"
           icon="/icons/nav/umiejetnosci.png"

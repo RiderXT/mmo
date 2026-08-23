@@ -10,8 +10,9 @@ import { AnvilTab } from "./game/AnvilTab";
 import { NpcTab } from "./game/NpcTab";
 import { SkillsTab } from "./game/SkillsTab";
 import { DailyLoginTab } from "./game/DailyLoginTab";
+import { WorldMapTab } from "./game/WorldMapTab";
 
-type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc" | "skills" | "daily-login";
+type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc" | "skills" | "daily-login" | "world-map";
 
 export function GamePage() {
   const { tab } = useParams<{ tab?: string }>();
@@ -45,6 +46,7 @@ export function GamePage() {
         <div className="mt-4">
           {activeTab === "character" && <CharacterTab character={character} />}
           {activeTab === "equipment" && <EquipmentTab character={character} />}
+          {activeTab === "world-map" && <WorldMapTab character={character} />}
           {activeTab === "expeditions" && (
             <ExpeditionsTab
               character={character}
