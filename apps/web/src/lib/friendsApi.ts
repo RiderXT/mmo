@@ -8,6 +8,7 @@ export interface FriendEntryDto {
   characterLevel: number | null;
   className: string | null;
   online: boolean;
+  lastSeenAt: string | null;
 }
 
 export interface FriendRequestEntryDto {

@@ -3605,6 +3605,29 @@ wiadomość wysłana przez API od B do A → w przeglądarce jako A otwarcie wia
 wysłanie → potwierdzone przez API, że odpowiedź dotarła do skrzynki B z poprawnym tematem i
 treścią. `tsc --noEmit` czysto na `web`.
 
+### Status "Xh temu" przy offline znajomych
+
+Mockup z Claude Design (sekcja "FRIENDS PAGE") pokazywał offline znajomym czas typu "3h temu", ale
+przy pierwszym wdrożeniu stylu Znajomi to pominięto — `FriendEntryDto` niosło wtedy tylko
+`online: boolean`, bez surowego znacznika czasu. Backend jednak już wtedy śledził
+`User.lastSeenAt` (bumpowane przy każdym uwierzytelnionym requeście, patrz
+[presence.ts](../apps/api/src/lib/presence.ts)) i [profile/service.ts](../apps/api/src/modules/profile/service.ts)
+już to eksponowało na stronie profilu — brakowało tylko przekazania tego samego pola przez
+`listFriends`.
+
+[friends/service.ts](../apps/api/src/modules/friends/service.ts): `FriendEntryDto` dostało
+`lastSeenAt: string | null`, respektujące `hideOnlineStatus` dokładnie jak profil (jeśli user
+schował status online, `lastSeenAt` też wraca jako `null` — inaczej ukrywanie statusu byłoby
+pozorne, bo nadal widać byłoby dokładny czas ostatniej aktywności).
+[FriendsPage.tsx](../apps/web/src/pages/FriendsPage.tsx): nowy `relativeOffline(iso)` — celowo
+zgrubny format ("X min temu" / "Xh temu" / "Xd temu" / "dawno temu"), to podpowiedź obecności na
+liście znajomych, nie precyzyjny log audytowy. `statusText()` doklejone jako
+"Offline · 3h temu" zamiast gołego "Offline".
+
+Zweryfikowane end-to-end: dwa świeże konta testowe, zaprzyjaźnione przez API, `lastSeenAt` jednego
+z nich cofnięte ręcznie w `dev.db` o 3h — panel Znajomi poprawnie pokazał "Offline · 3h temu · Mag
+lvl. 1". Konta testowe usunięte po teście. `tsc --noEmit` czysto na `api` i `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

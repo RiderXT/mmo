@@ -133,6 +133,7 @@ export async function listFriends(userId: string) {
     characterLevel: number | null;
     className: string | null;
     online: boolean;
+    lastSeenAt: string | null;
   }[] = [];
   const incoming: {
     friendRequestId: string;
@@ -162,6 +163,8 @@ export async function listFriends(userId: string) {
         characterLevel: character?.level ?? null,
         className: character?.class?.name ?? null,
         online: other.hideOnlineStatus ? false : isOnline(other.lastSeenAt),
+        // hideOnlineStatus hides the raw timestamp too — see profile/service.ts for the same rule.
+        lastSeenAt: other.hideOnlineStatus ? null : (other.lastSeenAt?.toISOString() ?? null),
       });
     } else if (row.status === "pending" && row.addresseeId === userId) {
       incoming.push({

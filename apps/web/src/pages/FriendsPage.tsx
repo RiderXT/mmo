@@ -33,11 +33,26 @@ function FriendAvatar({ label, online }: { label: string; online: boolean }) {
   );
 }
 
+/** "3h temu" / "5 min temu" style relative offline label — coarse on purpose, this is a presence
+ * hint for a friends list, not a precise audit timestamp. */
+function relativeOffline(iso: string | null): string {
+  if (!iso) return "";
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return "przed chwilą";
+  if (minutes < 60) return `${minutes} min temu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h temu`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d temu`;
+  return "dawno temu";
+}
+
 function statusText(f: FriendEntryDto): string {
   if (!f.characterName) return "Brak postaci";
   const classPart = f.className ? ` · ${f.className}` : "";
   const levelPart = f.characterLevel != null ? ` lvl. ${f.characterLevel}` : "";
-  return `${f.online ? "Online" : "Offline"}${classPart}${levelPart}`;
+  const presence = f.online ? "Online" : ["Offline", relativeOffline(f.lastSeenAt)].filter(Boolean).join(" · ");
+  return `${presence}${classPart}${levelPart}`;
 }
 
 export function FriendsPage() {
