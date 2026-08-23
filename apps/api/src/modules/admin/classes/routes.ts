@@ -7,6 +7,8 @@ import {
   createCharacterClass,
   updateCharacterClass,
   deleteCharacterClass,
+  setClassSkillImage,
+  setSkillNodeImage,
   ClassError,
 } from "./service.js";
 
@@ -50,6 +52,40 @@ export async function classesAdminRoutes(app: FastifyInstance): Promise<void> {
     try {
       await deleteCharacterClass(id, request.user!.sub, request.id);
       return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof ClassError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/skills/:skillId/image", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const { skillId } = request.params as { skillId: string };
+    const file = await request.file();
+    if (!file) return reply.code(400).send({ error: "Brak pliku" });
+    const buffer = await file.toBuffer();
+    if (file.file.truncated) {
+      return reply.code(400).send({ error: "Plik jest za duży (limit 3 MB)" });
+    }
+    try {
+      const characterClass = await setClassSkillImage(skillId, buffer, file.mimetype, request.user!.sub, request.id);
+      return reply.send(characterClass);
+    } catch (err) {
+      if (err instanceof ClassError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/nodes/:nodeId/image", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const { nodeId } = request.params as { nodeId: string };
+    const file = await request.file();
+    if (!file) return reply.code(400).send({ error: "Brak pliku" });
+    const buffer = await file.toBuffer();
+    if (file.file.truncated) {
+      return reply.code(400).send({ error: "Plik jest za duży (limit 3 MB)" });
+    }
+    try {
+      const characterClass = await setSkillNodeImage(nodeId, buffer, file.mimetype, request.user!.sub, request.id);
+      return reply.send(characterClass);
     } catch (err) {
       if (err instanceof ClassError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;

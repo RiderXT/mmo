@@ -14,8 +14,17 @@ import { Field, inputClass } from "../../components/admin/Field";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ItemPickerFilterBar } from "../../components/admin/ItemPickerFilterBar";
 import { useItemPickerFilter } from "../../hooks/useItemPickerFilter";
-import { ApiError } from "../../lib/apiClient";
-import { listClasses, createClass, updateClass, deleteClass, listItems, type ClassDto } from "../../lib/adminApi";
+import { ApiError, API_URL } from "../../lib/apiClient";
+import {
+  listClasses,
+  createClass,
+  updateClass,
+  deleteClass,
+  listItems,
+  uploadClassSkillImage,
+  uploadSkillNodeImage,
+  type ClassDto,
+} from "../../lib/adminApi";
 
 const CORE_STATS = CoreStatKeySchema.options;
 const SKILL_KINDS = SkillKindSchema.options;
@@ -133,6 +142,21 @@ export function ClassesAdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-classes"] }),
     onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć"),
   });
+
+  // Icons are uploaded per-id against the SAVED class (see uploadItemImage precedent) — the form
+  // only holds by-name input values, so lookups below cross-reference the live query data by
+  // (skill name, node name) to find each entity's id/imageUrl.
+  const uploadSkillImageMutation = useMutation({
+    mutationFn: ({ skillId, file }: { skillId: string; file: File }) => uploadClassSkillImage(skillId, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-classes"] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się wgrać ikony"),
+  });
+  const uploadNodeImageMutation = useMutation({
+    mutationFn: ({ nodeId, file }: { nodeId: string; file: File }) => uploadSkillNodeImage(nodeId, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-classes"] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się wgrać ikony"),
+  });
+  const editingClass = editingId && editingId !== "new" ? classesQuery.data?.find((c) => c.id === editingId) : undefined;
 
   function openCreate() {
     setForm(emptyForm());
@@ -354,8 +378,37 @@ export function ClassesAdminPage() {
               </button>
             </div>
             <div className="space-y-3">
-              {form.skills.map((skill, idx) => (
+              {form.skills.map((skill, idx) => {
+                const skillDto = editingClass?.skills.find((s) => s.name === skill.name);
+                return (
                 <div key={`${idx}-${skill.name}`} className=" border border-line p-3">
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">
+                      {skillDto?.imageUrl ? (
+                        <img src={`${API_URL}${skillDto.imageUrl}`} alt="" className="h-full w-full object-contain" />
+                      ) : (
+                        <span className="text-[9px] text-parchment-faint">brak</span>
+                      )}
+                    </div>
+                    {skillDto ? (
+                      <label className="cursor-pointer border border-line-soft px-2 py-1 text-xs text-parchment-dim hover:bg-panel-raised">
+                        {uploadSkillImageMutation.isPending ? "Wgrywanie…" : "Ikona umiejętności (PNG/JPEG/WEBP/GIF, max 3 MB)"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          className="hidden"
+                          disabled={uploadSkillImageMutation.isPending}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) uploadSkillImageMutation.mutate({ skillId: skillDto.id, file });
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    ) : (
+                      <p className="text-xs text-parchment-faint">Zapisz klasę, żeby móc wgrać ikonę tej umiejętności.</p>
+                    )}
+                  </div>
                   <div className="grid gap-2 sm:grid-cols-4">
                     <input
                       placeholder="nazwa"
@@ -495,8 +548,37 @@ export function ClassesAdminPage() {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      {skill.nodes.map((node, nodeIdx) => (
+                      {skill.nodes.map((node, nodeIdx) => {
+                        const nodeDto = skillDto?.nodes.find((n) => n.name === node.name);
+                        return (
                         <div key={`${nodeIdx}-${node.name}`} className="border border-line-soft/60 p-2">
+                          <div className="mb-2 flex items-center gap-2">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">
+                              {nodeDto?.imageUrl ? (
+                                <img src={`${API_URL}${nodeDto.imageUrl}`} alt="" className="h-full w-full object-contain" />
+                              ) : (
+                                <span className="text-[8px] text-parchment-faint">brak</span>
+                              )}
+                            </div>
+                            {nodeDto ? (
+                              <label className="cursor-pointer border border-line-soft px-2 py-1 text-xs text-parchment-dim hover:bg-panel-raised">
+                                {uploadNodeImageMutation.isPending ? "Wgrywanie…" : "Ikona (max 3 MB)"}
+                                <input
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/webp,image/gif"
+                                  className="hidden"
+                                  disabled={uploadNodeImageMutation.isPending}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) uploadNodeImageMutation.mutate({ nodeId: nodeDto.id, file });
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            ) : (
+                              <p className="text-xs text-parchment-faint">Zapisz klasę, żeby wgrać ikonę węzła.</p>
+                            )}
+                          </div>
                           <div className="grid gap-2 sm:grid-cols-4">
                             <input
                               placeholder="nazwa węzła"
@@ -582,7 +664,8 @@ export function ClassesAdminPage() {
                             Usuń węzeł
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -593,7 +676,8 @@ export function ClassesAdminPage() {
                     Usuń umiejętność
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

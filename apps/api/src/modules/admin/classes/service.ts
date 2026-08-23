@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prismaClient.js";
 import { logAction } from "../../../lib/gameLog.js";
@@ -7,6 +9,17 @@ const classInclude = {
   skills: { include: { nodes: true } },
   starterItems: { include: { item: { select: { id: true, name: true } } } },
 } as const;
+
+// Relative to cwd (apps/api/), matching how app.ts serves it at /uploads/ — same convention as
+// modules/admin/items. Shared by both ClassSkill (branch root) and SkillTreeNode (upgrade) icons
+// since each entity's own cuid already guarantees a unique filename across both.
+const UPLOADS_DIR = path.join(process.cwd(), "uploads", "skills");
+const EXT_BY_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
 
 export class ClassError extends Error {
   constructor(
@@ -274,5 +287,83 @@ export async function deleteCharacterClass(id: string, actorUserId: string, requ
     actorUserId,
     requestId,
     payload: { classId: id, name: existing.name },
+  });
+}
+
+/** Writes an uploaded icon to disk under a fresh timestamped filename (avoids serving a
+ * stale browser-cached image under a reused URL after re-uploading) and removes the previous
+ * one, if any — same convention as modules/admin/items setItemImage. */
+async function saveIcon(entityId: string, previousUrl: string | null, buffer: Buffer, mimetype: string) {
+  const ext = EXT_BY_MIME[mimetype];
+  if (!ext) throw new ClassError("Dozwolone formaty: PNG, JPEG, WEBP, GIF", 400);
+
+  await fs.mkdir(UPLOADS_DIR, { recursive: true });
+  const filename = `${entityId}-${Date.now()}${ext}`;
+  await fs.writeFile(path.join(UPLOADS_DIR, filename), buffer);
+
+  if (previousUrl) {
+    await fs.rm(path.join(UPLOADS_DIR, path.basename(previousUrl)), { force: true });
+  }
+
+  return `/uploads/skills/${filename}`;
+}
+
+/** Sets the icon for a ClassSkill (the skill-tree branch root, rendered as the first tile in
+ * SkillsPanel.tsx). Returns the whole parent class, matching updateCharacterClass's shape, so
+ * the admin form can refresh its state directly without a second fetch. */
+export async function setClassSkillImage(
+  skillId: string,
+  buffer: Buffer,
+  mimetype: string,
+  actorUserId: string,
+  requestId?: string,
+) {
+  const existing = await prisma.classSkill.findUnique({ where: { id: skillId } });
+  if (!existing) throw new ClassError("Nie znaleziono umiejętności", 404);
+
+  const imageUrl = await saveIcon(skillId, existing.imageUrl, buffer, mimetype);
+  await prisma.classSkill.update({ where: { id: skillId }, data: { imageUrl } });
+
+  await logAction({
+    module: "admin:classes",
+    action: "upload_skill_image",
+    actorUserId,
+    requestId,
+    payload: { skillId, imageUrl },
+  });
+
+  return prisma.characterClass.findUniqueOrThrow({ where: { id: existing.classId }, include: classInclude });
+}
+
+/** Sets the icon for one SkillTreeNode (an upgrade tile within a skill's tree). Same
+ * save-first-then-upload flow as items — a node must already exist (i.e. the class has been
+ * saved at least once with that node) before its id is known. */
+export async function setSkillNodeImage(
+  nodeId: string,
+  buffer: Buffer,
+  mimetype: string,
+  actorUserId: string,
+  requestId?: string,
+) {
+  const existing = await prisma.skillTreeNode.findUnique({
+    where: { id: nodeId },
+    include: { classSkill: { select: { classId: true } } },
+  });
+  if (!existing) throw new ClassError("Nie znaleziono węzła", 404);
+
+  const imageUrl = await saveIcon(nodeId, existing.imageUrl, buffer, mimetype);
+  await prisma.skillTreeNode.update({ where: { id: nodeId }, data: { imageUrl } });
+
+  await logAction({
+    module: "admin:classes",
+    action: "upload_node_image",
+    actorUserId,
+    requestId,
+    payload: { nodeId, imageUrl },
+  });
+
+  return prisma.characterClass.findUniqueOrThrow({
+    where: { id: existing.classSkill.classId },
+    include: classInclude,
   });
 }

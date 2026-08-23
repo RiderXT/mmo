@@ -4,7 +4,7 @@ import type { Character, SkillCategory } from "@mmo/shared";
 import { getPlayerClass } from "../../lib/classesApi";
 import { unlockSkill, unlockNode, getCharacterSkills, listCharacterSkillNodes } from "../../lib/charactersApi";
 import type { ClassSkillDto, SkillTreeNodeDto } from "../../lib/adminApi";
-import { ApiError } from "../../lib/apiClient";
+import { ApiError, API_URL } from "../../lib/apiClient";
 import { PanelFrame } from "../common/PanelFrame";
 import { SocketCorners } from "../inventory/SocketCorners";
 import { SkillSygil, LockGlyph } from "./SkillSygil";
@@ -54,12 +54,14 @@ function Tile({
   locked,
   maxed,
   selected,
+  imageUrl,
   onSelect,
 }: {
   level: number | null;
   locked: boolean;
   maxed: boolean;
   selected: boolean;
+  imageUrl: string | null;
   onSelect: () => void;
 }) {
   return (
@@ -78,6 +80,8 @@ function Tile({
       {!locked && <SocketCorners />}
       {locked ? (
         <LockGlyph className="h-5 w-5 text-parchment-faint" />
+      ) : imageUrl ? (
+        <img src={`${API_URL}${imageUrl}`} alt="" className="h-8 w-8 object-contain" />
       ) : (
         <SkillSygil className="h-6 w-6 text-parchment-dim" />
       )}
@@ -194,6 +198,7 @@ export function SkillsPanel({ character }: { character: Character }) {
                     locked={!unlocked}
                     maxed={false}
                     selected={selection?.type === "skill" && selection.skillId === skill.id}
+                    imageUrl={skill.imageUrl}
                     onSelect={() => setSelection({ type: "skill", skillId: skill.id })}
                   />
                 </SkillTooltip>
@@ -231,6 +236,7 @@ export function SkillsPanel({ character }: { character: Character }) {
                               locked={nodeLocked}
                               maxed={maxed}
                               selected={selection?.type === "node" && selection.nodeId === node.id}
+                              imageUrl={node.imageUrl}
                               onSelect={() => setSelection({ type: "node", nodeId: node.id })}
                             />
                           </SkillTooltip>

@@ -120,6 +120,7 @@ export interface SkillTreeNodeDto {
   pointCost: number;
   maxLevel: number;
   requiresNodeId: string | null;
+  imageUrl: string | null;
 }
 
 export interface ClassSkillDto {
@@ -136,6 +137,7 @@ export interface ClassSkillDto {
   baseManaCost: number | null;
   category: SkillCategory;
   nodes: SkillTreeNodeDto[];
+  imageUrl: string | null;
 }
 
 export interface ClassDto {
@@ -202,6 +204,43 @@ export const updateClass = (id: string, input: CreateCharacterClassInput) =>
   apiFetch<ClassDto>(`/api/admin/classes/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteClass = (id: string) =>
   apiFetch<void>(`/api/admin/classes/${id}`, { method: "DELETE" });
+
+// Multipart uploads — same reasoning as uploadItemImage above (FormData needs its own
+// auto-generated boundary header, apiFetch always forces JSON). Both return the whole parent
+// class so the admin form can refresh its state directly.
+export const uploadClassSkillImage = async (skillId: string, file: File): Promise<ClassDto> => {
+  const { accessToken } = useAuthStore.getState();
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_URL}/api/admin/classes/skills/${skillId}/image`, {
+    method: "POST",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}) as { error?: string });
+    throw new ApiError(body.error ?? res.statusText, res.status);
+  }
+  return res.json();
+};
+
+export const uploadSkillNodeImage = async (nodeId: string, file: File): Promise<ClassDto> => {
+  const { accessToken } = useAuthStore.getState();
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_URL}/api/admin/classes/nodes/${nodeId}/image`, {
+    method: "POST",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}) as { error?: string });
+    throw new ApiError(body.error ?? res.statusText, res.status);
+  }
+  return res.json();
+};
 
 // Characters (testing tool)
 export const listAllCharacters = () => apiFetch<AdminCharacterDto[]>("/api/admin/characters");

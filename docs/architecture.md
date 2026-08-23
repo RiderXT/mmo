@@ -3459,6 +3459,57 @@ akcję czytelnym błędem (zamiast budować UI do wyboru "co odrzucić").
 "Odbierz nagrody" na naprawdę zapełnionym EQ nie została wykonana (wymagałoby ręcznego zapełnienia
 140 slotów), fix opiera się na tej samej, już zweryfikowanej ścieżce.
 
+### Ikony dla drzewka umiejętności (ClassSkill + SkillTreeNode) (2026-08-23)
+
+User poprosił o możliwość dodawania ikon do drzewka umiejętności. W repo są dwa systemy nazywane
+"umiejętnościami" — `PassiveSkillType` (płaska lista, bez zależności/kosztu, zbieractwo/książki)
+i `ClassSkill`+`SkillTreeNode` (prawdziwe drzewo z `pointCost`/`maxLevel`/`requiresNodeId`,
+panel Klasy → edycja klasy). Tylko ten drugi pasuje do opisu "drzewko" — i tylko on ma już
+placeholder gotowy pod prawdziwe ikony: `SkillSygil.tsx` (jeden generyczny SVG-glif dla każdego
+kafelka drzewka, korzeń i węzły jednakowo), z komentarzem w kodzie wprost mówiącym że czeka na
+podmianę na per-skill artwork.
+
+Zaimplementowane 1:1 na wzorcu `Item.imageUrl` (jedyny działający upload obrazków w projekcie,
+`modules/admin/items`) — ten sam katalog uploadów (`uploads/skills/`, wspólny dla obu encji, bo
+każdy cuid jest unikalny), ta sama mapa `EXT_BY_MIME` (PNG/JPEG/WEBP/GIF), ten sam wzorzec nazwy
+pliku (`${id}-${Date.now()}`, unika stale cache po ponownym wgraniu), to samo `fs.rm` starego
+pliku przy nadpisaniu.
+
+**Backend**: `imageUrl String?` dodane do OBU modeli (`ClassSkill` i `SkillTreeNode` — root gałęzi
+i węzły upgrade'ów renderują się identycznym kafelkiem w `SkillsPanel.tsx`, więc obsłużenie tylko
+jednego z nich zostawiłoby połowę drzewka na zawsze z placeholderem). `packages/admin/classes/service.ts`:
+wspólny prywatny helper `saveIcon()` (zapis na dysk + usunięcie poprzedniego) używany przez dwie
+publiczne funkcje `setClassSkillImage`/`setSkillNodeImage` — obie zwracają CAŁĄ nadrzędną klasę
+(`classInclude`), żeby formularz admina mógł odświeżyć stan bez drugiego zapytania. Dwa nowe
+endpointy: `POST /api/admin/classes/skills/:skillId/image`, `POST /api/admin/classes/nodes/:nodeId/image`.
+`app.ts`: dopisany `fs.mkdirSync(uploads/skills)` obok istniejącego dla `items` — jeden wspólny
+`fastifyStatic` na całym `uploads/` już serwuje nowy podkatalog bez dodatkowej rejestracji.
+
+**Frontend — trudność nie do końca oczywista z góry**: formularz `ClassesAdminPage.tsx` operuje
+na "form state" bez `id`/`imageUrl` (`CreateCharacterClassInput` — węzły identyfikowane po nazwie,
+upsertowane po `[classSkillId, name]`, patrz Etap wcześniejszy o drzewku). Upload wymaga
+prawdziwego `id`, którego formularz nie ma. Rozwiązanie: cross-reference po nazwie do
+`classesQuery.data` (żywe dane z serwera) — `editingClass?.skills.find(s => s.name === skill.name)`
+daje `skillDto` z prawdziwym `id`/`imageUrl`; analogicznie `skillDto?.nodes.find(n => n.name === node.name)`
+dla węzłów. Dokładnie ten sam wzorzec "zapisz najpierw, potem wgraj" co w Itemach — dla NOWEGO,
+jeszcze niezapisanego węzła/umiejętności pokazuje się `"Zapisz klasę, żeby móc wgrać ikonę..."`
+zamiast pola uploadu.
+
+`SkillsPanel.tsx` (`Tile()`): nowy prop `imageUrl`, renderowany jako `<img>` zamiast `<SkillSygil>`
+gdy ustawiony — ale TYLKO gdy `!locked` (zablokowany kafelek zawsze pokazuje `<LockGlyph>`,
+niezależnie czy ma własną ikonę, żeby stan "zablokowane" zostawał jednoznacznie czytelny).
+Ponieważ publiczny endpoint `/api/classes` używa dokładnie tego samego `classInclude`/serwisu co
+panel admina, `imageUrl` przepływa do gracza automatycznie, bez żadnej dodatkowej zmiany po
+stronie odczytu.
+
+Zweryfikowane w przeglądarce end-to-end: wgranie ikony dla umiejętności-korzenia (odpowiedź 200,
+plik poprawnie serwowany pod `/uploads/skills/...`, `<img>` faktycznie renderuje się w formularzu
+zamiast "brak"), dodanie nowego węzła → zapis klasy → ikona dla NOWEGO węzła (potwierdza że
+cross-reference po nazwie działa też tuż po utworzeniu, nie tylko dla już istniejących encji).
+Stan zablokowany w `SkillsPanel.tsx` (świeża postać, level 1, brak wydanych punktów) poprawnie
+nadal pokazuje kłódkę zamiast ikony — potwierdza że warunek `locked` nie został przypadkiem
+ominięty. `tsc --noEmit` czysto na `shared`/`api`/`web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

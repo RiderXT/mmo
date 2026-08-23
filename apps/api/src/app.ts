@@ -100,6 +100,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // uploads/ is gitignored (user-generated content, not source) — a fresh checkout (e.g. first
   // deploy) won't have it yet, and @fastify/static requires its root to exist at registration.
   fs.mkdirSync(path.join(uploadsRoot, "items"), { recursive: true });
+  fs.mkdirSync(path.join(uploadsRoot, "skills"), { recursive: true });
   await app.register(fastifyStatic, {
     root: uploadsRoot,
     prefix: "/uploads/",

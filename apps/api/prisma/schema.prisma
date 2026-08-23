@@ -197,6 +197,9 @@ model ClassSkill {
   unlockCost   Int  @default(1)
   baseManaCost Int? // active only, BASE mana cost (nodes with effect "cost" reduce it)
   category     String @default("combat") // "combat" | "survival" | "tactics" — groups skills into UI tabs
+  // Uploaded artwork path (e.g. "/uploads/skills/xxx.png"), served statically like Item.imageUrl
+  // — see modules/admin/classes. Null = fall back to the generic SkillSygil placeholder.
+  imageUrl String?
 
   class           CharacterClass   @relation(fields: [classId], references: [id], onDelete: Cascade)
   characterSkills CharacterSkill[]
@@ -219,6 +222,8 @@ model SkillTreeNode {
   pointCost      Int     @default(1) // flat cost per level invested (not progressive)
   maxLevel       Int     @default(1)
   requiresNodeId String?
+  // Uploaded artwork path — see ClassSkill.imageUrl above, same convention.
+  imageUrl String?
 
   classSkill       ClassSkill           @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
   requires         SkillTreeNode?       @relation("NodePrerequisite", fields: [requiresNodeId], references: [id], onDelete: SetNull)
