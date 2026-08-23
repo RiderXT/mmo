@@ -3369,6 +3369,32 @@ ręcznie przesunięty na slot 250) — poprawnie wrócił na slot 0, zweryfikowa
 
 `tsc --noEmit` czysto na `shared`/`api`/`web`, `pnpm --filter shared build` (dist przebudowany).
 
+**Dogrywka tego samego dnia**: po wdrożeniu powyższego fixu user zgłosił, że problem nadal
+występuje — sprawdzone wspólnie na produkcji: `slotIndex` dla "sztaba1" nadal 297, ale `quantity`
+urosła z 8 do 10 (dwa kolejne granty PO deployu). Przyczyna: `addLootToInventory` najpierw szuka
+**istniejącego stosu** tego itemu (`tx.inventoryItem.findMany` bez filtra na `slotIndex`) i dokłada
+do niego, zanim w ogóle rozważy szukanie nowego wolnego slotu — a istniejący stos siedział właśnie
+na osieroconym slocie 297. Poprzedni fix pilnował tylko ścieżki "znajdź NOWY slot", nie dotykał
+ścieżki "dołóż do ISTNIEJĄCEGO stosu", więc każdy kolejny grant tego samego itemu po prostu
+powiększał ten sam niewidzialny stos zamiast kiedykolwiek wylądować w widocznym miejscu.
+
+Fix: zapytanie o `existingStacks` w `addLootToInventory` (gałąź `stackable`) dostało warunek
+`OR: [{slotIndex: null}, {slotIndex: {lt: MAX_INVENTORY_SLOTS}}]` — pozwala nadal dokładać do
+stosu w aktywnym slocie (potiony, `slotIndex: null`) i do widocznego stosu w siatce, ale **nie**
+do osieroconego stosu ≥140. Taki stos jest teraz ignorowany jako cel merge'a, więc kolejny grant
+poprawnie trafia do `nextFreeSlot` — albo znajdzie widoczne miejsce, albo (jeśli 4 zakładki
+faktycznie pełne) rzuci "Ekwipunek jest pełny", zamiast dalej cicho tuczyć niewidzialny stos.
+
+Zweryfikowane lokalnie: sztucznie osierocony stos (item przesunięty na slot 200) + nowy grant tego
+samego itemu przez panel admina → w bazie powstał DRUGI, osobny wiersz na widocznym slocie 0,
+oryginalny osierocony wiersz pozostał nietknięty (dowód, że merge faktycznie go pomija). Skrypt
+`relocate-orphaned-inventory-slots.ts` uruchomiony ponownie poprawnie przeniósł ten testowy
+osierocony wiersz na wolny widoczny slot. Dla postaci z produkcji z oryginalnego zgłoszenia:
+jeśli po tym fixie i ponownym uruchomieniu skryptu migracyjnego nadal zostanie zgłoszone
+"BRAK MIEJSCA", oznacza to, że jej 140 widocznych slotów jest naprawdę zapełnione (stąd w ogóle
+doszło do sięgania po slot 297 wcześniej) — trzeba zrobić miejsce (wyrzucić/sprzedać coś w
+widocznych zakładkach) zanim ten konkretny osierocony stos "sztaba1" będzie mógł wrócić do EQ.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

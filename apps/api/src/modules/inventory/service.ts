@@ -810,7 +810,16 @@ export async function addLootToInventory(
   if (item.stackable) {
     let remaining = quantity;
     const existingStacks = await tx.inventoryItem.findMany({
-      where: { characterId, itemId, equippedSlot: null },
+      // slotIndex: null covers active-use-slotted stacks (potions in the 6 active slots) — those
+      // stay a valid merge target. A grid stack at slotIndex >= MAX_INVENTORY_SLOTS is "orphaned"
+      // (see docs/architecture.md, 2026-08-23) — invisible in the UI, so new grants must NOT keep
+      // stacking onto it (that regrows the same invisible pile instead of surfacing a real slot).
+      where: {
+        characterId,
+        itemId,
+        equippedSlot: null,
+        OR: [{ slotIndex: null }, { slotIndex: { lt: MAX_INVENTORY_SLOTS } }],
+      },
       orderBy: { quantity: "desc" },
     });
 
