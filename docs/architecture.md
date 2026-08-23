@@ -3588,6 +3588,23 @@ się na liście znajomych z poprawnym statusem online i klasą/poziomem → klik
 przechodzi do `/mail?to=TestAdmin` z automatycznie otwartym, wypełnionym formularzem. Brak
 przelewania na mobile (375px). `tsc --noEmit` czysto na `web`.
 
+### Przycisk "Odpowiedz" w Poczcie
+
+Rozwinięty widok wiadomości w skrzynce Odebranych miał tylko treść i "Usuń" — brak jakiegokolwiek
+sposobu odpowiedzenia nadawcy poza ręcznym otwarciem "Nowa wiadomość" i przepisaniem jego nazwy
+postaci od zera. [MailPage.tsx](../apps/web/src/pages/MailPage.tsx) dostał `startReply(message)`:
+otwiera compose (`setComposeOpen(true)`), wypełnia odbiorcę z `message.counterpartCharacterName`,
+temat prefiksuje `"Re: "` (bez dublowania, jeśli temat już nim zaczyna), czyści treść i płynnie
+przewija do formularza (`composeRef.current?.scrollIntoView`). Przycisk "Odpowiedz" pokazuje się
+tylko przy wiadomościach w zakładce Odebrane (odpowiadanie na własną wysłaną wiadomość nie ma
+sensu) i tylko gdy `counterpartCharacterName` istnieje.
+
+Zweryfikowane end-to-end przez dwa świeże konta testowe (utworzone i usunięte w ramach testu):
+wiadomość wysłana przez API od B do A → w przeglądarce jako A otwarcie wiadomości → klik
+"Odpowiedz" → pole odbiorcy poprawnie ustawione na "MailTestB", temat na "Re: Test tematu" →
+wysłanie → potwierdzone przez API, że odpowiedź dotarła do skrzynki B z poprawnym tematem i
+treścią. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

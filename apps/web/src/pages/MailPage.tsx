@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
@@ -25,6 +25,7 @@ export function MailPage() {
   const [body, setBody] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendOk, setSendOk] = useState<string | null>(null);
+  const composeRef = useRef<HTMLFormElement | null>(null);
 
   const inboxQuery = useQuery({ queryKey: ["mail-inbox"], queryFn: listInbox, enabled: tab === "inbox" });
   const sentQuery = useQuery({ queryKey: ["mail-sent"], queryFn: listSent, enabled: tab === "sent" });
@@ -63,6 +64,15 @@ export function MailPage() {
     }
   }
 
+  function startReply(message: MessageDto) {
+    setRecipient(message.counterpartCharacterName ?? "");
+    setSubject(message.subject.startsWith("Re: ") ? message.subject : `Re: ${message.subject}`);
+    setBody("");
+    setSendError(null);
+    setComposeOpen(true);
+    setTimeout(() => composeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
+
   return (
     <AppShell>
       <PanelFrame
@@ -78,6 +88,7 @@ export function MailPage() {
       >
         {composeOpen && (
           <form
+            ref={composeRef}
             onSubmit={(e) => {
               e.preventDefault();
               if (recipient.trim() && subject.trim() && body.trim()) sendMutation.mutate();
@@ -161,9 +172,16 @@ export function MailPage() {
                 {expandedId === m.id && (
                   <div className="mt-2 space-y-2 border-l-2 border-gold/30 pl-3">
                     <p className="whitespace-pre-wrap text-sm text-parchment">{m.body}</p>
-                    <button onClick={() => setConfirmingDeleteId(m.id)} className="text-xs text-red-400 hover:underline">
-                      Usuń
-                    </button>
+                    <div className="flex gap-3">
+                      {tab === "inbox" && m.counterpartCharacterName && (
+                        <button onClick={() => startReply(m)} className="text-xs text-gold-bright hover:underline">
+                          Odpowiedz
+                        </button>
+                      )}
+                      <button onClick={() => setConfirmingDeleteId(m.id)} className="text-xs text-red-400 hover:underline">
+                        Usuń
+                      </button>
+                    </div>
                   </div>
                 )}
               </li>
