@@ -3558,6 +3558,36 @@ i w widoku wyboru), brak przelewania poziomego na desktopie i na mobile (375px �
 świadomie ukryty poniżej `sm:`, żeby nie kolidował z wąskim portretem). `tsc --noEmit` czysto na
 `web`.
 
+### Styl zakładki Znajomi, wzorowany na sekcji "FRIENDS PAGE" z tego samego projektu Claude Design (2026-08-23)
+
+Ten sam projekt "MMO RPG Website mockups" dostał później nową sekcję "FRIENDS PAGE" (nieobecną
+przy poprzednim odczycie — patrz wpis wyżej o `CharactersPage.tsx`). Ta sama zasada co poprzednio:
+własne tokeny (gold/parchment/ink, Cinzel) zamiast literalnej palety/fontu mockupu, ale tym razem
+mockup miał już polskie etykiety ("Znajomi", "LISTA ZNAJOMYCH", "WYSŁANE ZAPROSZENIA") — prosto do
+przeniesienia. [FriendsPage.tsx](../apps/web/src/pages/FriendsPage.tsx) przepisana: układ
+dwukolumnowy (1.3fr lista znajomych / 1fr zaproszenia+dodawanie, jak w mockupie), awatary "pierwsza
+litera nazwy" z kropką statusu (ten sam placeholder co roster postaci w `CharactersPage.tsx` —
+świadomie spójny język wizualny między dwoma listami graczy w apce), licznik "N online" w nagłówku
+panelu.
+
+Jedna realna funkcjonalna zmiana poza czystym restylem: mockupowy przycisk "WYŚLIJ WIADOMOŚĆ" przy
+każdym znajomym dostał prawdziwe działanie — link do `/mail?to=NazwaPostaci`.
+[MailPage.tsx](../apps/web/src/pages/MailPage.tsx) czyta teraz `?to=` z URL (`useSearchParams`,
+odczytane raz przy montowaniu, nieaktualizowane przy przełączaniu zakładek Odebrane/Wysłane) i
+otwiera compose z gotowym odbiorcą zamiast pustej skrzynki — bez tego link byłby kosmetyczny
+(prowadziłby do Poczty, ale user musiałby ręcznie wpisać nazwę postaci ponownie).
+
+Dane z mockupu (status online/offline/zajęty jako trzy kolory, "3h temu" dla offline) uproszczone
+do tego co realnie zwraca `FriendEntryDto` (`online: boolean`, bez `lastSeenAt`) — status pokazuje
+"Online"/"Offline" + klasę i poziom zamiast trójstanowego koloru i czasu od ostatniej sesji, którego
+backend nie śledzi.
+
+Zweryfikowane w przeglądarce end-to-end dwoma kontami testowymi: wysłanie zaproszenia →
+"Wysłane zaproszenia" u nadawcy → "Przychodzące zaproszenia" u odbiorcy → akceptacja → obaj widzą
+się na liście znajomych z poprawnym statusem online i klasą/poziomem → kliknięcie "Wiadomość"
+przechodzi do `/mail?to=TestAdmin` z automatycznie otwartym, wypełnionym formularzem. Brak
+przelewania na mobile (375px). `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

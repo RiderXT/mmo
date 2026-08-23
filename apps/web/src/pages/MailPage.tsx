@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { PanelFrame } from "../components/common/PanelFrame";
@@ -10,11 +11,16 @@ type Tab = "inbox" | "sent";
 
 export function MailPage() {
   const queryClient = useQueryClient();
+  // ?to=CharacterName (e.g. the "Wiadomość" button on the Friends page) opens straight into a
+  // pre-addressed compose instead of the inbox — read once on mount, not kept in sync with the
+  // URL afterwards, so navigating tabs inside this page doesn't fight the query string.
+  const [searchParams] = useSearchParams();
+  const prefilledRecipient = searchParams.get("to") ?? "";
   const [tab, setTab] = useState<Tab>("inbox");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [recipient, setRecipient] = useState("");
+  const [composeOpen, setComposeOpen] = useState(prefilledRecipient.length > 0);
+  const [recipient, setRecipient] = useState(prefilledRecipient);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
