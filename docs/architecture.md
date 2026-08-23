@@ -3806,6 +3806,32 @@ potwory), klik pinu ORAZ klik wiersza na liście oba poprawnie otwierają popup 
 `ZoneInfoCard` (poziom, "wymagany poziom" ostrzeżenie, wrogowie, "+10 więcej" przy łupach), ×
 zamyka. `tsc --noEmit` czysto na `web`.
 
+### Druga dogrywka: filtry po prawej obok mapy, pin ≠ popup
+
+User doprecyzował po poprzedniej zmianie: filtry miały siedzieć PO PRAWEJ stronie obok mapy (nie
+nad nią na pełną szerokość), bez zakładki "Wszystkie", a klik na PINIE ma tylko przełączać
+zakładkę/podświetlać krainę — popup ma się otwierać WYŁĄCZNIE po kliknięciu wiersza na liście.
+
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx): `Category` straciło wariant
+`"all"` (zawsze jedna z trzech: `combat`/`fishing`/`mining`, domyślnie `combat`). Pigułki filtrów
+przeniesione znad mapy do prawej kolumny (`lg:grid-cols-[1fr_320px]`), nad panelem "Krainy".
+Rozdzielone dwa stany zamiast jednego: `highlightedZoneId` (podświetlenie pinu/wiersza, ustawiane
+przez OBA kliknięcia) i osobno `popupZoneId` (otwiera Modal, ustawiane WYŁĄCZNIE przez klik
+wiersza na liście). Klik pinu (`handlePinClick`) nigdy nie dotyka `popupZoneId` — jeśli kliknięta
+kraina nie pasuje do aktywnej kategorii, przełącza `category` na pierwszą pasującą (priorytet
+combat → fishing → mining) i podświetla ją na mapie i po przełączeniu też na liście. Piny spoza
+aktywnej kategorii są przygaszone (`opacity-40`) jako wizualna wskazówka przynależności, mapa
+nadal pokazuje WSZYSTKIE piny niezależnie od filtra (tylko lista po prawej jest filtrowana) —
+inaczej klik pinu nie miałby jak "otworzyć" innej zakładki, skoro ta kraina byłaby już niewidoczna.
+
+Zweryfikowane w przeglądarce (te same tymczasowe łowisko/kopalnia z poprzedniego testu, znów
+usunięte po teście): pigułki potwierdzone `getBoundingClientRect()` na tej samej wysokości co
+góra mapy i na prawo od niej. Klik pinu "Krwawy Wąwóz" (sama walka, bez łowiska) podczas gdy
+aktywna była zakładka "Łowiska" poprawnie przełączył na "Expowiska" i NIE otworzył popupu
+(`document.querySelector('.fixed.inset-0.z-50')` puste). Klik tej samej krainy na liście otworzył
+popup z tytułem "Krwawy Wąwóz". Brak przelewania na 375px (pigułki i lista wracają pod mapę).
+`tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
