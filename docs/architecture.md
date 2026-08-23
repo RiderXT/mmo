@@ -3781,6 +3781,31 @@ poprawnie pokazuje `ZoneInfoCard` (w tym "Wymagany poziom X-Y" dla krainy poza z
 poziomu postaci), lista "Wszystkie krainy" zsynchronizowana z wyborem na mapie. Brak przelewania
 w poziomie na 375px. Konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
 
+### Dogrywka: popup zamiast stałej karty + filtrowanie po typie krainy
+
+User poprawił pierwszą wersję: "niedokładnie odwzorowana budowa" — kliknięcie krainy miało
+wywoływać POPUP z potworami/dropem (nie stałą kartę w sidebarze), a brakowało sortowania po
+expowiskach/łowiskach/kopalniach.
+
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx): `ZoneInfoCard` przeniesiony z
+zawsze-widocznej kolumny bocznej do [Modal.tsx](../apps/web/src/components/common/Modal.tsx) (ten
+sam generyczny modal co edycja itemu w adminie) — klik pinu na mapie LUB wiersza na liście
+otwiera popup z nazwą krainy w tytule, poziomem, wrogami i dropem; `selectedZoneId` startuje jako
+`null` (nic nie wyskakuje przy wejściu na stronę), a nie domyślnie `character.currentZoneId` jak
+poprzednio. Dodane pigułki filtrów "Wszystkie / Expowiska / Łowiska / Kopalnie" nad mapą (ten sam
+`rounded-full border` wzorzec co przedziały poziomów w `ZoneMapPath.tsx`) — kategoria liczona z
+realnych danych krainy, nie deklarowana ręcznie: `combat` = `zone.monsters.length > 0`, `fishing` =
+`zone.fishingSpot !== null`, `mining` = `zone.mine !== null`. Filtr działa jednocześnie na pinach
+mapy i na liście "Krainy" obok.
+
+Zweryfikowane w przeglądarce: dev.db nie miał żadnej skonfigurowanej krainy z łowiskiem/kopalnią
+(sprawdzone w `seed.ts` — to nigdy nie było ustawiane), więc tymczasowo dopięto jedno łowisko i
+jedną kopalnię przez Prisma do testu, potem usunięto. Filtr "Łowiska" poprawnie zawęził
+piny+listę do jednej krainy, "Kopalnie" do innej, "Expowiska" pokazało wszystkie 10 (każda ma
+potwory), klik pinu ORAZ klik wiersza na liście oba poprawnie otwierają popup z pełną treścią
+`ZoneInfoCard` (poziom, "wymagany poziom" ostrzeżenie, wrogowie, "+10 więcej" przy łupach), ×
+zamyka. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
