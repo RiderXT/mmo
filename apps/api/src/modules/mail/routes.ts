@@ -1,19 +1,31 @@
 import type { FastifyInstance } from "fastify";
 import { SendMessageSchema } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
-import { sendMessage, listInbox, listSent, markRead, deleteMessage, getUnreadCount, MailError } from "./service.js";
+import { sendMessage, listConversations, getConversation, deleteConversation, getUnreadCount, MailError } from "./service.js";
 
 export async function mailRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/inbox", { preHandler: requireAuth }, async (request, reply) => {
-    return reply.send(await listInbox(request.user!.sub));
-  });
-
-  app.get("/sent", { preHandler: requireAuth }, async (request, reply) => {
-    return reply.send(await listSent(request.user!.sub));
+  app.get("/conversations", { preHandler: requireAuth }, async (request, reply) => {
+    return reply.send(await listConversations(request.user!.sub));
   });
 
   app.get("/unread-count", { preHandler: requireAuth }, async (request, reply) => {
     return reply.send({ count: await getUnreadCount(request.user!.sub) });
+  });
+
+  app.get("/conversations/:partnerUserId", { preHandler: requireAuth }, async (request, reply) => {
+    const { partnerUserId } = request.params as { partnerUserId: string };
+    try {
+      return reply.send(await getConversation(request.user!.sub, partnerUserId));
+    } catch (err) {
+      if (err instanceof MailError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.delete("/conversations/:partnerUserId", { preHandler: requireAuth }, async (request, reply) => {
+    const { partnerUserId } = request.params as { partnerUserId: string };
+    await deleteConversation(request.user!.sub, partnerUserId, request.id);
+    return reply.send({ ok: true });
   });
 
   app.post("/", { preHandler: requireAuth }, async (request, reply) => {
@@ -21,28 +33,6 @@ export async function mailRoutes(app: FastifyInstance): Promise<void> {
     try {
       const message = await sendMessage(request.user!.sub, body, request.id);
       return reply.code(201).send(message);
-    } catch (err) {
-      if (err instanceof MailError) return reply.code(err.statusCode).send({ error: err.message });
-      throw err;
-    }
-  });
-
-  app.post("/:messageId/read", { preHandler: requireAuth }, async (request, reply) => {
-    const { messageId } = request.params as { messageId: string };
-    try {
-      await markRead(request.user!.sub, messageId);
-      return reply.send({ ok: true });
-    } catch (err) {
-      if (err instanceof MailError) return reply.code(err.statusCode).send({ error: err.message });
-      throw err;
-    }
-  });
-
-  app.delete("/:messageId", { preHandler: requireAuth }, async (request, reply) => {
-    const { messageId } = request.params as { messageId: string };
-    try {
-      await deleteMessage(request.user!.sub, messageId, request.id);
-      return reply.send({ ok: true });
     } catch (err) {
       if (err instanceof MailError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;

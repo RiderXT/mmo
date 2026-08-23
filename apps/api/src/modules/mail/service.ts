@@ -11,7 +11,7 @@ export class MailError extends Error {
   }
 }
 
-/** The character shown alongside a message (sender/recipient row) — same "pick the highest-level
+/** The character shown alongside a message/conversation partner — same "pick the highest-level
  * character on that account" convention as modules/friends/service.ts. */
 async function representativeCharacter(userId: string) {
   return prisma.character.findFirst({
@@ -35,7 +35,10 @@ export async function sendMessage(senderId: string, input: SendMessageInput, req
     data: {
       senderId,
       recipientId: targetCharacter.userId,
-      subject: input.subject,
+      // Subject is a leftover from the old per-message inbox model — conversations are now
+      // grouped by counterpart, not by subject line, so this is just a constant placeholder the
+      // (still NOT NULL) column requires. Never shown anywhere.
+      subject: "Wiadomość",
       body: input.body,
     },
   });
@@ -48,65 +51,99 @@ export async function sendMessage(senderId: string, input: SendMessageInput, req
     payload: { messageId: message.id, recipientCharacterName: targetCharacter.name },
   });
 
-  return message;
+  return { id: message.id, body: message.body, createdAt: message.createdAt.toISOString(), recipientUserId: targetCharacter.userId };
 }
 
-export async function listInbox(userId: string) {
+/** One row per person you've ever exchanged messages with — everything sent+received between the
+ * two of you collapses into a single conversation regardless of how many separate replies went
+ * back and forth, so replying never spins off a disconnected new thread the other side can't
+ * continue. See docs/architecture.md, "Poczta jako konwersacje...". */
+export async function listConversations(userId: string) {
   const rows = await prisma.message.findMany({
-    where: { recipientId: userId, deletedByRecipient: false },
+    where: {
+      OR: [
+        { senderId: userId, deletedBySender: false },
+        { recipientId: userId, deletedByRecipient: false },
+      ],
+    },
     orderBy: { createdAt: "desc" },
-    include: { sender: { select: { id: true } } },
+    select: { senderId: true, recipientId: true, body: true, read: true, createdAt: true },
   });
-  return Promise.all(
-    rows.map(async (row) => ({
-      id: row.id,
-      subject: row.subject,
-      body: row.body,
-      read: row.read,
-      createdAt: row.createdAt.toISOString(),
-      counterpartCharacterName: (await representativeCharacter(row.sender.id))?.name ?? null,
-    })),
-  );
-}
 
-export async function listSent(userId: string) {
-  const rows = await prisma.message.findMany({
-    where: { senderId: userId, deletedBySender: false },
-    orderBy: { createdAt: "desc" },
-    include: { recipient: { select: { id: true } } },
-  });
-  return Promise.all(
-    rows.map(async (row) => ({
-      id: row.id,
-      subject: row.subject,
-      body: row.body,
-      read: row.read,
-      createdAt: row.createdAt.toISOString(),
-      counterpartCharacterName: (await representativeCharacter(row.recipient.id))?.name ?? null,
-    })),
-  );
-}
-
-export async function markRead(userId: string, messageId: string) {
-  const message = await prisma.message.findUnique({ where: { id: messageId } });
-  if (!message || message.recipientId !== userId) throw new MailError("Nie znaleziono wiadomości", 404);
-  if (message.read) return;
-  await prisma.message.update({ where: { id: messageId }, data: { read: true } });
-}
-
-export async function deleteMessage(userId: string, messageId: string, requestId?: string) {
-  const message = await prisma.message.findUnique({ where: { id: messageId } });
-  if (!message || (message.senderId !== userId && message.recipientId !== userId)) {
-    throw new MailError("Nie znaleziono wiadomości", 404);
+  const byPartner = new Map<string, { lastBody: string; lastCreatedAt: Date; unread: number }>();
+  for (const row of rows) {
+    const partnerId = row.senderId === userId ? row.recipientId : row.senderId;
+    const isUnreadForMe = row.recipientId === userId && !row.read;
+    const entry = byPartner.get(partnerId);
+    if (!entry) {
+      // Rows arrive createdAt-desc, so the first row seen per partner is already the latest one.
+      byPartner.set(partnerId, { lastBody: row.body, lastCreatedAt: row.createdAt, unread: isUnreadForMe ? 1 : 0 });
+    } else if (isUnreadForMe) {
+      entry.unread += 1;
+    }
   }
 
-  const isSender = message.senderId === userId;
-  await prisma.message.update({
-    where: { id: messageId },
-    data: isSender ? { deletedBySender: true } : { deletedByRecipient: true },
+  const partnerIds = Array.from(byPartner.keys());
+  const characters = await Promise.all(partnerIds.map((id) => representativeCharacter(id)));
+
+  return partnerIds
+    .map((partnerId, i) => {
+      const entry = byPartner.get(partnerId)!;
+      return {
+        partnerUserId: partnerId,
+        partnerCharacterName: characters[i]?.name ?? null,
+        lastMessage: entry.lastBody,
+        lastMessageAt: entry.lastCreatedAt.toISOString(),
+        unreadCount: entry.unread,
+      };
+    })
+    .sort((a, b) => (a.lastMessageAt < b.lastMessageAt ? 1 : -1));
+}
+
+/** Full back-and-forth with one partner, oldest first (chat order). Marks their unread messages
+ * read as a side effect of opening the thread — same UX the old per-message inbox had, just
+ * applied to the whole conversation at once instead of one row at a time. */
+export async function getConversation(userId: string, partnerUserId: string) {
+  const partner = await prisma.user.findUnique({ where: { id: partnerUserId }, select: { id: true } });
+  if (!partner) throw new MailError("Nie znaleziono rozmówcy", 404);
+
+  await prisma.message.updateMany({
+    where: { senderId: partnerUserId, recipientId: userId, read: false },
+    data: { read: true },
   });
 
-  await logAction({ module: "mail", action: "delete", actorUserId: userId, requestId, payload: { messageId } });
+  const rows = await prisma.message.findMany({
+    where: {
+      OR: [
+        { senderId: userId, recipientId: partnerUserId, deletedBySender: false },
+        { senderId: partnerUserId, recipientId: userId, deletedByRecipient: false },
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+    fromMe: row.senderId === userId,
+  }));
+}
+
+/** Soft-deletes my side of every message with this partner — mirrors the old per-message delete
+ * (Message.deletedBySender/deletedByRecipient), just applied to the whole thread at once. The
+ * other side keeps their own copy until they delete it too. */
+export async function deleteConversation(userId: string, partnerUserId: string, requestId?: string) {
+  await prisma.message.updateMany({
+    where: { senderId: userId, recipientId: partnerUserId, deletedBySender: false },
+    data: { deletedBySender: true },
+  });
+  await prisma.message.updateMany({
+    where: { senderId: partnerUserId, recipientId: userId, deletedByRecipient: false },
+    data: { deletedByRecipient: true },
+  });
+
+  await logAction({ module: "mail", action: "delete_conversation", actorUserId: userId, requestId, payload: { partnerUserId } });
 }
 
 export async function getUnreadCount(userId: string) {

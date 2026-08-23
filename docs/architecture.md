@@ -3685,6 +3685,48 @@ przycisku = dokładnie `oklch(23% 0.006 45)` (token `panel`), złote kółko pun
 poprawnym `title`, pasek expa/złoto/tytuł renderują się zgodnie z treścią strony. Konto testowe
 usunięte po teście. `tsc --noEmit` czysto na `web`.
 
+### Poczta jako konwersacje, nie osobne wiadomości per temat
+
+User zgłosił: "jak sie odpowie na wiadomosc to ta osoba juz nie moze odpowiedziec spowrotem, zrob
+to w formie jednej konwersacji a nie wielu nowych wiadomosci. jeden temat jedna konwersacja."
+Backend nigdy nie blokował drugiej odpowiedzi (potwierdzone testem: cztery wiadomości w obie
+strony przeszły bez błędu) — prawdziwy problem był model danych: każda wiadomość (z własnym
+"Temat") żyła jako osobny wiersz w płaskiej liście Odebrane/Wysłane, więc wymiana zamieniała się w
+stertę niepowiązanych wpisów zamiast jednej rozmowy, i nie było miejsca żeby po prostu doklejać
+kolejną odpowiedź do tej samej nitki.
+
+Przebudowa: [mail/service.ts](../apps/api/src/modules/mail/service.ts) grupuje teraz wiadomości
+po ROZMÓWCY (drugiej stronie), nie po temacie — `listConversations(userId)` zwraca jeden wiersz
+per partnerUserId (ostatnia wiadomość, licznik nieprzeczytanych, nazwa reprezentatywnej postaci),
+`getConversation(userId, partnerUserId)` zwraca CAŁĄ wymianę w obie strony chronologicznie i przy
+okazji oznacza wiadomości partnera jako przeczytane (zamiast osobnego `markRead` per wiadomość),
+`deleteConversation` soft-deletuje mój udział w całym wątku naraz (`deletedBySender`/
+`deletedByRecipient` per wiersz, ta sama flaga co wcześniej — druga strona nadal widzi swoją
+kopię). Kolumna `Message.subject` została w schemacie (bez migracji — additive/no-op), ale
+`sendMessage` wysyła teraz stałą wartość `"Wiadomość"` zamiast wymagać tematu od gracza — cała
+koncepcja "tematu" zniknęła z UI, bo jeden rozmówca = jedna rozmowa, więc nic nie trzeba nazywać
+osobno. `SendMessageSchema` w [mail.ts](../packages/shared/src/schemas/mail.ts) stracił pole
+`subject`.
+
+[MailPage.tsx](../apps/web/src/pages/MailPage.tsx) przepisany w stylu czatu: lewa kolumna — lista
+konwersacji (ostatnia wiadomość jako podgląd, plakietka nieprzeczytanych), prawa — dymki
+wiadomości (moje po prawej, rozmówcy po lewej) plus STAŁE pole odpowiedzi na dole panelu (Enter
+wysyła, Shift+Enter nowa linia) — więc "odpowiedz" nie jest już osobną akcją na pojedynczej
+wiadomości, tylko zwykłym wpisaniem tekstu w ten sam, zawsze widoczny formularz. `?to=NazwaPostaci`
+(link "Wiadomość" z Znajomych) najpierw sprawdza czy konwersacja z tą postacią już istnieje —
+jeśli tak, otwiera ją, jeśli nie, startuje pustą rozmowę z gotowym odbiorcą. "Nowa" w nagłówku listy
+robi to samo ręcznie. Wysłanie do kogoś z kim już jest wątek (czy to przez "Nowa" z ręcznie wpisaną
+nazwą, czy przez `?to=`) doklei wiadomość do ISTNIEJĄCEJ konwersacji, nie stworzy duplikatu —
+zweryfikowane explicite w teście niżej.
+
+Zweryfikowane end-to-end: dwa konta testowe, cztery wiadomości na przemian przez API (A→B→A→B) —
+wszystkie cztery trafiły do jednej, poprawnie posortowanej konwersacji z obu stron
+(`fromMe` zgodne z perspektywą), `unreadCount` i oznaczanie-jako-przeczytane po otwarciu wątku
+zgodne z oczekiwaniami. W przeglądarce: odpowiedź z dymków, wysłanie przez formularz "Nowa" do
+istniejącego rozmówcy trafiło do tego samego wątku (nie zduplikowało konwersacji), usunięcie
+konwersacji wyczyściło widok nadawcy przy zachowaniu widoku odbiorcy. Konta testowe usunięte po
+teście. `tsc --noEmit` czysto na `api`, `web` i `shared` (przebudowany po zmianie schematu Zod).
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
