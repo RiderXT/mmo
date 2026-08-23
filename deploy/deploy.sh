@@ -13,6 +13,7 @@ pnpm --filter @mmo/api prisma:push:prod
 # deploy; no-ops once already applied. See prisma/scripts/*.ts for what each one does.
 (cd apps/api && npx tsx prisma/scripts/lower-drop-rates.ts)
 (cd apps/api && npx tsx prisma/scripts/set-weapon-armor-grid-width.ts)
+(cd apps/api && npx tsx prisma/scripts/relocate-orphaned-inventory-slots.ts)
 pnpm --filter @mmo/api build
 pnpm --filter @mmo/web build
 sudo systemctl restart mmo-api

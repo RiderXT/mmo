@@ -1,3 +1,21 @@
+/**
+ * One-off, additive fix: findNextFreeSlotIndex used to search up to slot 500 for a free grid
+ * cell, but EquipmentTab.tsx only ever rendered/allowed switching to INVENTORY_TABS (4) tabs =
+ * 140 slots — items placed at slot >= 140 were fully persisted server-side but permanently
+ * invisible in the UI (no tab control could reach them), even though the grant/purchase/drop
+ * that created them succeeded with no error. See docs/architecture.md, "Ekwipunek: backend
+ * pozwalal na 500 slotow..." (2026-08-23) for the full incident writeup.
+ *
+ * Idempotent and non-destructive: only touches InventoryItem rows already at slotIndex >=
+ * MAX_INVENTORY_SLOTS, moving each to the first free slot < MAX_INVENTORY_SLOTS for that
+ * character (respecting Item.gridWidth, same placement logic as findNextFreeSlotIndex). If a
+ * character's visible inventory is genuinely full, the row is left untouched and reported —
+ * nothing is ever deleted or overwritten. Safe to run on every deploy; no-ops once every
+ * orphaned row has been relocated (or once none exist, which is the steady state after the
+ * first successful run).
+ *
+ * Run once, from apps/api: `npx tsx prisma/scripts/relocate-orphaned-inventory-slots.ts`
+ */
 import { PrismaClient } from "@prisma/client";
 import { MAX_INVENTORY_SLOTS, inventoryOccupiedRange } from "@mmo/shared";
 
@@ -69,4 +87,9 @@ async function main() {
   console.log(`\nGotowe. Przeniesiono: ${relocated}, bez miejsca (bez zmian): ${stuck}.`);
 }
 
-main().finally(() => prisma.$disconnect());
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

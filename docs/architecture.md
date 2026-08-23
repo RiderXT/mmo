@@ -3354,16 +3354,18 @@ sztywnej tablicy `["I","II","III","IV"]`, żeby ten sam rodzaj rozjazdu (stała 
 mógł się powtórzyć przy przyszłej zmianie pojemności.
 
 Sprzątanie istniejących "osieroconych" przedmiotów (już zapisanych na slotach ≥140 na produkcji,
-sprzed tego fixu): jednorazowy skrypt
-[apps/api/scripts/_relocate_orphaned_inventory_slots.ts](../apps/api/scripts/_relocate_orphaned_inventory_slots.ts)
-— znajduje wszystkie `InventoryItem` ze slotem ≥140, dla każdej postaci próbuje przenieść je na
-pierwszy wolny widoczny slot (ta sama logika co `findNextFreeSlotIndex`, żeby zachować spójność z
-`gridWidth`); jeśli naprawdę brak miejsca (4 zakładki faktycznie pełne), zostawia bez zmian i
-wypisuje do ręcznej decyzji zamiast czegokolwiek nadpisywać. Przetestowany lokalnie na sztucznie
-spreparowanym przypadku (item ręcznie przesunięty na slot 250) — poprawnie wrócił na slot 0,
-zweryfikowany też w przeglądarce (poprawił się licznik przedmiotów w zakładce I). Do uruchomienia
-na produkcji jednorazowo, po wdrożeniu tego fixu (`cd /var/www/mmo && npx tsx apps/api/scripts/_relocate_orphaned_inventory_slots.ts`
-z katalogu `apps/api` lub odpowiednio dopasowaną ścieżką).
+sprzed tego fixu): dodatkowy jednorazowy skrypt, tym razem od razu we wzorcu tych już istniejących
+w tym projekcie (`prisma/scripts/*.ts`, wpięte na stałe w `deploy/deploy.sh` jako "dodatkowe,
+addytywne, idempotentne poprawki danych — bezpieczne przy każdym deployu, no-op gdy już
+zastosowane") —
+[apps/api/prisma/scripts/relocate-orphaned-inventory-slots.ts](../apps/api/prisma/scripts/relocate-orphaned-inventory-slots.ts),
+wywoływany automatycznie z `deploy.sh` od tego wdrożenia. Znajduje wszystkie `InventoryItem` ze
+slotem ≥140, dla każdej postaci próbuje przenieść je na pierwszy wolny widoczny slot (ta sama
+logika co `findNextFreeSlotIndex`, żeby zachować spójność z `gridWidth`); jeśli naprawdę brak
+miejsca (4 zakładki faktycznie pełne), zostawia bez zmian i wypisuje do ręcznej decyzji zamiast
+czegokolwiek nadpisywać. Przetestowany lokalnie na sztucznie spreparowanym przypadku (item
+ręcznie przesunięty na slot 250) — poprawnie wrócił na slot 0, zweryfikowany też w przeglądarce
+(poprawił się licznik przedmiotów w zakładce I).
 
 `tsc --noEmit` czysto na `shared`/`api`/`web`, `pnpm --filter shared build` (dist przebudowany).
 
