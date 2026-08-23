@@ -30,8 +30,11 @@ export function StatsPanel({ character }: { character: Character }) {
     <PanelFrame
       title="Statystyki"
       headerRight={
-        <span className="text-xs normal-case tracking-normal text-parchment-dim">
-          Niewydane punkty: <span className="text-gold-bright">{character.unspentStatPoints}</span>
+        <span
+          title="Niewydane punkty"
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-gold/60 text-xs font-bold tabular-nums text-gold-bright"
+        >
+          {character.unspentStatPoints}
         </span>
       }
     >

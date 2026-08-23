@@ -3651,6 +3651,40 @@ prawej szerokiej kolumnie na tej samej wysokości startowej; na 375px wszystko p
 jednej kolumny bez przelewania w poziomie. Konto testowe usunięte po teście. `tsc --noEmit`
 czysto na `web`.
 
+### Dogrywka: treść zakładki Postać dokładniej wg mockupu + drobne poprawki
+
+Poprzednia zmiana dopasowała tylko UKŁAD kolumn do mockupu "CHARACTER SHEET", ale zostawiła
+Kondycję (HP/MP) zamiast treści, którą mockup faktycznie tam pokazuje: portret + wyświetlany
+tytuł, pasek DOŚWIADCZENIA i ZŁOTO. User poprawił: Kondycja i tak była zbędna — "Zdrowie" i
+"Mana" już są wierszami w tabeli "Statystyki bojowe — źródło" (kolumna Razem = to samo co max
+HP/MP), więc nic nie ginie.
+
+Nowy [CharacterSheetHeader.tsx](../apps/web/src/components/character/CharacterSheetHeader.tsx)
+zastępuje VitalsPanel (usunięty, był używany tylko tutaj): portret-placeholder (ten sam
+"brak grafiki" wzorzec paskowany co `PortraitBackdrop` w CharactersPage.tsx), wyśrodkowany napis
+"MISTRZ PVP" + "(Wybierz wyświetlany tytuł)" — statyczny tekst, NIE przycisk, bo w grze nie ma
+systemu tytułów gracza; to czysto treść z mockupu, nie obietnica działającej funkcji. Pasek expa
+liczony z tego samego wzoru co mini-pasek w `CharacterHeaderBar` (AppShell.tsx) —
+`expForLevel(level)`/`expForLevel(level+1)` z [leveling.ts](../packages/shared/src/lib/leveling.ts)
+— pokazany jako "{pct}% · {into-level}/{span}" z liczbami skróconymi przez
+`Intl.NumberFormat('pl-PL', {notation:'compact'})` (np. "1,5 mln"), zamiast twardo wpisanych
+"1.5mln/2.8mln" z mockupu.
+
+Przy okazji dwie drobne poprawki zgłoszone przez usera:
+- [StatsPanel.tsx](../apps/web/src/components/character/StatsPanel.tsx): "Niewydane punkty: {n}"
+  zastąpione samą liczbą w złotym kółku (`title="Niewydane punkty"` — natywny tooltip przy najechaniu
+  myszką), mniej tekstu w nagłówku panelu.
+- [CharactersPage.tsx](../apps/web/src/pages/CharactersPage.tsx): nieaktywne przyciski na liście
+  postaci dostały `bg-panel` (to samo tło co panel Statystyki) zamiast przezroczystego tła —
+  aktywny/wybrany przycisk zachował swój `bg-gold/10`, każdy wariant ma dokładnie jedną klasę `bg-*`
+  żeby uniknąć konfliktu kolejności generowanych klas Tailwind (patrz wcześniejszy incydent
+  `relative`/`absolute` w tym samym pliku).
+
+Zweryfikowane w przeglądarce: konto testowe, `getComputedStyle` potwierdził tło nieaktywnego
+przycisku = dokładnie `oklch(23% 0.006 45)` (token `panel`), złote kółko punktów 24×24px z
+poprawnym `title`, pasek expa/złoto/tytuł renderują się zgodnie z treścią strony. Konto testowe
+usunięte po teście. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

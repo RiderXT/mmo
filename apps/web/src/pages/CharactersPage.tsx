@@ -116,7 +116,7 @@ export function CharactersPage() {
                   setIsCreating(false);
                 }}
                 className={`flex items-center gap-3 border p-3 text-left transition ${
-                  active ? "border-gold bg-gold/10" : "border-line hover:border-line-soft"
+                  active ? "border-gold bg-gold/10" : "border-line bg-panel hover:border-line-soft"
                 }`}
               >
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">

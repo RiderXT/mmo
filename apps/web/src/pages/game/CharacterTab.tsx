@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Character } from "@mmo/shared";
 import { StatsPanel } from "../../components/character/StatsPanel";
-import { VitalsPanel } from "../../components/character/VitalsPanel";
+import { CharacterSheetHeader } from "../../components/character/CharacterSheetHeader";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { getCombatStatsBreakdown } from "../../lib/charactersApi";
 import { STAT_LABELS, COMBAT_STAT_TO_STAT_KEY, formatBreakdownValue } from "../../lib/statFormat";
@@ -20,7 +20,7 @@ export function CharacterTab({ character }: { character: Character }) {
     // columns and reads better with the room a 1fr column gives it.
     <div className="grid gap-4 md:grid-cols-[360px_1fr] md:items-start">
       <div className="flex flex-col gap-4">
-        <VitalsPanel characterId={character.id} />
+        <CharacterSheetHeader character={character} />
         <StatsPanel character={character} />
       </div>
 
