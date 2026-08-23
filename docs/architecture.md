@@ -3510,6 +3510,54 @@ Stan zablokowany w `SkillsPanel.tsx` (świeża postać, level 1, brak wydanych p
 nadal pokazuje kłódkę zamiast ikony — potwierdza że warunek `locked` nie został przypadkiem
 ominięty. `tsc --noEmit` czysto na `shared`/`api`/`web`.
 
+### Nowy styl wyboru i tworzenia postaci, wzorowany na projekcie z Claude Design (2026-08-23)
+
+User poprosił o zaimplementowanie stylu z zewnętrznego projektu Claude Design (`claude.ai/design`,
+"MMO RPG Website mockups", plik `MMO Website.dc.html`) — mockup dark-fantasy strony ("Ironveil")
+z osobnymi widokami "character select" i "classes". Odczytane przez `DesignSync` (`get_project`/
+`list_files`/`get_file`), NIE skopiowane 1:1 — mockup używa własnej palety (#14100d/#e9dfc9/
+#c9a24a) i fontu EB Garamond na treść, ale gra ma już bardzo zbliżony, własny system (token `gold`
+niemal identyczny z mockupu #c9a24a, `ink`/`panel`/`parchment`, i **Cinzel jest już fontem
+display** w `tailwind.config.js`) — użyto WŁASNYCH tokenów zamiast wprowadzać drugą, konkurencyjną
+paletę/font tylko dla jednej strony (co zepsułoby spójność z resztą gry, szczególnie po niedawnym
+ujednolicaniu tła — patrz wpis "Tło strony ujednolicone..." 2026-08-21).
+
+[CharactersPage.tsx](../apps/web/src/pages/CharactersPage.tsx) przepisana od zera, łącząc DWIE
+sekcje mockupu w jedną spójną stronę (mockup miał je jako osobne zakładki nawigacji):
+- **Wybór postaci** (gdy istnieje i jest zaznaczona postać) — wzorem mockupowej "CHARACTER SELECT
+  PAGE": duży panel-"portret" (dekoracyjne ukośne pasy zamiast prawdziwej grafiki postaci, w tym
+  samym duchu co `ItemTypeIcon`/`SkillSygil` — uczciwy placeholder, nie fałszywy obrazek), pływający
+  panel STATYSTYKI (`PanelFrame emphasis="secondary"`, cztery paski `ProgressBar` dla
+  siła/witalność/zręczność/inteligencja — mockup miał sztywną skalę 0-100, u nas staty rosną bez
+  górnej granicy z poziomem, więc paski skalowane względem umownego "miękkiego" pułapu czysto
+  wizualnie, nie prawdziwego capa), dolny gradientowy pasek z nazwą/klasą/poziomem i przyciskiem
+  "WEJDŹ DO GRY" (ta sama akcja co dotychczasowe kliknięcie karty postaci — `setActiveCharacterId`
+  + nawigacja).
+- **Tworzenie postaci** — mockup miał to jako gołe pole na nazwę (klasa była na sztywno w kodzie
+  mockupu, nie prawdziwym wyborem). U nas wybór klasy jest realną decyzją, więc połączono z drugą
+  sekcją mockupu ("CLASSES PAGE"): poziomy pasek zakładek klas, portret-placeholder + opis +
+  główny atrybut, lista umiejętności klasy (`ClassDto.skills`, z odznaką Pasywna/Aktywna) jako
+  podgląd "co odblokujesz", i pasek na dole z polem nazwy + przyciskiem "UTWÓRZ POSTAĆ" (zamiast
+  mockupowej nawigacji między stronami).
+
+Sidebar (lista postaci) dostał też ulepszenie względem starej wersji: pokazuje teraz nazwę klasy
+przy poziomie (wcześniej tylko poziom/exp/złoto), zgodnie z mockupowym "Lv. X ClassName".
+
+Świadomie POMINIĘTE względem mockupu: pełny wizualny "full-bleed" układ (strona nadal żyje
+wewnątrz `AppShell`'owego `max-w-5xl`, żeby zachować spójną nawigację/chrome z resztą gry — zmiana
+tego wymagałaby ingerencji w `AppShell.tsx`, poza zakresem tego zadania), font EB Garamond (treść
+zostaje na dotychczasowym sans, żeby nie różnicować jednej strony od reszty apki), panel "UNLOCKED
+ABILITIES" dla WYBRANEJ (nie tworzonej) postaci — pokazywałby odblokowane umiejętności, ale
+wymagałoby to dodatkowych zapytań (`getCharacterSkills`+`getPlayerClass`) tylko dla tej jednej
+sekcji; uznano że nie jest kluczowe dla "stylu wyboru i tworzenia" i pominięto dla zwięzłości.
+
+Zweryfikowane w przeglądarce end-to-end: przełączanie między istniejącymi postaciami (poprawne
+staty/nazwa/klasa w panelu), przełączanie zakładek klas w trybie tworzenia (opis/umiejętności się
+aktualizują), pełne utworzenie nowej postaci (nazwa + wybrana klasa → postać pojawia się na liście
+i w widoku wyboru), brak przelewania poziomego na desktopie i na mobile (375px — panel statystyk
+świadomie ukryty poniżej `sm:`, żeby nie kolidował z wąskim portretem). `tsc --noEmit` czysto na
+`web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
