@@ -15,14 +15,17 @@ export function CharacterTab({ character }: { character: Character }) {
   });
 
   return (
-    <div>
-      <div className="grid gap-4 sm:grid-cols-2">
+    // Mirrors the Claude Design mockup's Character Sheet: a narrow attribute column beside a
+    // wider combat-stats table, not stacked full-width panels — the breakdown table has five
+    // columns and reads better with the room a 1fr column gives it.
+    <div className="grid gap-4 md:grid-cols-[360px_1fr] md:items-start">
+      <div className="flex flex-col gap-4">
         <VitalsPanel characterId={character.id} />
         <StatsPanel character={character} />
       </div>
 
       {breakdownQuery.data && (
-        <PanelFrame title="Statystyki bojowe — źródło" className="mt-4">
+        <PanelFrame title="Statystyki bojowe — źródło">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-left text-sm">
               <thead className="text-parchment-dim">

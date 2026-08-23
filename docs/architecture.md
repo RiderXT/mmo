@@ -3628,6 +3628,29 @@ Zweryfikowane end-to-end: dwa świeże konta testowe, zaprzyjaźnione przez API,
 z nich cofnięte ręcznie w `dev.db` o 3h — panel Znajomi poprawnie pokazał "Offline · 3h temu · Mag
 lvl. 1". Konta testowe usunięte po teście. `tsc --noEmit` czysto na `api` i `web`.
 
+### Układ zakładki Postać dopasowany do "CHARACTER SHEET" z Claude Design
+
+Mockup Claude Design (sekcja `isSheet`, ten sam projekt co Znajomi/wybór postaci) układa arkusz
+postaci jako dwie kolumny: wąska (420px, atrybuty + pasek expa + złoto) obok szerokiej (1fr,
+tabela statystyk bojowych z pięcioma kolumnami). [CharacterTab.tsx](../apps/web/src/pages/game/CharacterTab.tsx)
+miał zamiast tego Kondycję i Statystyki obok siebie w równym `sm:grid-cols-2`, a tabela
+"Statystyki bojowe — źródło" leżała pełną szerokością POD nimi — przy pięciu kolumnach
+(Staty/Baza/Ekwipunek/Umiejętności/Razem) ciasno się tam mieściła.
+
+Portret/tytuł/pasek expa/złoto z mockupu pomięto świadomie — te dane już są w globalnym
+`CharacterHeaderBar` w [AppShell.tsx](../apps/web/src/components/AppShell.tsx) (awatar z inicjałem,
+poziom, mini-pasek expa, złoto), widocznym na KAŻDEJ stronie gry, nie tylko na Postaci — duplikowanie
+ich w zakładce byłoby powtórką tej samej informacji. Przeniesiona została wyłącznie struktura
+kolumnowa: `grid md:grid-cols-[360px_1fr] md:items-start` — lewa wąska kolumna (Kondycja nad
+Statystykami, zamiast obok), prawa szeroka kolumna (tabela bojowa, teraz z realnym miejscem na
+pięć kolumn). Poniżej `md` obie kolumny wracają do jednej, w pełni zgodnie z resztą apki.
+
+Zweryfikowane w przeglądarce: konto testowe + postać, zmierzone `getBoundingClientRect()` na
+desktopie (1280px) potwierdziło Kondycję i Statystyki w lewej wąskiej kolumnie, tabelę bojową w
+prawej szerokiej kolumnie na tej samej wysokości startowej; na 375px wszystko poprawnie wraca do
+jednej kolumny bez przelewania w poziomie. Konto testowe usunięte po teście. `tsc --noEmit`
+czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
