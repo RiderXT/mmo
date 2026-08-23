@@ -79,7 +79,10 @@ export async function buyFromNpc(
       if (debited.count === 0) {
         throw new NpcShopError("Za mało złota", 409);
       }
-      await addLootToInventory(tx, characterId, shopItem.itemId, input.quantity);
+      const { overflow } = await addLootToInventory(tx, characterId, shopItem.itemId, input.quantity);
+      if (overflow > 0) {
+        throw new NpcShopError("Nie udało się dodać przedmiotu do ekwipunku", 500);
+      }
     });
   } catch (err) {
     // Restore stock if the purchase failed after it was reserved above.

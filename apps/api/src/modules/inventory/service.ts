@@ -614,7 +614,10 @@ export async function openChest(
       await tx.inventoryItem.update({ where: { id: inventoryItem.id }, data: { quantity: inventoryItem.quantity - 1 } });
     }
     for (const a of awarded) {
-      await addLootToInventory(tx, input.characterId, a.itemId, a.quantity);
+      const { overflow } = await addLootToInventory(tx, input.characterId, a.itemId, a.quantity);
+      if (overflow > 0) {
+        throw new InventoryError("Nie udało się dodać nagrody ze skrzyni", 500);
+      }
     }
     await tx.character.update({ where: { id: input.characterId }, data: { chestsOpened: { increment: 1 } } });
   });

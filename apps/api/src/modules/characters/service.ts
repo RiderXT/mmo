@@ -87,7 +87,10 @@ export async function createCharacter(
       },
     });
     for (const starter of characterClass.starterItems) {
-      await addLootToInventory(tx, created.id, starter.itemId, starter.quantity);
+      const { overflow } = await addLootToInventory(tx, created.id, starter.itemId, starter.quantity);
+      if (overflow > 0) {
+        throw new CharacterError("Nie udało się przyznać przedmiotu startowego", 500);
+      }
     }
     return created;
   });

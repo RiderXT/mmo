@@ -3282,6 +3282,43 @@ statusu na "Rozwiązany" → widoczne z powrotem po stronie gracza z odpowiedzi�
 changelogu w adminie → widoczny na publicznej stronie "Co nowego" → edycja → usunięcie z
 potwierdzeniem. `tsc --noEmit` czysto na `shared`/`api`/`web`.
 
+### Fix: nadawanie itemu przez panel admina czasem "udawało się" bez dodania itemu do EQ (2026-08-23)
+
+User zgłosił: stworzył nowy item ("sztaba1", materiał ze statami losowymi i wymaganiami
+ulepszenia), spróbował nadać go postaci przez Testowanie → panel nie pokazał żadnego błędu, ale
+item nie trafił do ekwipunku. Dla porównania granting prostego itemu ("kilof") zadziałał od razu.
+
+Przyczyna: [addLootToInventory](../apps/api/src/modules/inventory/service.ts) (funkcja dodająca
+loot do EQ, współdzielona przez wszystkie źródła przedmiotów — granty admina, sklep NPC, skrzynie,
+starter itemy, ekspedycje, zbieractwo) jest CELOWO zaprojektowana, by przy `allowPartial: true`
+nie rzucać wyjątku gdy nie może czegoś dodać (np. plecak pełny) — zamiast tego cicho zwraca
+`{granted, overflow}`, żeby np. reszta nagrody z ekspedycji nie przepadła przez jeden zły
+wiersz loota. Problem: [grantToCharacter](../apps/api/src/modules/admin/characters/service.ts)
+(panel admina, `allowPartial: false` domyślnie) w ogóle NIE sprawdzał zwróconej wartości —
+transakcja i tak kończyła się sukcesem (bo `character.update` na exp/gold się wykonywał), więc
+front dostawał 200 OK i pokazywał "Wykonano." mimo że w tabeli `InventoryItem` nic nie przybyło.
+`quantity <= 0` jest już zablokowane wcześniej przez Zod (`AdminGrantItemSchema.quantity.min(1)`,
+widoczny błąd "Nieprawidłowe dane") — więc realnym wyzwalaczem cichego `{granted:0}` może być
+tylko druga gałąź w `addLootToInventory`: `if (!item ...) return {granted:0, overflow:0}`, czyli
+`itemId` który w momencie transakcji nie wskazuje na istniejący rekord (mimo że pre-check w
+`grantToCharacter` sprawdza istnienie przed transakcją — więc to zawężone okno, np. edycja/kasowanie
+itemu między odświeżeniem listy w panelu a kliknięciem "Wykonaj"). Item "sztaba1" nie istniał w
+lokalnym `dev.db`, więc nie dało się tego 1:1 odtworzyć — zdarzenie miało miejsce na produkcji.
+
+Fix: `grantToCharacter` teraz sprawdza `{granted, overflow}` z każdego wywołania
+`addLootToInventory` i rzuca `AdminCharacterError` (co robi rollback całej transakcji, łącznie z
+exp/gold) jeśli `overflow > 0` — zamiast cichego "sukcesu" admin dostanie teraz widoczny błąd.
+Ten sam brakujący check istniał identycznie w trzech innych miejscach wołających
+`addLootToInventory` bez `allowPartial` (czyli tam gdzie brak wyjątku = realny, cichy błąd, nie
+świadomy tryb "best effort"): [npcShop/service.ts](../apps/api/src/modules/npcShop/service.ts)
+(gracz płaci złoto, może nie dostać przedmiotu — najpoważniejszy z trzech, realna strata gracza),
+[characters/service.ts](../apps/api/src/modules/characters/service.ts) (przedmioty startowe przy
+tworzeniu postaci), [inventory/service.ts:617](../apps/api/src/modules/inventory/service.ts)
+(otwieranie skrzyni — skrzynia by się zużyła bez przyznania nagrody). Wszystkie trzy dostały ten
+sam wzorzec (`if (overflow > 0) throw ...`). Zweryfikowane w przeglądarce: normalny grant nadal
+działa (3× "Kilof Górnika" trafiło do EQ), tworzenie nowej postaci nadal działa (przedmioty
+startowe bez zmian). `tsc --noEmit` czysto.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

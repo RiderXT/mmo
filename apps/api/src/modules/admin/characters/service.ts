@@ -59,7 +59,13 @@ export async function grantToCharacter(
 
   await prisma.$transaction(async (tx) => {
     for (const item of input.items) {
-      await addLootToInventory(tx, characterId, item.itemId, item.quantity);
+      const { granted, overflow } = await addLootToInventory(tx, characterId, item.itemId, item.quantity);
+      if (overflow > 0) {
+        throw new AdminCharacterError(
+          `Nie udało się dodać itemu ${item.itemId} do ekwipunku (dodano ${granted}/${item.quantity}) — sprawdź czy ilość jest większa od zera`,
+          400,
+        );
+      }
     }
     await tx.character.update({
       where: { id: characterId },
