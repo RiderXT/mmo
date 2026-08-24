@@ -3910,6 +3910,53 @@ literówek, jeden z dropów faktycznie załadował prawdziwy plik z `uploads/ite
 placeholdera. Brak przelewania na 375px. Konto testowe usunięte po teście. `tsc --noEmit` czysto
 na `api` i `web`.
 
+### Zakładka "Walka" jako karta walki w Mapie świata
+
+Projekt Claude Design zaktualizował się o nową stronę — "COMBAT / EXPEDITION PAGE" (`isCombat`,
+nawigacja "WALKA"): pasy HP/MP gracza i przeciwnika obok siebie, podwójny log aktywności
+("AKTYWNOŚĆ GRACZA" / "AKTYWNOŚĆ PRZECIWNIKA"), rząd umiejętności z cooldownem, sloty mikstur,
+i prawa kolumna z wynikiem ekspedycji na żywo + zdobytymi przedmiotami + przyciskiem zakończenia.
+User poprosił o dodanie tego jako zakładki "Walka" w Mapie świata.
+
+Zaskakujące odkrycie: prawie CAŁA ta treść już istniała jako osobne, przetestowane komponenty w
+[ExpeditionPanel.tsx](../apps/web/src/components/expedition/ExpeditionPanel.tsx) —
+[CombatLog.tsx](../apps/web/src/components/expedition/CombatLog.tsx) już renderuje dokładnie ten
+sam podział "Aktywność gracza" / "Aktywność przeciwnika" co mockup (dosłownie ten sam tekst),
+[PlayerVitalsBar](../apps/web/src/components/expedition/PlayerVitalsBar.tsx) i
+[MonsterEncounterPanel](../apps/web/src/components/expedition/MonsterEncounterPanel.tsx) dają
+paski HP/MP, [ActiveSkillCooldownBar](../apps/web/src/components/expedition/ActiveSkillCooldownBar.tsx)
+daje umiejętności z cooldownem, [ActivePotionsSummary](../apps/web/src/components/expedition/ActivePotionsSummary.tsx)
+daje 6 slotów mikstur (nawet z tą samą etykietą "Aktywne mikstury (na bieżąco w trakcie walki)"),
+[LootBar](../apps/web/src/components/expedition/LootBar.tsx) daje pasek zdobytych przedmiotów.
+
+Nowy [LiveCombatCard.tsx](../apps/web/src/components/expedition/LiveCombatCard.tsx) to więc NOWY
+UKŁAD tych samych, gotowych klocków — dwukolumnowy jak w mockupie (lewa: nagłówek
+ekspedycja/czas, gracz-vs-potwór, log, umiejętności, mikstury; prawa: "Wynik ekspedycji" na żywo
++ "Zdobyte przedmioty" + przycisk odbioru/zakończenia) — nie druga implementacja logiki walki.
+Celowo SAMODZIELNY (własne query/tickowanie/mutacje `claimExpedition`/`leaveExpedition`), nie
+współdzieli stanu z `ExpeditionPanel.tsx`, żeby nowa powierzchnia w Mapie świata nie mogła
+zepsuć już działającej zakładki Ekspedycje — obie renderują ten sam realny stan
+(`character.activeExpeditionId` + `GET /api/expeditions/:id/active`), po prostu każda swoim
+kodem orkiestracji.
+
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx): `Category` dostało czwarty
+wariant `"battle"` (nie jest filtrem typu krainy — `matchesCategory` zwraca dla niego `false`,
+żaden pin nigdy "nie należy" do Walki). Pigułki kategorii przeniesione poza dwukolumnowy
+układ mapa+sidebar, żeby były widoczne w OBU trybach; wybranie "Walka" podmienia cały obszar
+mapa+sidebar na pełnoszerokościowy `LiveCombatCard` (mapa nie ma tam czego pokazywać). Udany
+start ekspedycji (`startMutation.onSuccess`) automatycznie przełącza `category` na `"battle"` —
+gracz od razu widzi walkę zamiast tekstu wskazującego na zakładkę Ekspedycje (usunięty, bo
+przestał być prawdziwy — walka jest teraz tu, na miejscu).
+
+Zweryfikowane end-to-end w przeglądarce: pusty stan Walki bez aktywnej ekspedycji ("Brak aktywnej
+walki..."), start ekspedycji z Expowisk automatycznie przełączył na Walkę i pokazał żywe paski
+HP/MP gracza (malejące z rundy na rundę), HP przeciwnika, oba kolumny logu wypełniające się w
+czasie rzeczywistym, licznik "Wynik ekspedycji" (exp/złoto/pokonani) aktualizujący się na żywo.
+Po śmierci postaci: "CZAS" zmieniło się na "Gotowe", przycisk na "Odbierz nagrody" → kliknięcie
+pokazało podsumowanie "Ekspedycja zakończona" → "OK" wróciło do pustego stanu. Ekspedycje
+(oryginalna zakładka) sprawdzone bez regresji — działa identycznie jak przed zmianą. Brak
+przelewania na 375px. Konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

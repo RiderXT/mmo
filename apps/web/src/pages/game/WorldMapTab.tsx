@@ -11,21 +11,26 @@ import { ApiError } from "../../lib/apiClient";
 import { ZoneInfoCard } from "../../components/expedition/ZoneInfoCard";
 import { MonsterAttackPanel } from "../../components/expedition/MonsterAttackPanel";
 import { BattleTacticsModal } from "../../components/expedition/BattleTacticsModal";
+import { LiveCombatCard } from "../../components/expedition/LiveCombatCard";
 import { CampfireGlyph, WildZoneGlyph } from "../../components/expedition/ZoneGlyphs";
 import { PanelFrame } from "../../components/common/PanelFrame";
 
-type Category = "combat" | "fishing" | "mining";
+type Category = "combat" | "fishing" | "mining" | "battle";
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "combat", label: "Expowiska" },
   { key: "fishing", label: "Łowiska" },
   { key: "mining", label: "Kopalnie" },
+  { key: "battle", label: "Walka" },
 ];
 
+/** "battle" isn't a zone-type filter — it's a mode switch to the live combat card, not something
+ * any zone pin "belongs to" — so it never matches here (the map is hidden in that mode anyway). */
 function matchesCategory(zone: ZoneDto, category: Category): boolean {
   if (category === "combat") return zone.monsters.length > 0;
   if (category === "fishing") return zone.fishingSpot !== null;
-  return zone.mine !== null;
+  if (category === "mining") return zone.mine !== null;
+  return false;
 }
 
 // Same 30-level banding convention as ZoneMapPath.tsx ("Acts" here just get their own row above
@@ -79,7 +84,6 @@ export function WorldMapTab({ character }: { character: Character }) {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [pendingMonsterIds, setPendingMonsterIds] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [startedMessage, setStartedMessage] = useState<string | null>(null);
 
   const act = acts[activeActIndex] ?? acts[0];
   const zonesInAct = ordered.filter((z) => z.minLevel >= (act?.start ?? 1) && z.minLevel <= (act?.end ?? ACT_SIZE));
@@ -99,7 +103,6 @@ export function WorldMapTab({ character }: { character: Character }) {
   function selectZone(zone: ZoneDto) {
     setSelectedZoneId(zone.id);
     setError(null);
-    setStartedMessage(null);
     if (!matchesCategory(zone, category)) {
       const next = CATEGORIES.find((c) => matchesCategory(zone, c.key));
       if (next) setCategory(next.key);
@@ -121,7 +124,9 @@ export function WorldMapTab({ character }: { character: Character }) {
     onSuccess: () => {
       setError(null);
       setPendingMonsterIds(null);
-      setStartedMessage("Ekspedycja rozpoczęta! Postęp zobaczysz w zakładce Ekspedycje.");
+      // Drop the player straight into the live combat card instead of leaving them on the
+      // now-stale monster-selection panel or pointing them at a different tab entirely.
+      setCategory("battle");
       queryClient.invalidateQueries({ queryKey: ["character", character.id] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się rozpocząć walki"),
@@ -159,80 +164,87 @@ export function WorldMapTab({ character }: { character: Character }) {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
-        <div
-          className="relative aspect-[16/11] overflow-hidden border border-line-soft"
-          style={{
-            backgroundColor: "oklch(23% 0.006 45)",
-            backgroundImage:
-              "repeating-linear-gradient(115deg, oklch(23% 0.006 45) 0px, oklch(23% 0.006 45) 18px, oklch(28% 0.007 45) 18px, oklch(28% 0.007 45) 36px)",
-          }}
-        >
-          {zonesInAct.length === 0 && (
-            <p className="absolute inset-0 flex items-center justify-center text-sm text-parchment-faint">
-              Brak krain w tym akcie.
-            </p>
-          )}
-          {zonesInAct.map((zone, i) => {
-            const pos = pinPosition(i, zonesInAct.length);
-            const zoneEligible = character.level >= zone.minLevel && character.level <= zone.maxLevel;
-            const isCurrent = zone.id === character.currentZoneId;
-            const isSelected = zone.id === selectedZoneId;
-            const inActiveCategory = matchesCategory(zone, category);
-            return (
-              <button
-                key={zone.id}
-                onClick={() => selectZone(zone)}
-                style={{ top: pos.top, left: pos.left }}
-                className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 transition ${
-                  inActiveCategory ? "" : "opacity-40 hover:opacity-70"
-                }`}
-              >
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border bg-gradient-to-br from-panel-raised to-panel transition ${
-                    isCurrent
-                      ? "border-gold-bright shadow-[0_0_14px_oklch(80%_0.14_85_/_0.5)]"
-                      : isSelected
-                        ? "border-gold ring-2 ring-gold/50"
-                        : zoneEligible
-                          ? "border-line-soft hover:border-gold/60"
-                          : "border-line-soft opacity-50"
-                  }`}
-                >
-                  {zone.isTown ? (
-                    <CampfireGlyph className="h-4 w-4 text-gold-bright" />
-                  ) : (
-                    <WildZoneGlyph className="h-4 w-4 text-parchment-dim" />
-                  )}
-                </span>
-                <span
-                  className={`whitespace-nowrap rounded bg-ink/80 px-1.5 py-0.5 text-[11px] font-medium ${
-                    isSelected ? "text-gold-bright" : "text-parchment-dim"
-                  }`}
-                >
-                  {zone.name}
-                  {isCurrent && <span className="ml-1 text-gold">•</span>}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {CATEGORIES.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setCategory(c.key)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+              category === c.key
+                ? "border-gold bg-gold/10 text-gold-bright"
+                : "border-line-soft text-parchment-dim hover:bg-panel-raised"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.key}
-                onClick={() => setCategory(c.key)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  category === c.key
-                    ? "border-gold bg-gold/10 text-gold-bright"
-                    : "border-line-soft text-parchment-dim hover:bg-panel-raised"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
+      {category === "battle" ? (
+        <PanelFrame title="Walka" emphasis="secondary">
+          <LiveCombatCard
+            character={character}
+            onClaimed={() => queryClient.invalidateQueries({ queryKey: ["character", character.id] })}
+          />
+        </PanelFrame>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
+          <div
+            className="relative aspect-[16/11] overflow-hidden border border-line-soft"
+            style={{
+              backgroundColor: "oklch(23% 0.006 45)",
+              backgroundImage:
+                "repeating-linear-gradient(115deg, oklch(23% 0.006 45) 0px, oklch(23% 0.006 45) 18px, oklch(28% 0.007 45) 18px, oklch(28% 0.007 45) 36px)",
+            }}
+          >
+            {zonesInAct.length === 0 && (
+              <p className="absolute inset-0 flex items-center justify-center text-sm text-parchment-faint">
+                Brak krain w tym akcie.
+              </p>
+            )}
+            {zonesInAct.map((zone, i) => {
+              const pos = pinPosition(i, zonesInAct.length);
+              const zoneEligible = character.level >= zone.minLevel && character.level <= zone.maxLevel;
+              const isCurrent = zone.id === character.currentZoneId;
+              const isSelected = zone.id === selectedZoneId;
+              const inActiveCategory = matchesCategory(zone, category);
+              return (
+                <button
+                  key={zone.id}
+                  onClick={() => selectZone(zone)}
+                  style={{ top: pos.top, left: pos.left }}
+                  className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 transition ${
+                    inActiveCategory ? "" : "opacity-40 hover:opacity-70"
+                  }`}
+                >
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border bg-gradient-to-br from-panel-raised to-panel transition ${
+                      isCurrent
+                        ? "border-gold-bright shadow-[0_0_14px_oklch(80%_0.14_85_/_0.5)]"
+                        : isSelected
+                          ? "border-gold ring-2 ring-gold/50"
+                          : zoneEligible
+                            ? "border-line-soft hover:border-gold/60"
+                            : "border-line-soft opacity-50"
+                    }`}
+                  >
+                    {zone.isTown ? (
+                      <CampfireGlyph className="h-4 w-4 text-gold-bright" />
+                    ) : (
+                      <WildZoneGlyph className="h-4 w-4 text-parchment-dim" />
+                    )}
+                  </span>
+                  <span
+                    className={`whitespace-nowrap rounded bg-ink/80 px-1.5 py-0.5 text-[11px] font-medium ${
+                      isSelected ? "text-gold-bright" : "text-parchment-dim"
+                    }`}
+                  >
+                    {zone.name}
+                    {isCurrent && <span className="ml-1 text-gold">•</span>}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <PanelFrame title={CATEGORIES.find((c) => c.key === category)?.label ?? ""} emphasis="secondary">
@@ -268,8 +280,6 @@ export function WorldMapTab({ character }: { character: Character }) {
               </div>
             ) : selectedZone.monsters.length === 0 ? (
               <p className="text-sm text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
-            ) : startedMessage ? (
-              <p className="text-sm text-gold-bright">{startedMessage}</p>
             ) : (
               <MonsterAttackPanel
                 zone={selectedZone}
@@ -288,7 +298,7 @@ export function WorldMapTab({ character }: { character: Character }) {
             )}
           </PanelFrame>
         </div>
-      </div>
+      )}
 
       {pendingMonsterIds && selectedZone && (
         <BattleTacticsModal
