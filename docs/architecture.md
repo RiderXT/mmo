@@ -4031,6 +4031,41 @@ Zweryfikowane w przeglądarce: konto testowe, sprawdzone Postać/Ekwipunek/Mapa 
 że stary wewnętrzny nagłówek zniknął, nie ma podwójnego "Mapa świata"). Brak przelewania na 375px.
 Konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
 
+### Karta HP/MP gracza wyrównana do karty potwora + nagłówek pokazuje kategorię w trakcie walki
+
+User przysłał zrzut ekranu: karta gracza (samo imię nad paskami HP/MP, bez ramki) wizualnie nie
+pasowała do karty potwora (ramka, awatar-placeholder, imię+poziom w środku) — inny rozmiar, inny
+układ. Druga uwaga: nagłówek zakładki (poprzednia zmiana — wyśrodkowana złota nazwa zakładki)
+podczas aktywnej walki nadal pokazywał "Mapa świata", a powinien pokazywać kategorię krainy
+("Expowiska"/"Łowiska"/"Kopalnie").
+
+**Wyrównanie kart**: nowy [PlayerEncounterPanel.tsx](../apps/web/src/components/expedition/PlayerEncounterPanel.tsx)
+to lustrzane odbicie [MonsterEncounterPanel.tsx](../apps/web/src/components/expedition/MonsterEncounterPanel.tsx)
+— identyczna ramka (`border border-line bg-ink/60 p-3`), identyczny awatar-placeholder
+(`h-14 w-14`), imię+poziom w środku zamiast nad ramką. Logika odczytu aktualnego HP/many z eventów
+(`findPlayerVitals`) została w [PlayerVitalsBar.tsx](../apps/web/src/components/expedition/PlayerVitalsBar.tsx)
+(eksportowana zamiast zduplikowana) — `PlayerVitalsBar` sam w sobie zostaje nietknięty i nadal
+używany tak samo w Ekspedycjach (`ExpeditionPanel.tsx`), gdzie ten sam problem nie występuje (tam
+nie stoi obok karty potwora). W [LiveCombatCard.tsx](../apps/web/src/components/expedition/LiveCombatCard.tsx)
+`PlayerEncounterPanel` zastąpił ręczny `<div><p>{character.name}</p><PlayerVitalsBar/></div>`.
+
+**Dynamiczny nagłówek**: [GamePage.tsx](../apps/web/src/pages/GamePage.tsx) dostało stan
+`dynamicHeaderLabel`, resetowany na `null` przy każdej zmianie zakładki (`useEffect` na
+`activeTab`). [WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx) dostało opcjonalny
+prop `onHeaderLabelChange` — `useEffect` śledzący `character.activeExpeditionId` i
+`character.currentZoneId`: gdy ekspedycja trwa, znajduje aktualną krainę w już dociągniętej liście
+stref i zgłasza w górę etykietę pasującej kategorii (ta sama funkcja `matchesCategory` co reszta
+pliku); gdy nie trwa, zgłasza `null` (nagłówek wraca do domyślnej nazwy zakładki z `TAB_LABELS`).
+Świadomie "dziecko zgłasza w górę" zamiast GamePage samodzielnie odpytujące o strefę/kategorię —
+ta logika już należy do World Map, nie trzeba jej duplikować wyżej.
+
+Zweryfikowane w przeglądarce: konto testowe, start ekspedycji w "Wilcze Uroczysko" (Expowisko) —
+nagłówek zmienił się z "Mapa świata" na "Expowiska", `getBoundingClientRect()` na obu kartach
+(`.border.border-line.bg-ink\/60.p-3`) potwierdził IDENTYCZNY rozmiar (339×108px) i tę samą
+wysokość `y` — karty wizualnie wyrównane. Po zakończeniu i odebraniu nagród nagłówek poprawnie
+wrócił do "Mapa świata". Brak przelewania na 375px. Konto testowe usunięte po teście. `tsc
+--noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

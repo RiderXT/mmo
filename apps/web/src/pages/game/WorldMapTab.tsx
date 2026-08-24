@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Character, BattleTacticsInput } from "@mmo/shared";
 import { listPlayerZones } from "../../lib/zonesApi";
@@ -56,7 +56,17 @@ function pinPosition(index: number, total: number) {
  *
  * This is a new, separate tab (see docs/architecture.md) that may later replace the Ekspedycje
  * map entirely, not a duplicate maintained in parallel forever. */
-export function WorldMapTab({ character }: { character: Character }) {
+export function WorldMapTab({
+  character,
+  onHeaderLabelChange,
+}: {
+  character: Character;
+  /** GamePage's shared tab header shows "Mapa świata" by default — while an expedition is
+   * active, it should instead name the zone's category (Expowiska/Łowiska/Kopalnie), since
+   * that's what's actually happening on screen. GamePage owns the header, so this just reports
+   * up what to show instead of duplicating expedition-category lookup logic there. */
+  onHeaderLabelChange?: (label: string | null) => void;
+}) {
   const queryClient = useQueryClient();
   const zonesQuery = useQuery({ queryKey: ["player-zones"], queryFn: listPlayerZones });
   const durationQuery = useQuery({ queryKey: ["expedition-duration"], queryFn: getExpeditionDuration });
@@ -95,6 +105,17 @@ export function WorldMapTab({ character }: { character: Character }) {
   const activeSkillsForTactics = (classQuery.data?.skills ?? []).filter(
     (s) => s.kind === "active" && unlockedClassSkillIds.has(s.id),
   );
+
+  useEffect(() => {
+    if (!onHeaderLabelChange) return;
+    if (!character.activeExpeditionId) {
+      onHeaderLabelChange(null);
+      return;
+    }
+    const currentZone = (zonesQuery.data ?? []).find((z) => z.id === character.currentZoneId);
+    const label = currentZone ? CATEGORIES.find((c) => matchesCategory(currentZone, c.key))?.label : undefined;
+    onHeaderLabelChange(label ?? null);
+  }, [character.activeExpeditionId, character.currentZoneId, zonesQuery.data, onHeaderLabelChange]);
 
   function selectZone(zone: ZoneDto) {
     setSelectedZoneId(zone.id);

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
@@ -33,6 +34,11 @@ export function GamePage() {
   const characterId = useCharacterStore((s) => s.activeCharacterId);
   const queryClient = useQueryClient();
   const activeTab = (tab as TabKey | undefined) ?? "character";
+  // World Map overrides the header while an expedition is live (see WorldMapTab's
+  // onHeaderLabelChange) — reset whenever the tab itself changes so a stale "Expowiska" doesn't
+  // linger after navigating away from World Map.
+  const [dynamicHeaderLabel, setDynamicHeaderLabel] = useState<string | null>(null);
+  useEffect(() => setDynamicHeaderLabel(null), [activeTab]);
 
   const characterQuery = useQuery({
     queryKey: ["character", characterId],
@@ -49,7 +55,7 @@ export function GamePage() {
     <AppShell>
       <div className="border-b border-line pb-3 text-center">
         <h1 className="font-display text-2xl font-semibold uppercase tracking-[0.15em] text-gold-bright">
-          {TAB_LABELS[activeTab]}
+          {dynamicHeaderLabel ?? TAB_LABELS[activeTab]}
         </h1>
       </div>
 
@@ -57,7 +63,9 @@ export function GamePage() {
         <div className="mt-4">
           {activeTab === "character" && <CharacterTab character={character} />}
           {activeTab === "equipment" && <EquipmentTab character={character} />}
-          {activeTab === "world-map" && <WorldMapTab character={character} />}
+          {activeTab === "world-map" && (
+            <WorldMapTab character={character} onHeaderLabelChange={setDynamicHeaderLabel} />
+          )}
           {activeTab === "expeditions" && (
             <ExpeditionsTab
               character={character}

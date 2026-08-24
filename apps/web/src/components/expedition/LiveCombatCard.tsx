@@ -16,7 +16,7 @@ import {
 } from "../../lib/expeditionsApi";
 import { CombatLog } from "./CombatLog";
 import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
-import { PlayerVitalsBar } from "./PlayerVitalsBar";
+import { PlayerEncounterPanel } from "./PlayerEncounterPanel";
 import { ActivePotionsSummary } from "./ActivePotionsSummary";
 import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
@@ -246,14 +246,13 @@ export function LiveCombatCard({ character, onClaimed }: { character: Character;
 
           {combatStatsQuery.data && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="mb-1 text-xs font-medium text-parchment-dim">{character.name}</p>
-                <PlayerVitalsBar
-                  events={revealedEvents}
-                  maxHp={combatStatsQuery.data.maxHp}
-                  maxMana={combatStatsQuery.data.maxMana}
-                />
-              </div>
+              <PlayerEncounterPanel
+                name={character.name}
+                level={character.level}
+                events={revealedEvents}
+                maxHp={combatStatsQuery.data.maxHp}
+                maxMana={combatStatsQuery.data.maxMana}
+              />
               <MonsterEncounterPanel events={revealedEvents} />
             </div>
           )}

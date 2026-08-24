@@ -4,7 +4,7 @@ import { ProgressBar } from "../common/ProgressBar";
 /** Walks the (already time-revealed) event list to find the player's current HP/mana as of the
  * last event that touched them — "round" only updates HP (mana regen happens silently inside
  * the simulation and isn't logged per-round), "skill_activated"/"potion_used" update both. */
-function findPlayerVitals(events: CombatEvent[], maxHp: number, maxMana: number) {
+export function findPlayerVitals(events: CombatEvent[], maxHp: number, maxMana: number) {
   let hp = maxHp;
   let mana = maxMana;
   for (const e of events) {
