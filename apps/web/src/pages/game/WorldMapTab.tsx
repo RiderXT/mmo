@@ -108,16 +108,21 @@ export function WorldMapTab({
   const isTraveling = travelArrivesAtMs !== null;
   const travelReady = isTraveling && now >= travelArrivesAtMs;
 
+  // Keep ticking past travelReady (not just up to it) so the invalidate below can retry every
+  // second — a single one-shot invalidate right at travelReady can lose a race against the
+  // server's own clock (client/server skew) and silently leave the screen stuck at "0:00"
+  // forever. Polling stops naturally once the server actually resolves the arrival (isTraveling
+  // flips false) — same fix ExpeditionPanel already applies to this exact race.
   useEffect(() => {
-    if (!isTraveling || travelReady) return;
+    if (!isTraveling) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [isTraveling, travelReady]);
+  }, [isTraveling]);
 
   useEffect(() => {
     if (!travelReady) return;
     queryClient.invalidateQueries({ queryKey: ["character", character.id] });
-  }, [travelReady, queryClient, character.id]);
+  }, [travelReady, now, queryClient, character.id]);
 
   const act = acts[activeActIndex] ?? acts[0];
   const zonesInAct = ordered.filter((z) => z.minLevel >= (act?.start ?? 1) && z.minLevel <= (act?.end ?? ACT_SIZE));

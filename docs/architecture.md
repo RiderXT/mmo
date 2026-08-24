@@ -4128,6 +4128,31 @@ efekt: po odliczaniu lista potworów pojawiła się sama, bez odświeżenia. Wsz
 (flagi krain, poziom postaci, konta testowe) przywrócone/usunięte po teście. Brak przelewania na
 375px. `tsc --noEmit` czysto na `web`.
 
+### Dogrywka: ekran "W drodze" zostawał zablokowany na 0:00
+
+User: po dotarciu do celu ekran "W drodze" zostawał na "0:00" i nic dalej się nie działo — trzeba
+było przejść na inną zakładkę i wrócić, żeby się zaktualizowało. Dokładnie ten scenariusz, przed
+którym ostrzega własny komentarz w `ExpeditionPanel.tsx`: pierwsza wersja tickowania w
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx) zatrzymywała `setInterval` w
+momencie gdy `travelReady` stawało się `true`, a efekt odświeżający zapytanie o postać miał w
+zależnościach tylko `travelReady` (bool, zmienia się raz) zamiast `now`. Jeśli ten JEDEN
+`invalidateQueries` trafił w wyścig z zegarem serwera (przybycie liczone jest leniwie — patrz
+poprzedni wpis) i serwer jeszcze nie uznawał podróży za zakończoną, nic tego nie ponawiało: zegar
+przestał tykać, więc `now` już się nie zmieniał, więc efekt zależny od `travelReady` (już `true`,
+niezmienny) nigdy nie odpalił się drugi raz.
+
+Naprawa: tickowanie trwa dopóki `isTraveling` jest `true` (nie gasi się przy `travelReady`), a
+efekt odświeżający zależy też od `now` — więc raz na sekundę PO przekroczeniu czasu próbuje
+ponownie, aż serwer faktycznie zaktualizuje `currentZoneId` (co naturalnie ustawia
+`isTraveling` na `false` i zatrzymuje pętlę). Dokładnie ten sam wzorzec, jaki `ExpeditionPanel.tsx`
+już stosuje dla tej samej klasy wyścigu.
+
+Zweryfikowane w przeglądarce: tymczasowo oznaczona krainę-miasto z 4-sekundowym czasem podróży,
+start podróży, odczekanie 4s BEZ żadnej interakcji (bez przechodzenia na inną zakładkę) — ekran
+sam wrócił do normalnego widoku Mapy świata z "Jesteś tutaj", potwierdzając że pętla ponawiania
+faktycznie działa zamiast polegać na szczęśliwym trafieniu w jednym strzale. Flagi testowe i
+konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
