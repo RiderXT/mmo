@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import type { Character } from "@mmo/shared";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Character, BattleTacticsInput } from "@mmo/shared";
 import { listPlayerZones } from "../../lib/zonesApi";
 import type { ZoneDto } from "../../lib/adminApi";
+import { startTravel } from "../../lib/travelApi";
+import { startExpedition, getExpeditionDuration } from "../../lib/expeditionsApi";
+import { getCharacterSkills } from "../../lib/charactersApi";
+import { getPlayerClass } from "../../lib/classesApi";
+import { ApiError } from "../../lib/apiClient";
 import { ZoneInfoCard } from "../../components/expedition/ZoneInfoCard";
+import { MonsterAttackPanel } from "../../components/expedition/MonsterAttackPanel";
+import { BattleTacticsModal } from "../../components/expedition/BattleTacticsModal";
 import { CampfireGlyph, WildZoneGlyph } from "../../components/expedition/ZoneGlyphs";
 import { PanelFrame } from "../../components/common/PanelFrame";
-import { Modal } from "../../components/common/Modal";
 
 type Category = "combat" | "fishing" | "mining";
 
-// Priority order used when a map pin belongs to more than one category and the click needs to
-// pick a tab to jump to — combat first since every sample zone has monsters, gathering spots are
-// the exception layered on top.
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "combat", label: "Expowiska" },
   { key: "fishing", label: "Łowiska" },
@@ -25,10 +28,16 @@ function matchesCategory(zone: ZoneDto, category: Category): boolean {
   return zone.mine !== null;
 }
 
-/** Deterministic scattered pin layout for a variable-length, admin-defined zone list — there's no
- * hand-painted map illustration (same "no art pipeline" situation ZoneMapPath already notes), so
- * pins sweep loosely from bottom-left to top-right in level order with a gentle wave, mirroring
- * the mockup's organic scatter without pretending to know the layout of art that doesn't exist. */
+// Same 30-level banding convention as ZoneMapPath.tsx ("Acts" here just get their own row above
+// the map instead of tabs above a vertical path) — bucketed off the actual seeded zone levels,
+// not a hardcoded zone count, so this keeps working as zones are added/removed in admin.
+const ACT_SIZE = 30;
+const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
+/** Deterministic scattered pin layout — no hand-painted map illustration (same "no art pipeline"
+ * situation ZoneMapPath already notes), so pins sweep loosely from bottom-left to top-right in
+ * level order with a gentle wave, computed against whichever zones are visible in the active act
+ * so a thin act still spreads across the whole map instead of clustering in one corner. */
 function pinPosition(index: number, total: number) {
   const t = total <= 1 ? 0.5 : index / (total - 1);
   const left = 10 + t * 78;
@@ -37,41 +46,117 @@ function pinPosition(index: number, total: number) {
   return { top: `${Math.min(88, Math.max(8, top))}%`, left: `${left}%` };
 }
 
-/** Purely explorational — browse real zone lore/level-ranges/monsters+drops on a map instead of
- * the flat list ZoneMapPath already uses for actually traveling. No travel action here on
- * purpose: this is a new, separate tab (see docs/architecture.md) that may later replace the
- * Ekspedycje map, not a duplicate of its travel/combat flow.
+/** Real, working entry point into an expedition — not a placeholder. Clicking a zone shows its
+ * actual monster roster (level/hp/exp) with checkbox selection; "Ruszaj" opens the same tactics
+ * lobby Ekspedycje uses (BattleTacticsModal) and then calls the same startExpedition endpoint.
+ * Traveling-there is still a separate, explicit step (see modules/travel — the backend rejects
+ * starting a fight in a zone the character hasn't arrived at yet), so this offers a "Wyrusz do
+ * krainy" button first when needed rather than silently failing.
  *
- * Two distinct interactions, on purpose: clicking a PIN never opens the popup — it just jumps
- * the right-hand tab to whichever category that zone belongs to and highlights it there. Only
- * clicking the zone's row IN THE LIST opens the info popup. The map is a navigation aid into the
- * category list, not itself a trigger for the detail view. */
+ * This is a new, separate tab (see docs/architecture.md) that may later replace the Ekspedycje
+ * map entirely, not a duplicate maintained in parallel forever. */
 export function WorldMapTab({ character }: { character: Character }) {
+  const queryClient = useQueryClient();
   const zonesQuery = useQuery({ queryKey: ["player-zones"], queryFn: listPlayerZones });
-  const [category, setCategory] = useState<Category>("combat");
-  const [highlightedZoneId, setHighlightedZoneId] = useState<string | null>(null);
-  const [popupZoneId, setPopupZoneId] = useState<string | null>(null);
+  const durationQuery = useQuery({ queryKey: ["expedition-duration"], queryFn: getExpeditionDuration });
+  const classQuery = useQuery({
+    queryKey: ["class", character.classId],
+    queryFn: () => getPlayerClass(character.classId!),
+    enabled: !!character.classId,
+  });
+  const characterSkillsQuery = useQuery({
+    queryKey: ["character-skills", character.id],
+    queryFn: () => getCharacterSkills(character.id),
+  });
 
   const ordered = [...(zonesQuery.data ?? [])].sort((a, b) => a.minLevel - b.minLevel);
-  const filtered = ordered.filter((z) => matchesCategory(z, category));
-  const popupZone = ordered.find((z) => z.id === popupZoneId) ?? null;
-  const popupEligible = popupZone
-    ? character.level >= popupZone.minLevel && character.level <= popupZone.maxLevel
-    : false;
+  const maxLevel = ordered.length > 0 ? Math.max(...ordered.map((z) => z.maxLevel)) : 0;
+  const actCount = Math.max(1, Math.ceil(maxLevel / ACT_SIZE));
+  const acts = Array.from({ length: actCount }, (_, i) => ({ start: i * ACT_SIZE + 1, end: (i + 1) * ACT_SIZE }));
 
-  function handlePinClick(zone: ZoneDto) {
-    setHighlightedZoneId(zone.id);
+  const [activeActIndex, setActiveActIndex] = useState(0);
+  const [category, setCategory] = useState<Category>("combat");
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [pendingMonsterIds, setPendingMonsterIds] = useState<string[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [startedMessage, setStartedMessage] = useState<string | null>(null);
+
+  const act = acts[activeActIndex] ?? acts[0];
+  const zonesInAct = ordered.filter((z) => z.minLevel >= (act?.start ?? 1) && z.minLevel <= (act?.end ?? ACT_SIZE));
+  const selectedZone = ordered.find((z) => z.id === selectedZoneId) ?? null;
+  const eligible = selectedZone
+    ? character.level >= selectedZone.minLevel && character.level <= selectedZone.maxLevel
+    : false;
+  const isHere = selectedZone?.id === character.currentZoneId;
+
+  const unlockedClassSkillIds = new Set(
+    characterSkillsQuery.data?.filter((s) => s.unlocked).map((s) => s.classSkillId) ?? [],
+  );
+  const activeSkillsForTactics = (classQuery.data?.skills ?? []).filter(
+    (s) => s.kind === "active" && unlockedClassSkillIds.has(s.id),
+  );
+
+  function selectZone(zone: ZoneDto) {
+    setSelectedZoneId(zone.id);
+    setError(null);
+    setStartedMessage(null);
     if (!matchesCategory(zone, category)) {
-      const nextCategory = CATEGORIES.find((c) => matchesCategory(zone, c.key));
-      if (nextCategory) setCategory(nextCategory.key);
+      const next = CATEGORIES.find((c) => matchesCategory(zone, c.key));
+      if (next) setCategory(next.key);
     }
   }
+
+  const travelMutation = useMutation({
+    mutationFn: (zoneId: string) => startTravel(character.id, zoneId),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["character", character.id] });
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się wyruszyć w drogę"),
+  });
+
+  const startMutation = useMutation({
+    mutationFn: (tactics: BattleTacticsInput) =>
+      startExpedition(character.id, selectedZone!.id, pendingMonsterIds ?? [], tactics),
+    onSuccess: () => {
+      setError(null);
+      setPendingMonsterIds(null);
+      setStartedMessage("Ekspedycja rozpoczęta! Postęp zobaczysz w zakładce Ekspedycje.");
+      queryClient.invalidateQueries({ queryKey: ["character", character.id] });
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się rozpocząć walki"),
+  });
 
   return (
     <div>
       <div className="mb-4">
         <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-gold">Eksploracja</p>
         <h1 className="font-display text-3xl font-semibold text-parchment">Mapa świata</h1>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {acts.map((a, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveActIndex(i)}
+            className={`border px-4 py-2 text-left transition ${
+              activeActIndex === i
+                ? "border-gold bg-gold/10"
+                : "border-line-soft hover:border-line-soft hover:bg-panel-raised"
+            }`}
+          >
+            <p
+              className={`font-display text-xs font-semibold uppercase tracking-widest ${
+                activeActIndex === i ? "text-gold-bright" : "text-parchment-dim"
+              }`}
+            >
+              {ROMAN_NUMERALS[i] ?? i + 1} Akt
+            </p>
+            <p className="text-[11px] text-parchment-faint">
+              poz. {a.start}-{a.end}
+            </p>
+          </button>
+        ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -83,21 +168,21 @@ export function WorldMapTab({ character }: { character: Character }) {
               "repeating-linear-gradient(115deg, oklch(23% 0.006 45) 0px, oklch(23% 0.006 45) 18px, oklch(28% 0.007 45) 18px, oklch(28% 0.007 45) 36px)",
           }}
         >
-          {ordered.length === 0 && (
+          {zonesInAct.length === 0 && (
             <p className="absolute inset-0 flex items-center justify-center text-sm text-parchment-faint">
-              Brak skonfigurowanych krain.
+              Brak krain w tym akcie.
             </p>
           )}
-          {ordered.map((zone, i) => {
-            const pos = pinPosition(i, ordered.length);
-            const eligible = character.level >= zone.minLevel && character.level <= zone.maxLevel;
+          {zonesInAct.map((zone, i) => {
+            const pos = pinPosition(i, zonesInAct.length);
+            const zoneEligible = character.level >= zone.minLevel && character.level <= zone.maxLevel;
             const isCurrent = zone.id === character.currentZoneId;
-            const isHighlighted = zone.id === highlightedZoneId;
+            const isSelected = zone.id === selectedZoneId;
             const inActiveCategory = matchesCategory(zone, category);
             return (
               <button
                 key={zone.id}
-                onClick={() => handlePinClick(zone)}
+                onClick={() => selectZone(zone)}
                 style={{ top: pos.top, left: pos.left }}
                 className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 transition ${
                   inActiveCategory ? "" : "opacity-40 hover:opacity-70"
@@ -107,9 +192,9 @@ export function WorldMapTab({ character }: { character: Character }) {
                   className={`flex h-8 w-8 items-center justify-center rounded-full border bg-gradient-to-br from-panel-raised to-panel transition ${
                     isCurrent
                       ? "border-gold-bright shadow-[0_0_14px_oklch(80%_0.14_85_/_0.5)]"
-                      : isHighlighted
+                      : isSelected
                         ? "border-gold ring-2 ring-gold/50"
-                        : eligible
+                        : zoneEligible
                           ? "border-line-soft hover:border-gold/60"
                           : "border-line-soft opacity-50"
                   }`}
@@ -122,7 +207,7 @@ export function WorldMapTab({ character }: { character: Character }) {
                 </span>
                 <span
                   className={`whitespace-nowrap rounded bg-ink/80 px-1.5 py-0.5 text-[11px] font-medium ${
-                    isHighlighted ? "text-gold-bright" : "text-parchment-dim"
+                    isSelected ? "text-gold-bright" : "text-parchment-dim"
                   }`}
                 >
                   {zone.name}
@@ -150,42 +235,67 @@ export function WorldMapTab({ character }: { character: Character }) {
             ))}
           </div>
 
-          <PanelFrame title="Krainy" emphasis="secondary">
-            <div className="flex flex-col">
-              {filtered.length === 0 && (
-                <p className="py-2 text-sm text-parchment-faint">Brak krain w tej kategorii.</p>
-              )}
-              {filtered.map((zone) => (
+          <PanelFrame title={CATEGORIES.find((c) => c.key === category)?.label ?? ""} emphasis="secondary">
+            {!selectedZone ? (
+              <p className="text-sm text-parchment-faint">Wybierz krainę na mapie.</p>
+            ) : !matchesCategory(selectedZone, category) ? (
+              <p className="text-sm text-parchment-faint">
+                {selectedZone.name} nie ma tu nic do pokazania — spróbuj innej zakładki.
+              </p>
+            ) : category !== "combat" ? (
+              <ZoneInfoCard
+                zone={selectedZone}
+                eligible={character.level >= selectedZone.minLevel && character.level <= selectedZone.maxLevel}
+              />
+            ) : !eligible ? (
+              <div>
+                <p className="font-display text-sm font-semibold text-gold-bright">{selectedZone.name}</p>
+                <p className="mt-2 text-sm font-medium text-red-400">
+                  Wymagany poziom {selectedZone.minLevel}-{selectedZone.maxLevel}.
+                </p>
+              </div>
+            ) : !isHere ? (
+              <div>
+                <p className="font-display text-sm font-semibold text-gold-bright">{selectedZone.name}</p>
+                <p className="mt-2 text-sm text-parchment-dim">Musisz najpierw dotrzeć do tej krainy.</p>
                 <button
-                  key={zone.id}
-                  onClick={() => {
-                    setHighlightedZoneId(zone.id);
-                    setPopupZoneId(zone.id);
-                  }}
-                  className={`flex items-center justify-between border-b border-line-soft/40 py-2 text-left text-sm transition last:border-b-0 ${
-                    zone.id === highlightedZoneId ? "text-gold-bright" : "text-parchment-dim hover:text-parchment"
-                  }`}
+                  onClick={() => travelMutation.mutate(selectedZone.id)}
+                  disabled={travelMutation.isPending}
+                  className="mt-3 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span>
-                    {zone.name}
-                    {zone.id === character.currentZoneId && (
-                      <span className="ml-1.5 text-xs text-gold">(tu jesteś)</span>
-                    )}
-                  </span>
-                  <span className="shrink-0 text-xs text-parchment-faint">
-                    poz. {zone.minLevel}-{zone.maxLevel}
-                  </span>
+                  Wyrusz do krainy
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : selectedZone.monsters.length === 0 ? (
+              <p className="text-sm text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
+            ) : startedMessage ? (
+              <p className="text-sm text-gold-bright">{startedMessage}</p>
+            ) : (
+              <MonsterAttackPanel
+                zone={selectedZone}
+                durationMinutes={durationQuery.data?.minutes ?? null}
+                confirmLabel="Ruszaj"
+                onConfirm={(ids) => {
+                  setPendingMonsterIds(ids);
+                  setError(null);
+                }}
+              />
+            )}
+            {error && (
+              <p role="alert" className="mt-2 text-sm text-red-400">
+                {error}
+              </p>
+            )}
           </PanelFrame>
         </div>
       </div>
 
-      {popupZone && (
-        <Modal title={popupZone.name} onClose={() => setPopupZoneId(null)}>
-          <ZoneInfoCard zone={popupZone} eligible={popupEligible} />
-        </Modal>
+      {pendingMonsterIds && selectedZone && (
+        <BattleTacticsModal
+          activeSkills={activeSkillsForTactics}
+          onBack={() => setPendingMonsterIds(null)}
+          onConfirm={(tactics) => startMutation.mutate(tactics)}
+        />
       )}
     </div>
   );

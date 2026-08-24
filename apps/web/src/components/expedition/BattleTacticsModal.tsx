@@ -12,8 +12,10 @@ export function BattleTacticsModal({
   onConfirm: (tactics: BattleTacticsInput) => void;
   onBack: () => void;
 }) {
-  const [useThresholdOverride, setUseThresholdOverride] = useState(false);
-  const [thresholdPct, setThresholdPct] = useState(60);
+  const [useHpThresholdOverride, setUseHpThresholdOverride] = useState(false);
+  const [hpThresholdPct, setHpThresholdPct] = useState(60);
+  const [useManaThresholdOverride, setUseManaThresholdOverride] = useState(false);
+  const [manaThresholdPct, setManaThresholdPct] = useState(60);
   const [disabledSkillIds, setDisabledSkillIds] = useState<Set<string>>(new Set());
   useEscapeKey(onBack);
 
@@ -28,7 +30,8 @@ export function BattleTacticsModal({
 
   function handleConfirm() {
     onConfirm({
-      hpThresholdOverridePct: useThresholdOverride ? thresholdPct / 100 : undefined,
+      hpThresholdOverridePct: useHpThresholdOverride ? hpThresholdPct / 100 : undefined,
+      manaThresholdOverridePct: useManaThresholdOverride ? manaThresholdPct / 100 : undefined,
       disabledSkillIds: Array.from(disabledSkillIds),
     });
   }
@@ -46,23 +49,48 @@ export function BattleTacticsModal({
           <label className="flex items-center gap-2 text-sm text-parchment-dim">
             <input
               type="checkbox"
-              checked={useThresholdOverride}
-              onChange={(e) => setUseThresholdOverride(e.target.checked)}
+              checked={useHpThresholdOverride}
+              onChange={(e) => setUseHpThresholdOverride(e.target.checked)}
               className="accent-gold"
             />
             Nadpisz próg % HP, przy którym mikstury lecznicze się uruchamiają
           </label>
-          {useThresholdOverride && (
+          {useHpThresholdOverride && (
             <div className="flex items-center gap-3 pl-6">
               <input
                 type="range"
                 min={0}
                 max={100}
-                value={thresholdPct}
-                onChange={(e) => setThresholdPct(Number(e.target.value))}
+                value={hpThresholdPct}
+                onChange={(e) => setHpThresholdPct(Number(e.target.value))}
                 className="flex-1 accent-gold"
               />
-              <span className="w-12 text-right text-sm tabular-nums text-parchment">{thresholdPct}%</span>
+              <span className="w-12 text-right text-sm tabular-nums text-parchment">{hpThresholdPct}%</span>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 space-y-2">
+          <label className="flex items-center gap-2 text-sm text-parchment-dim">
+            <input
+              type="checkbox"
+              checked={useManaThresholdOverride}
+              onChange={(e) => setUseManaThresholdOverride(e.target.checked)}
+              className="accent-gold"
+            />
+            Nadpisz próg % many, przy którym mikstury many się uruchamiają
+          </label>
+          {useManaThresholdOverride && (
+            <div className="flex items-center gap-3 pl-6">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={manaThresholdPct}
+                onChange={(e) => setManaThresholdPct(Number(e.target.value))}
+                className="flex-1 accent-gold"
+              />
+              <span className="w-12 text-right text-sm tabular-nums text-parchment">{manaThresholdPct}%</span>
             </div>
           )}
         </div>

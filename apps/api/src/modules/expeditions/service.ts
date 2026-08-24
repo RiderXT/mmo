@@ -198,12 +198,15 @@ async function buildAndSimulate(
   const activeSkills = tactics?.disabledSkillIds?.length
     ? allActiveSkills.filter((s) => !tactics.disabledSkillIds.includes(s.id))
     : allActiveSkills;
-  const potions =
-    tactics?.hpThresholdOverridePct != null
-      ? basePotions.map((p) =>
-          p.trigger === "hp_below" ? { ...p, thresholdPct: tactics.hpThresholdOverridePct! } : p,
-        )
-      : basePotions;
+  const potions = basePotions.map((p) => {
+    if (p.trigger === "hp_below" && tactics?.hpThresholdOverridePct != null) {
+      return { ...p, thresholdPct: tactics.hpThresholdOverridePct };
+    }
+    if (p.trigger === "mana_below" && tactics?.manaThresholdOverridePct != null) {
+      return { ...p, thresholdPct: tactics.manaThresholdOverridePct };
+    }
+    return p;
+  });
 
   const stats = computeDerivedStats(core, equipmentStats, passiveSkills);
 

@@ -10,10 +10,12 @@ export function MonsterAttackPanel({
   zone,
   durationMinutes,
   onConfirm,
+  confirmLabel = "Rozpocznij walkę",
 }: {
   zone: ZoneDto;
   durationMinutes: number | null;
   onConfirm: (selectedMonsterIds: string[]) => void;
+  confirmLabel?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -69,7 +71,7 @@ export function MonsterAttackPanel({
           disabled={selected.size === 0}
           className="rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
         >
-          Rozpocznij walkę
+          {confirmLabel}
         </button>
       </div>
     </div>

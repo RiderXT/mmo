@@ -3832,6 +3832,56 @@ aktywna była zakładka "Łowiska" poprawnie przełączył na "Expowiska" i NIE 
 popup z tytułem "Krwawy Wąwóz". Brak przelewania na 375px (pigułki i lista wracają pod mapę).
 `tsc --noEmit` czysto na `web`.
 
+### Trzecia dogrywka: Mapa świata staje się prawdziwym wejściem do ekspedycji
+
+User: zakładka Expowiska miała być interaktywna, nie stałą listą krain — na mapie mają być
+"Akty" (grupy poziomowe, prostokątne przyciski nad mapą, żeby ograniczyć liczbę widocznych pinów
+naraz), a klik krainy w prawym menu ma pokazywać realną listę potworów (poziom/hp/exp) z
+zaznaczaniem, pod spodem złoty przycisk "Ruszaj" — na razie sam przycisk, bez pełnego "lobby"
+ekspedycji. W trakcie pracy user dodał: przycisk ma otwierać ten sam popup taktyki co Ekspedycje
+(próg % mikstury HP i MANY, wybór aktywnych umiejętności), nie nic.
+
+**Akty**: [WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx) grupuje krainy w pasma co
+30 poziomów — dokładnie ten sam `BAND_SIZE`/bucketing co
+[ZoneMapPath.tsx](../apps/web/src/components/expedition/ZoneMapPath.tsx) już robi dla swojej
+pionowej ścieżki, tu tylko jako prostokątne przyciski "I Akt" / "II Akt"... nad mapą (celowo
+kwadratowe, nie `rounded-full` jak pigułki kategorii, żeby wizualnie odróżnić dwa różne osie
+filtrowania: akt = poziom, kategoria = typ aktywności). Mapa pokazuje tylko piny z aktywnego aktu.
+
+**Prawdziwa ekspedycja z Mapy świata, nie atrapa**: klik krainy w kategorii "Expowiska"
+odtwarza DOKŁADNIE tę samą bramkę co [ExpeditionPanel.tsx](../apps/web/src/components/expedition/ExpeditionPanel.tsx)
+— backend (`expeditions/service.ts`) i tak odrzuca `startExpedition` gdy `character.currentZoneId
+!== zoneId` ("Postać musi najpierw dotrzeć do tej krainy"), więc zamiast to ukrywać, panel
+pokazuje: brak wymaganego poziomu → ostrzeżenie; poziom OK ale nie tu → prawdziwy przycisk
+"Wyrusz do krainy" (`startTravel`, ten sam endpoint co Ekspedycje); jest tu → reużyty
+[MonsterAttackPanel.tsx](../apps/web/src/components/expedition/MonsterAttackPanel.tsx) (dostał
+nowy opcjonalny prop `confirmLabel`, domyślnie "Rozpocznij walkę" jak dotychczas w Ekspedycjach,
+tu przekazane "Ruszaj"). Zatwierdzenie wyboru potworów otwiera reużyty
+[BattleTacticsModal.tsx](../apps/web/src/components/expedition/BattleTacticsModal.tsx), którego
+"Rozpocznij walkę" woła to samo `startExpedition(characterId, zoneId, monsterIds, tactics)` co
+Ekspedycje — Mapa świata nie duplikuje logiki startu, tylko inny punkt wejścia do tej samej
+funkcji. Po starcie: krótki komunikat + wskazanie zakładki Ekspedycje po żywy postęp walki (log
+walki/countdown/odbiór nagród zostają WYŁĄCZNIE własnością Ekspedycji, nie są tu duplikowane).
+
+**Nowość: próg % mikstury many obok HP**. `BattleTacticsModal` miał tylko nadpisanie progu HP —
+user poprosił też o mana. `BattleTacticsSchema` w
+[expedition.ts](../packages/shared/src/schemas/expedition.ts) dostało
+`manaThresholdOverridePct` (analogicznie do istniejącego `hpThresholdOverridePct`, oba opcjonalne
+— addytywna zmiana Zod, nie dotyka Prismy/bazy). Backend
+([expeditions/service.ts](../apps/api/src/modules/expeditions/service.ts)) rozszerzony o dokładnie
+symetryczną gałąź: nadpisuje `thresholdPct` na potionie z `trigger === "mana_below"`, tak samo jak
+już robił dla `hp_below`. UI dostał drugi checkbox+suwak, ten sam wzorzec co HP.
+
+Zweryfikowane end-to-end w przeglądarce (konto testowe): 4 Akty poprawnie wyliczone z realnego
+maxLevel krain (99 → 4 akty po 30), Akt I pokazał 3 pasujące krainy. Klik "Wilcze Uroczysko" (poza
+aktualną lokalizacją postaci) pokazał "Musisz najpierw dotrzeć do tej krainy" + działający
+"Wyrusz do krainy" — po odczekaniu na przybycie i odświeżeniu, ten sam klik pokazał realną listę 5
+wilków z poziomem/HP/exp. Zaznaczenie jednego, klik "Ruszaj" otworzył `BattleTacticsModal` z
+progiem HP I MANY oraz listą umiejętności. "Rozpocznij walkę" faktycznie utworzył ekspedycję —
+potwierdzone przez `GET /api/expeditions/:characterId/active`, zwrócił `status: "in_progress"` z
+prawdziwym eventem "encounter_start" dla wybranego potwora. Brak przelewania na 375px. Konto
+testowe usunięte po teście (kaskadowo usunęło i ekspedycję). `tsc --noEmit` czysto na `api` i `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
