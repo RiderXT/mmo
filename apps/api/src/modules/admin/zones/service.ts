@@ -5,7 +5,25 @@ import type { CreateZoneInput, UpdateZoneInput } from "@mmo/shared";
 const zoneInclude = {
   monsters: {
     include: {
-      monster: { select: { id: true, name: true, level: true, hp: true, expReward: true, goldReward: true } },
+      monster: {
+        select: {
+          id: true,
+          name: true,
+          level: true,
+          hp: true,
+          expReward: true,
+          goldReward: true,
+          drops: {
+            select: {
+              id: true,
+              dropChance: true,
+              minQty: true,
+              maxQty: true,
+              item: { select: { id: true, name: true, type: true, imageUrl: true } },
+            },
+          },
+        },
+      },
     },
   },
   drops: { include: { item: { select: { id: true, name: true, type: true } } } },

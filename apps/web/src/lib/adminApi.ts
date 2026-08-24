@@ -41,7 +41,21 @@ export interface ZoneDto {
     monsterId: string;
     spawnWeight: number;
     maxCount: number;
-    monster: { id: string; name: string; level: number; hp: number; expReward: number; goldReward: number };
+    monster: {
+      id: string;
+      name: string;
+      level: number;
+      hp: number;
+      expReward: number;
+      goldReward: number;
+      drops: {
+        id: string;
+        dropChance: number;
+        minQty: number;
+        maxQty: number;
+        item: { id: string; name: string; type: ItemType; imageUrl: string | null };
+      }[];
+    };
   }[];
   drops: { id: string; itemId: string; dropChance: number; item: { id: string; name: string; type: string } }[];
   npcs: { id: string; name: string; kind: string }[];

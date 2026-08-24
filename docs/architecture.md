@@ -3882,6 +3882,34 @@ potwierdzone przez `GET /api/expeditions/:characterId/active`, zwrócił `status
 prawdziwym eventem "encounter_start" dla wybranego potwora. Brak przelewania na 375px. Konto
 testowe usunięte po teście (kaskadowo usunęło i ekspedycję). `tsc --noEmit` czysto na `api` i `web`.
 
+### Lista potworów: prostokątne wiersze + podgląd dropu na hover
+
+User: lista potworów w [MonsterAttackPanel.tsx](../apps/web/src/components/expedition/MonsterAttackPanel.tsx)
+(używana teraz przez Mapę świata i od zawsze przez Ekspedycje) miała siatkę 2-kolumnową kwadratowych
+kart — zamiast tego jeden prostokątny wiersz pod drugim, format "Nazwa X lvl, Y HP, Z exp" w jednej
+linii, plus po prawej ikonka, po najechaniu myszką pokazująca popup z dropem tego potwora w formie
+obrazkowej.
+
+Dane o dropie per-potwór (`MonsterDrop`) nie były wcześniej dociągane do gracza — `zoneInclude` w
+[admin/zones/service.ts](../apps/api/src/modules/admin/zones/service.ts) (współdzielony przez
+publiczny `GET /api/zones` i panel admina) dostał zagnieżdżone `monster.select.drops` z
+`item.imageUrl`, żeby popup mógł pokazać prawdziwą grafikę przedmiotu, nie tylko nazwę.
+[ZoneDto](../apps/web/src/lib/adminApi.ts) rozszerzone o ten sam kształt.
+
+Popup na hover (nie klik) — `DropInfoTrigger` używa nazwanej grupy Tailwind (`group/drop` +
+`group-hover/drop:opacity-100`), żeby nie kolidować z resztą stylowania wiersza. Obrazek
+przedmiotu jeśli `item.imageUrl` istnieje, inaczej `ItemTypeIcon` (ten sam wzorzec fallbacku co
+`ZoneInfoCard`/`SkillsPanel`). `onClick={stopPropagation}` na ikonce, żeby najechanie/kliknięcie
+w nią nie przełączało przypadkiem zaznaczenia potwora (cały wiersz to nadal jeden `<button>` do
+zaznaczania).
+
+Zweryfikowane w przeglądarce: 5 wierszy 286×34px (prostokątne, nie kwadraty), tekst dokładnie w
+żądanym formacie ("Doświadczony Wilk 6 lvl, 156 HP, 364 exp"), popup domyślnie `opacity:0`
+(potwierdzone `getComputedStyle`), klasy `group/drop`/`group-hover/drop:opacity-100` obecne bez
+literówek, jeden z dropów faktycznie załadował prawdziwy plik z `uploads/items/...png` zamiast
+placeholdera. Brak przelewania na 375px. Konto testowe usunięte po teście. `tsc --noEmit` czysto
+na `api` i `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
