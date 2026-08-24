@@ -4092,6 +4092,42 @@ zakładce "Kopalnie" (`getComputedStyle().opacity === "1"`) — nie przygaszony.
 375px. Konto testowe i flaga `isTown` na testowej krainie przywrócone do stanu sprzed testu.
 `tsc --noEmit` czysto na `web`.
 
+### Podróż na Mapie świata nie tickowała — trzeba było ręcznie odświeżać
+
+User: po kliknięciu "Wyrusz do miasta" postać "już tam jest" (serwer zaakceptował podróż), ale
+dostęp do Kowadła/NPC pojawiał się dopiero po ręcznym odświeżeniu strony. Ten sam problem w drugą
+stronę — podróż do dzikiej krainy nie pokazywała żadnego licznika, potwory pojawiały się dopiero
+po odświeżeniu.
+
+Przyczyna: podróż w tym projekcie jest leniwie rozwiązywana po stronie serwera —
+`resolveTravelArrival(characterId)` (patrz `lib/travelResolution.ts`) faktycznie przestawia
+`currentZoneId` dopiero przy KOLEJNYM pobraniu postaci PO upłynięciu `travelArrivesAt` (ten sam
+mechanizm już od dawna działa poprawnie w Ekspedycjach — `ExpeditionPanel.tsx` ma własne
+tickowanie). [WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx) po prostu nigdy nie
+odpytywało postaci ponownie po starcie podróży — `travelMutation.onSuccess` robiło jednorazowy
+`invalidateQueries`, ale to zdarzało się ZANIM `travelArrivesAt` w ogóle minęło, więc pobierało tę
+samą, jeszcze-nie-przybyłą postać.
+
+Naprawa: dodane dokładnie to samo tickowanie co w ExpeditionPanel — `now`/`isTraveling`/
+`travelReady` liczone z `character.travelArrivesAt`, `setInterval` co sekundę dopóki się nie
+skończy, a po zakończeniu automatyczny `invalidateQueries(["character", characterId])`. Ponieważ
+[AppShell.tsx](../apps/web/src/components/AppShell.tsx)'s `CharacterNavLinks`/`CharacterHeaderBar`
+współdzielą DOKŁADNIE ten sam klucz zapytania, jedno odświeżenie naprawia OBA zgłoszone objawy
+naraz — Kowadło/NPC w menu i pojawienie się potworów, bez osobnej poprawki dla każdego. Dopóki
+trwa podróż, cały ekran zamienia się w dedykowany widok "W drodze" z odliczaniem (ta sama zasada
+co przy aktywnej ekspedycji — nic innego nie da się w tym czasie zrobić), a nagłówek zakładki
+pokazuje "W drodze" zamiast nazwy zakładki (ten sam mechanizm `onHeaderLabelChange` co dla
+kategorii walki).
+
+Zweryfikowane w przeglądarce: skrócono tymczasowo czas podróży testowych krain do 5s. Podróż do
+miasta — natychmiastowy ekran "W drodze" z odliczaniem, po ~5s automatyczny powrót do widoku
+"Jesteś tutaj" BEZ przeładowania strony, potwierdzone że linki "Kowadło"/"NPC" w menu bocznym
+zmieniły się z wyszarzonych `<div>` na prawdziwe klikalne `<a>` (sprawdzone przez DOM, nie przez
+odświeżenie). Podróż do dzikiej krainy (postać tymczasowo podniesiona do poziomu 15) — ten sam
+efekt: po odliczaniu lista potworów pojawiła się sama, bez odświeżenia. Wszystkie zmiany testowe
+(flagi krain, poziom postaci, konta testowe) przywrócone/usunięte po teście. Brak przelewania na
+375px. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

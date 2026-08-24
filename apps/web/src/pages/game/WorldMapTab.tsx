@@ -29,6 +29,13 @@ function matchesCategory(zone: ZoneDto, category: Category): boolean {
   return zone.mine !== null;
 }
 
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 // Same 30-level banding convention as ZoneMapPath.tsx ("Acts" here just get their own row above
 // the map instead of tabs above a vertical path) — bucketed off the actual seeded zone levels,
 // not a hardcoded zone count, so this keeps working as zones are added/removed in admin.
@@ -90,6 +97,27 @@ export function WorldMapTab({
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [pendingMonsterIds, setPendingMonsterIds] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Travel is a timed, lazily-resolved server-side step (see lib/travelResolution.ts —
+  // currentZoneId only actually updates the next time the character is fetched AFTER
+  // travelArrivesAt has passed). Without this tick+refetch, the character would look "stuck"
+  // mid-travel — no countdown, and arrival (monsters/NPC/Kowadło becoming available) silently
+  // never showing up until the player manually reloads the page.
+  const travelArrivesAtMs = character.travelArrivesAt ? new Date(character.travelArrivesAt).getTime() : null;
+  const isTraveling = travelArrivesAtMs !== null;
+  const travelReady = isTraveling && now >= travelArrivesAtMs;
+
+  useEffect(() => {
+    if (!isTraveling || travelReady) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isTraveling, travelReady]);
+
+  useEffect(() => {
+    if (!travelReady) return;
+    queryClient.invalidateQueries({ queryKey: ["character", character.id] });
+  }, [travelReady, queryClient, character.id]);
 
   const act = acts[activeActIndex] ?? acts[0];
   const zonesInAct = ordered.filter((z) => z.minLevel >= (act?.start ?? 1) && z.minLevel <= (act?.end ?? ACT_SIZE));
@@ -108,6 +136,10 @@ export function WorldMapTab({
 
   useEffect(() => {
     if (!onHeaderLabelChange) return;
+    if (isTraveling) {
+      onHeaderLabelChange("W drodze");
+      return;
+    }
     if (!character.activeExpeditionId) {
       onHeaderLabelChange(null);
       return;
@@ -115,7 +147,7 @@ export function WorldMapTab({
     const currentZone = (zonesQuery.data ?? []).find((z) => z.id === character.currentZoneId);
     const label = currentZone ? CATEGORIES.find((c) => matchesCategory(currentZone, c.key))?.label : undefined;
     onHeaderLabelChange(label ?? null);
-  }, [character.activeExpeditionId, character.currentZoneId, zonesQuery.data, onHeaderLabelChange]);
+  }, [isTraveling, character.activeExpeditionId, character.currentZoneId, zonesQuery.data, onHeaderLabelChange]);
 
   function selectZone(zone: ZoneDto) {
     setSelectedZoneId(zone.id);
@@ -158,6 +190,24 @@ export function WorldMapTab({
         character={character}
         onClaimed={() => queryClient.invalidateQueries({ queryKey: ["character", character.id] })}
       />
+    );
+  }
+
+  // Same reasoning as the combat takeover above — while traveling there's nothing else useful to
+  // browse (the destination is already committed), so this replaces the whole tab with a
+  // countdown instead of leaving the old "Wyrusz do..." button sitting there doing nothing.
+  if (isTraveling) {
+    const destination = ordered.find((z) => z.id === character.travelDestinationZoneId);
+    return (
+      <div className="flex flex-col items-center gap-2 py-16 text-center">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-gold">W drodze</p>
+        <p className="font-display text-2xl font-semibold text-parchment">
+          {destination?.name ?? "celu"}
+        </p>
+        <p className="font-display text-3xl tabular-nums text-gold-bright">
+          {formatDuration((travelArrivesAtMs ?? now) - now)}
+        </p>
+      </div>
     );
   }
 
