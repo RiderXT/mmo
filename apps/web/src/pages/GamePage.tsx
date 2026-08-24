@@ -14,6 +14,20 @@ import { WorldMapTab } from "./game/WorldMapTab";
 
 type TabKey = "character" | "equipment" | "expeditions" | "anvil" | "npc" | "skills" | "daily-login" | "world-map";
 
+// Same labels as the nav links in AppShell.tsx — this just repeats which tab you're on, not the
+// character's stats (name/level/exp/gold already live in AppShell's persistent CharacterHeaderBar,
+// visible on every page, so repeating them here on every single tab was pure duplication).
+const TAB_LABELS: Record<TabKey, string> = {
+  character: "Postać",
+  equipment: "Ekwipunek",
+  expeditions: "Ekspedycje",
+  "world-map": "Mapa świata",
+  anvil: "Kowadło",
+  npc: "NPC",
+  skills: "Umiejętności",
+  "daily-login": "Nagrody dzienne",
+};
+
 export function GamePage() {
   const { tab } = useParams<{ tab?: string }>();
   const characterId = useCharacterStore((s) => s.activeCharacterId);
@@ -33,13 +47,10 @@ export function GamePage() {
 
   return (
     <AppShell>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
-        <h1 className="text-lg font-semibold text-parchment">{character?.name ?? "…"}</h1>
-        {character && (
-          <p className="text-sm text-parchment-dim">
-            Poziom {character.level} · {character.exp} exp · {character.gold} złota
-          </p>
-        )}
+      <div className="border-b border-line pb-3 text-center">
+        <h1 className="font-display text-2xl font-semibold uppercase tracking-[0.15em] text-gold-bright">
+          {TAB_LABELS[activeTab]}
+        </h1>
       </div>
 
       {character && (

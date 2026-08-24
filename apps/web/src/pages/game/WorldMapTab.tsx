@@ -142,11 +142,6 @@ export function WorldMapTab({ character }: { character: Character }) {
 
   return (
     <div>
-      <div className="mb-4">
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-gold">Eksploracja</p>
-        <h1 className="font-display text-3xl font-semibold text-parchment">Mapa świata</h1>
-      </div>
-
       <div className="mb-4 flex flex-wrap gap-2">
         {acts.map((a, i) => (
           <button

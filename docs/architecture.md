@@ -4004,6 +4004,33 @@ ItemTooltip, nie gołe div-y), przedmioty poprawnie rozpoznane po nazwie ("Róż
 Ekspedycje (oryginalna zakładka) nadal bez regresji. Brak przelewania na 375px. Konto testowe
 usunięte po teście. `tsc --noEmit` czysto na `web`.
 
+### Nagłówek każdej zakładki gry: nazwa zakładki zamiast Nick/poziom/exp/złoto
+
+Każda zakładka pod `/game/:tab` (Postać, Ekwipunek, Ekspedycje, Mapa świata, Kowadło, NPC,
+Umiejętności, Nagrody dzienne) miała u góry powtórzone dane postaci — "{Nick}" jako `<h1>` +
+"Poziom X · Y exp · Z złota" obok. To już od dawna duplikuje `CharacterHeaderBar` w
+[AppShell.tsx](../apps/web/src/components/AppShell.tsx) (awatar, imię, plakietka poziomu, mini
+pasek expa, złoto), widoczny w górnym pasku na KAŻDEJ stronie gry, nie tylko tych pod `/game/:tab`.
+
+[GamePage.tsx](../apps/web/src/pages/GamePage.tsx) — ten nagłówek zastąpiony samą nazwą aktywnej
+zakładki, wyśrodkowaną, w `font-display` (Cinzel) i kolorze `text-gold-bright`: nowa mapa
+`TAB_LABELS` powtarza dosłownie te same etykiety co linki nawigacji w AppShell.tsx (żeby nazwa w
+nagłówku zawsze zgadzała się z tym, co jest podświetlone w menu). Przy okazji usunięty analogiczny,
+teraz podwójny nagłówek "Eksploracja / Mapa świata" wewnątrz
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx) — GamePage już pokazuje "Mapa
+świata" nad nim, drugi w środku byłby powtórką.
+
+Świadomie NIE tłumiony podczas aktywnej walki (Mapa świata → `LiveCombatCard`, patrz wcześniejszy
+wpis) — zamiast całego zestawu Nick/poziom/exp/złoto zostaje tam tylko jedno wyśrodkowane słowo
+"Walka"/"Mapa świata"[uwaga: nadal "Mapa świata", bo GamePage nie wie o wewnętrznym trybie
+walki WorldMapTab], znacznie lżejsze niż to, co tam wcześniej wisiało.
+
+Zweryfikowane w przeglądarce: konto testowe, sprawdzone Postać/Ekwipunek/Mapa świata —
+`getComputedStyle` potwierdził wyśrodkowanie (`text-align: center`), kolor `oklch(0.8 0.14 85)`
+(token `gold-bright`) i font Cinzel; na Mapie świata dokładnie jeden `<h1>` na stronie (potwierdzone
+że stary wewnętrzny nagłówek zniknął, nie ma podwójnego "Mapa świata"). Brak przelewania na 375px.
+Konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
