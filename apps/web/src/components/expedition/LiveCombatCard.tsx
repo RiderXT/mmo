@@ -5,7 +5,8 @@ import { ApiError } from "../../lib/apiClient";
 import { listPlayerZones } from "../../lib/zonesApi";
 import { listPlayerItems } from "../../lib/itemsApi";
 import { getCombatStats, getCharacterSkills } from "../../lib/charactersApi";
-import { getPlayerClass } from "../../lib/classesApi";
+import { getPlayerClass, listPlayerClasses } from "../../lib/classesApi";
+import type { ItemDto } from "../../lib/adminApi";
 import {
   getActiveExpedition,
   claimExpedition,
@@ -18,8 +19,9 @@ import { MonsterEncounterPanel } from "./MonsterEncounterPanel";
 import { PlayerVitalsBar } from "./PlayerVitalsBar";
 import { ActivePotionsSummary } from "./ActivePotionsSummary";
 import { ActiveSkillCooldownBar } from "./ActiveSkillCooldownBar";
-import { LootBar } from "./LootBar";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
+import { ItemTooltip } from "../inventory/ItemTooltip";
+import { API_URL } from "../../lib/apiClient";
 import { ConfirmModal } from "../common/ConfirmModal";
 
 function formatDuration(ms: number): string {
@@ -27,6 +29,34 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/** Loot preview icon — same tooltip-on-hover treatment as ItemBox in the equipment grid, just
+ * driven off catalog data (ItemDto) instead of a real InventoryItemDto, since this loot hasn't
+ * necessarily landed in the inventory yet (still mid-fight) and never carries rolled stats or an
+ * upgrade level of its own. */
+function LootIcon({ item, quantity, className }: { item: ItemDto | undefined; quantity: number; className: string | null }) {
+  if (!item) {
+    return (
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">
+        <ItemTypeIcon type="material" className="h-5 w-5 text-parchment-dim" />
+      </div>
+    );
+  }
+  return (
+    <ItemTooltip name={item.name} upgradeLevel={0} type={item.type} minLevel={item.minLevel} className={className} stats={item.baseStats}>
+      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">
+        {item.imageUrl ? (
+          <img src={`${API_URL}${item.imageUrl}`} alt="" className="h-full w-full object-contain p-1" />
+        ) : (
+          <ItemTypeIcon type={item.type} className="h-5 w-5 text-parchment-dim" />
+        )}
+        {quantity > 1 && (
+          <span className="absolute bottom-0 right-0.5 text-[10px] font-medium text-gold-bright">×{quantity}</span>
+        )}
+      </div>
+    </ItemTooltip>
+  );
 }
 
 /** The mockup's "COMBAT / EXPEDITION PAGE" — player-vs-monster bars, dual activity log, skills
@@ -52,6 +82,7 @@ export function LiveCombatCard({ character, onClaimed }: { character: Character;
   });
   const zonesQuery = useQuery({ queryKey: ["player-zones"], queryFn: listPlayerZones });
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
+  const classesQuery = useQuery({ queryKey: ["player-classes"], queryFn: listPlayerClasses });
   const combatStatsQuery = useQuery({ queryKey: ["combat-stats", characterId], queryFn: () => getCombatStats(characterId) });
   const classQuery = useQuery({
     queryKey: ["class", character.classId],
@@ -116,6 +147,8 @@ export function LiveCombatCard({ character, onClaimed }: { character: Character;
   const zones = zonesQuery.data ?? [];
   const itemFor = (itemId: string) => itemsQuery.data?.find((i) => i.id === itemId);
   const zoneNameFor = (zoneId: string) => zones.find((z) => z.id === zoneId)?.name ?? zoneId;
+  const classNameFor = (classId: string | null) =>
+    classId ? (classesQuery.data?.find((c) => c.id === classId)?.name ?? null) : null;
 
   const unlockedClassSkillIds = new Set(
     characterSkillsQuery.data?.filter((s) => s.unlocked).map((s) => s.classSkillId) ?? [],
@@ -146,14 +179,16 @@ export function LiveCombatCard({ character, onClaimed }: { character: Character;
           <p className="mt-1 text-sm font-medium text-gold-bright">Awans na poziom {claimResult.newLevel}!</p>
         )}
         {claimResult.result.loot.length > 0 ? (
-          <ul className="mt-2 space-y-1 text-sm text-parchment-dim">
+          <div className="mt-2 flex flex-wrap gap-2">
             {claimResult.result.loot.map((l) => (
-              <li key={l.itemId} className="flex items-center gap-1.5">
-                <ItemTypeIcon type={itemFor(l.itemId)?.type ?? "material"} className="h-4 w-4 shrink-0" />
-                {itemFor(l.itemId)?.name ?? l.itemId} ×{l.quantity}
-              </li>
+              <LootIcon
+                key={l.itemId}
+                item={itemFor(l.itemId)}
+                quantity={l.quantity}
+                className={classNameFor(itemFor(l.itemId)?.classId ?? null)}
+              />
             ))}
-          </ul>
+          </div>
         ) : (
           <p className="mt-2 text-sm text-parchment-faint">Brak przedmiotów tym razem.</p>
         )}
@@ -223,8 +258,7 @@ export function LiveCombatCard({ character, onClaimed }: { character: Character;
             </div>
           )}
 
-          <CombatLog events={revealedEvents} itemFor={itemFor} />
-          <LootBar events={revealedEvents} itemFor={itemFor} />
+          <CombatLog events={revealedEvents} itemFor={itemFor} showSummary={false} />
 
           {activeSkillsForCooldown.length > 0 && (
             <div className="mt-3">
@@ -273,15 +307,16 @@ export function LiveCombatCard({ character, onClaimed }: { character: Character;
           {lootTotals.size > 0 && (
             <div className="border border-line-soft bg-panel-raised/40 p-3">
               <p className="mb-2 text-[11px] uppercase tracking-wide text-parchment-faint">Zdobyte przedmioty</p>
-              <ul className="space-y-1 text-sm">
+              <div className="flex flex-wrap gap-2">
                 {Array.from(lootTotals.entries()).map(([itemId, qty]) => (
-                  <li key={itemId} className="flex items-center gap-1.5 text-parchment-dim">
-                    <ItemTypeIcon type={itemFor(itemId)?.type ?? "material"} className="h-4 w-4 shrink-0" />
-                    <span className="flex-1 truncate">{itemFor(itemId)?.name ?? itemId}</span>
-                    <span className="text-xs">×{qty}</span>
-                  </li>
+                  <LootIcon
+                    key={itemId}
+                    item={itemFor(itemId)}
+                    quantity={qty}
+                    className={classNameFor(itemFor(itemId)?.classId ?? null)}
+                  />
                 ))}
-              </ul>
+              </div>
             </div>
           )}
 

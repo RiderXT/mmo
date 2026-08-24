@@ -3957,6 +3957,53 @@ pokazało podsumowanie "Ekspedycja zakończona" → "OK" wróciło do pustego st
 (oryginalna zakładka) sprawdzone bez regresji — działa identycznie jak przed zmianą. Brak
 przelewania na 375px. Konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
 
+### Dogrywka: czysty ekran walki, bez duplikatu wyniku, drop jako ikona z popupem
+
+User poprawił trzy rzeczy po poprzedniej zmianie:
+1. Pigułki kategorii (Expowiska/Łowiska/Kopalnie/Walka) wróciły pod przyciski Aktów pełną
+   szerokością zamiast siedzieć po prawej stronie obok menu wyboru potworów, jak ustalono wcześniej.
+2. Po rozpoczęciu walki na ekranie zostawał cały nagłówek "Eksploracja / Mapa świata", Akty i
+   pigułki kategorii — miały tam być całkiem nieobecne.
+3. "Pokonano: X / Exp: Y / Złoto: Z" pod paskami HP dublowało się z nowym "Wynik ekspedycji" z
+   boku. "Zdobyte przedmioty" miały być ikonami z popupem informacyjnym (jak w ekwipunku), nie
+   tekstową listą.
+
+**Naprawa 1+2 razem**: usunięto "battle" jako ręcznie wybieraną kategorię — zamiast tego
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx) robi wczesny `return` na samej
+górze komponentu: `if (character.activeExpeditionId) return <LiveCombatCard .../>` — WCALE nie
+renderuje nagłówka/Aktów/pigułek, gdy trwa ekspedycja, bo o tym w ogóle nie dochodzi do tej
+części JSX. Kategorie (z powrotem tylko trzy: Expowiska/Łowiska/Kopalnie) wróciły do prawej
+kolumny nad panelem "Krainy", dokładnie tam gdzie były przed dodaniem Walki. Udany start
+ekspedycji nie musi już ręcznie przełączać żadnego stanu — samo odświeżenie `character` (już i
+tak wołane) sprawia, że `activeExpeditionId` się pojawia i komponent przy następnym renderze sam
+wchodzi w tryb pełnoekranowej walki.
+
+**Naprawa 3a (duplikat wyniku)**: [CombatLog.tsx](../apps/web/src/components/expedition/CombatLog.tsx)
+dostało opcjonalny prop `showSummary` (domyślnie `true`, więc Ekspedycje/`ExpeditionPanel.tsx` nie
+zauważają zmiany) — `LiveCombatCard` przekazuje `showSummary={false}`, bo tę samą sumę już pokazuje
+w bocznym "Wynik ekspedycji". Przy okazji usunięto też z lewej kolumny `<LootBar>` — to była
+DRUGA, osobna duplikacja tej samej informacji (pasek ikon zdobytych przedmiotów), skoro to samo
+już jest w "Zdobyte przedmioty" z boku.
+
+**Naprawa 3b (ikony zamiast tekstu)**: nowy `LootIcon` w LiveCombatCard.tsx opakowuje każdy
+przedmiot w [ItemTooltip](../apps/web/src/components/inventory/ItemTooltip.tsx) — DOKŁADNIE ten
+sam komponent popupu co `ItemBox` w Ekwipunku, tylko zasilany danymi z katalogu (`ItemDto` przez
+`itemFor`) zamiast pełnego `InventoryItemDto` (ten drop nie ma jeszcze przydzielonego poziomu
+ulepszenia ani wylosowanych statów — jeszcze nie wylądował w ekwipunku). Dociągnięto też listę
+klas (`listPlayerClasses`) żeby tooltip poprawnie pokazywał "Dla klasy: X" zamiast zawsze
+"Uniwersalny". Zastąpiono OBIE listy tekstowe — żywe "Zdobyte przedmioty" z boku ORAZ listę w
+podsumowaniu "Ekspedycja zakończona" po zakończeniu walki — tym samym komponentem.
+
+Zweryfikowane w przeglądarce: start ekspedycji potwierdzony jako całkowicie czysty ekran (brak
+"Eksploracja"/Aktów/pigułek w tekście strony), kategorie z powrotem po prawej stronie obok mapy
+(`getBoundingClientRect` na tej samej wysokości co góra mapy). Po walce z realnym dropem (znaleziona
+przez powtarzane starty ekspedycji przez API, bo szansa dropu to tylko 8% na zabicie) — "Zdobyte
+przedmioty" pokazało dwie prawdziwe ikony (`getComputedStyle`/DOM potwierdził opakowanie w
+ItemTooltip, nie gołe div-y), przedmioty poprawnie rozpoznane po nazwie ("Różdżka Wilków",
+"Sztylet Wilków") mimo braku wgranej grafiki (fallback na `ItemTypeIcon`, zgodnie z projektem).
+Ekspedycje (oryginalna zakładka) nadal bez regresji. Brak przelewania na 375px. Konto testowe
+usunięte po teście. `tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

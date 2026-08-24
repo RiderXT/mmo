@@ -97,9 +97,14 @@ function EnemyLine({ event, roundNo }: { event: CombatEvent; roundNo?: number })
 export function CombatLog({
   events,
   itemFor,
+  showSummary = true,
 }: {
   events: CombatEvent[];
   itemFor: (id: string) => LootItemLookup | undefined;
+  /** The "Pokonano/Exp/Złoto" line above the log — off when the caller already shows the same
+   * running totals elsewhere (e.g. LiveCombatCard's "Wynik ekspedycji" sidebar) so it isn't
+   * printed twice on the same screen. */
+  showSummary?: boolean;
 }) {
   void itemFor; // loot lines render as icons in LootBar (above), not text lines here
   const bottomRefPlayer = useRef<HTMLDivElement>(null);
@@ -128,19 +133,21 @@ export function CombatLog({
 
   return (
     <div className="mt-3">
-      <div className="flex flex-wrap gap-3 text-xs text-parchment-dim">
-        <span>
-          Pokonano: <span className="font-medium text-parchment">{kills}</span>
-        </span>
-        <span>
-          Exp: <span className="font-medium text-parchment">{exp}</span>
-        </span>
-        <span>
-          Złoto: <span className="font-medium text-parchment">{gold}</span>
-        </span>
-      </div>
+      {showSummary && (
+        <div className="flex flex-wrap gap-3 text-xs text-parchment-dim">
+          <span>
+            Pokonano: <span className="font-medium text-parchment">{kills}</span>
+          </span>
+          <span>
+            Exp: <span className="font-medium text-parchment">{exp}</span>
+          </span>
+          <span>
+            Złoto: <span className="font-medium text-parchment">{gold}</span>
+          </span>
+        </div>
+      )}
 
-      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-3 sm:grid-cols-2 ${showSummary ? "mt-2" : ""}`}>
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
           <div className="border-b border-line px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-parchment-dim">
             Aktywność gracza

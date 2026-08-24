@@ -15,22 +15,18 @@ import { LiveCombatCard } from "../../components/expedition/LiveCombatCard";
 import { CampfireGlyph, WildZoneGlyph } from "../../components/expedition/ZoneGlyphs";
 import { PanelFrame } from "../../components/common/PanelFrame";
 
-type Category = "combat" | "fishing" | "mining" | "battle";
+type Category = "combat" | "fishing" | "mining";
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "combat", label: "Expowiska" },
   { key: "fishing", label: "Łowiska" },
   { key: "mining", label: "Kopalnie" },
-  { key: "battle", label: "Walka" },
 ];
 
-/** "battle" isn't a zone-type filter — it's a mode switch to the live combat card, not something
- * any zone pin "belongs to" — so it never matches here (the map is hidden in that mode anyway). */
 function matchesCategory(zone: ZoneDto, category: Category): boolean {
   if (category === "combat") return zone.monsters.length > 0;
   if (category === "fishing") return zone.fishingSpot !== null;
-  if (category === "mining") return zone.mine !== null;
-  return false;
+  return zone.mine !== null;
 }
 
 // Same 30-level banding convention as ZoneMapPath.tsx ("Acts" here just get their own row above
@@ -124,13 +120,25 @@ export function WorldMapTab({ character }: { character: Character }) {
     onSuccess: () => {
       setError(null);
       setPendingMonsterIds(null);
-      // Drop the player straight into the live combat card instead of leaving them on the
-      // now-stale monster-selection panel or pointing them at a different tab entirely.
-      setCategory("battle");
+      // No local state needed to "enter combat mode" — refetching the character sets
+      // activeExpeditionId, and the top-level check below swaps the whole page into
+      // LiveCombatCard as soon as that comes back.
       queryClient.invalidateQueries({ queryKey: ["character", character.id] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się rozpocząć walki"),
   });
+
+  // An active expedition takes over the whole tab — no exploration chrome (header/Acts/category
+  // pills), just the fight, matching the mockup's dedicated combat page. Leaving/claiming clears
+  // activeExpeditionId, which drops back to the normal browsing UI on its own (see onClaimed).
+  if (character.activeExpeditionId) {
+    return (
+      <LiveCombatCard
+        character={character}
+        onClaimed={() => queryClient.invalidateQueries({ queryKey: ["character", character.id] })}
+      />
+    );
+  }
 
   return (
     <div>
@@ -164,31 +172,7 @@ export function WorldMapTab({ character }: { character: Character }) {
         ))}
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {CATEGORIES.map((c) => (
-          <button
-            key={c.key}
-            onClick={() => setCategory(c.key)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-              category === c.key
-                ? "border-gold bg-gold/10 text-gold-bright"
-                : "border-line-soft text-parchment-dim hover:bg-panel-raised"
-            }`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      {category === "battle" ? (
-        <PanelFrame title="Walka" emphasis="secondary">
-          <LiveCombatCard
-            character={character}
-            onClaimed={() => queryClient.invalidateQueries({ queryKey: ["character", character.id] })}
-          />
-        </PanelFrame>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
           <div
             className="relative aspect-[16/11] overflow-hidden border border-line-soft"
             style={{
@@ -247,6 +231,23 @@ export function WorldMapTab({ character }: { character: Character }) {
             })}
           </div>
 
+          <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-1.5">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setCategory(c.key)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  category === c.key
+                    ? "border-gold bg-gold/10 text-gold-bright"
+                    : "border-line-soft text-parchment-dim hover:bg-panel-raised"
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
           <PanelFrame title={CATEGORIES.find((c) => c.key === category)?.label ?? ""} emphasis="secondary">
             {!selectedZone ? (
               <p className="text-sm text-parchment-faint">Wybierz krainę na mapie.</p>
@@ -297,8 +298,8 @@ export function WorldMapTab({ character }: { character: Character }) {
               </p>
             )}
           </PanelFrame>
+          </div>
         </div>
-      )}
 
       {pendingMonsterIds && selectedZone && (
         <BattleTacticsModal
