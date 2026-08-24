@@ -4066,6 +4066,32 @@ wysokość `y` — karty wizualnie wyrównane. Po zakończeniu i odebraniu nagr�
 wrócił do "Mapa świata". Brak przelewania na 375px. Konto testowe usunięte po teście. `tsc
 --noEmit` czysto na `web`.
 
+### Brak przycisku "Ruszaj" do miasta na Mapie świata
+
+User: kliknięcie pinu miasta na mapie nie dawało żadnego sposobu, żeby tam podróżować. Przyczyna:
+`matchesCategory` sprawdza tylko `monsters.length > 0` / `fishingSpot` / `mine` — miasto (bez
+potworów, łowiska, kopalni) nie pasuje do ŻADNEJ z trzech kategorii, więc panel pokazywał "nie ma
+tu nic do pokazania — spróbuj innej zakładki" i nigdy nie docierał do gałęzi z przyciskiem
+"Wyrusz do krainy" (ta gałąź wymaga `category === "combat"` żeby w ogóle się wykonać).
+
+[WorldMapTab.tsx](../apps/web/src/pages/game/WorldMapTab.tsx): dodana osobna gałąź dla
+`selectedZone.isTown`, sprawdzana PRZED dopasowaniem kategorii — miasto ma teraz własną ścieżkę
+niezależną od aktywnej zakładki: brak wymaganego poziomu → ostrzeżenie; poziom OK ale nie tu →
+przycisk "Wyrusz do miasta" (`travelMutation`, ten sam co dla zwykłych krain); już tu → "Jesteś
+tutaj. NPC i Kowadło znajdziesz w menu po lewej." (miasta nie mają swojej zawartości na tym
+ekranie — zakupy/kowadło żyją w osobnych zakładkach, tak jak już ustalono w Ekspedycjach). Piny
+miast też przestały się przygaszać na mapie w kategoriach, do których nie pasują (`inActiveCategory
+= zone.isTown || matchesCategory(...)`) — miasto jest zawsze istotne, niezależnie od wybranej
+zakładki.
+
+Zweryfikowane w przeglądarce: dev.db nie miał żadnej krainy z `isTown: true` (sprawdzone
+wcześniej w tej sesji), więc tymczasowo oznaczono "Wilcze Uroczysko" jako miasto do testu, potem
+przywrócono. Klik pinu na zakładce "Expowiska" pokazał "Wyrusz do miasta" (wcześniej: "nie ma tu
+nic do pokazania"), po symulowanym dotarciu — "Jesteś tutaj...". Pin miasta sprawdzony na
+zakładce "Kopalnie" (`getComputedStyle().opacity === "1"`) — nie przygaszony. Brak przelewania na
+375px. Konto testowe i flaga `isTown` na testowej krainie przywrócone do stanu sprzed testu.
+`tsc --noEmit` czysto na `web`.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

@@ -207,7 +207,9 @@ export function WorldMapTab({
               const zoneEligible = character.level >= zone.minLevel && character.level <= zone.maxLevel;
               const isCurrent = zone.id === character.currentZoneId;
               const isSelected = zone.id === selectedZoneId;
-              const inActiveCategory = matchesCategory(zone, category);
+              // Towns don't belong to any category (no monsters/fishing/mining) but are always
+              // worth traveling to (NPC shops, Kowadło) — never dim them out on the map.
+              const inActiveCategory = zone.isTown || matchesCategory(zone, category);
               return (
                 <button
                   key={zone.id}
@@ -267,6 +269,40 @@ export function WorldMapTab({
           <PanelFrame title={CATEGORIES.find((c) => c.key === category)?.label ?? ""} emphasis="secondary">
             {!selectedZone ? (
               <p className="text-sm text-parchment-faint">Wybierz krainę na mapie.</p>
+            ) : selectedZone.isTown ? (
+              // Towns sit outside the Expowiska/Łowiska/Kopalnie split entirely (no monsters, no
+              // gathering) but still need their own travel path — without this, clicking a town
+              // pin under any category tab just said "nothing to show here", with no way to
+              // actually go there.
+              !eligible ? (
+                <div>
+                  <p className="font-display text-sm font-semibold text-gold-bright">{selectedZone.name}</p>
+                  <p className="mt-2 text-sm font-medium text-red-400">
+                    Wymagany poziom {selectedZone.minLevel}-{selectedZone.maxLevel}.
+                  </p>
+                </div>
+              ) : !isHere ? (
+                <div>
+                  <p className="font-display text-sm font-semibold text-gold-bright">{selectedZone.name}</p>
+                  <p className="mt-2 text-sm text-parchment-dim">
+                    Miasto — zakupy u NPC i ulepszenia w kowadle znajdziesz tam w menu.
+                  </p>
+                  <button
+                    onClick={() => travelMutation.mutate(selectedZone.id)}
+                    disabled={travelMutation.isPending}
+                    className="mt-3 rounded-md bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Wyrusz do miasta
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p className="font-display text-sm font-semibold text-gold-bright">{selectedZone.name}</p>
+                  <p className="mt-2 text-sm text-parchment-dim">
+                    Jesteś tutaj. NPC i Kowadło znajdziesz w menu po lewej.
+                  </p>
+                </div>
+              )
             ) : !matchesCategory(selectedZone, category) ? (
               <p className="text-sm text-parchment-faint">
                 {selectedZone.name} nie ma tu nic do pokazania — spróbuj innej zakładki.
