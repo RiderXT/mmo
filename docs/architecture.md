@@ -4325,6 +4325,25 @@ samego wzorca. Zweryfikowane pomiarem `getBoundingClientRect()` w przeglądarce:
 `SocketCorners`, stąd trzeba było odróżnić właściwy `<img>` po `src`). Konto i postać testowa
 usunięte po weryfikacji.
 
+### Druga dogrywka: ramka w kafelku umiejętności wciąż większa niż w podglądzie admina
+
+Po poprzedniej poprawce (inset-0 h-full w-full) user nadal widział wyraźnie większy margines wokół
+ikony w [SkillsPanel.tsx](../apps/web/src/components/character/SkillsPanel.tsx) niż w podglądzie
+tej samej ikony w panelu admina. Podejrzenie, że to "wypalona ramka w samym pliku PNG" (paczka
+ikon `Tymczasowe/Ikony/rozdzielone/spells_fizyczne` faktycznie ma taką winietę — potwierdzone
+wizualnie) okazało się TYLKO CZĘŚCIOWYM wyjaśnieniem. Zweryfikowano też, że deploy faktycznie
+poszedł: pobrano bezpośrednio wdrożony bundle z `https://gra.riderx.ovh/assets/index-*.js` i
+potwierdzono w jego treści nową klasę (`inset-0 h-full w-full object-contain`) zamiast starej
+(`h-8 w-8`), z `Last-Modified` zgodnym z dniem poprawki — więc to NIE była stara wersja ani cache.
+
+Prawdziwa przyczyna reszty różnicy: `Tile`'s `<img>` miał `p-1` (4px paddingu na stronę,
+skopiowane z konwencji `ItemBox.tsx`), podczas gdy podgląd ikony w
+[ClassesAdminPage.tsx](../apps/web/src/pages/admin/ClassesAdminPage.tsx) (`h-full w-full
+object-contain`, bez paddingu) renderuje się edge-to-edge. Usunięto `p-1` z `Tile`, żeby dokładnie
+dopasować się do zera-paddingu z admina. Zweryfikowane pomiarem: obrazek rośnie z 54×54px (z
+paddingiem) do 54×54px liczonych już od samej krawędzi `border` (różnica 56→54 to tylko grubość
+obramowania przycisku, nie padding) — identyczne proporcje jak w boksie podglądu admina.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
