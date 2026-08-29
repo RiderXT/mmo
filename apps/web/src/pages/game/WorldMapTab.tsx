@@ -133,7 +133,7 @@ export function WorldMapTab({
   const isHere = selectedZone?.id === character.currentZoneId;
 
   const unlockedClassSkillIds = new Set(
-    characterSkillsQuery.data?.filter((s) => s.unlocked).map((s) => s.classSkillId) ?? [],
+    characterSkillsQuery.data?.filter((s) => s.level > 0).map((s) => s.classSkillId) ?? [],
   );
   const activeSkillsForTactics = (classQuery.data?.skills ?? []).filter(
     (s) => s.kind === "active" && unlockedClassSkillIds.has(s.id),

@@ -78,15 +78,19 @@ async function spendSkillPoints(client: GameClient, report: BotReport, character
       client.getCharacterSkills(current.id),
       client.getCharacterSkillNodes(current.id),
     ]);
-    const unlockedSkillIds = new Set(skillState.filter((s) => s.unlocked).map((s) => s.classSkillId));
+    const skillLevels = new Map(skillState.map((s) => [s.classSkillId, s.level]));
+    const unlockedSkillIds = new Set(skillState.filter((s) => s.level > 0).map((s) => s.classSkillId));
     const nodeLevels = new Map(nodeState.map((n) => [n.nodeId, n.level]));
 
-    // First priority: unlock a new root ClassSkill if affordable (opens up its node tree).
-    const affordableSkill = cls.skills.find((s) => !unlockedSkillIds.has(s.id) && s.unlockCost <= current.unspentSkillPoints);
+    // First priority: invest in a root ClassSkill (first unlock or a further level, up to its
+    // maxLevel) if affordable — opens up its node tree the first time.
+    const affordableSkill = cls.skills.find(
+      (s) => (skillLevels.get(s.id) ?? 0) < s.maxLevel && s.unlockCost <= current.unspentSkillPoints,
+    );
     if (affordableSkill) {
       try {
         await client.unlockSkill(current.id, affordableSkill.id);
-        report.log("skill", `Odblokowano umiejętność: ${affordableSkill.name}`);
+        report.log("skill", `Zainwestowano w umiejętność: ${affordableSkill.name}`);
         current = await client.getCharacter(current.id);
         spentSomething = true;
         await sleep(THINK_DELAY_MS);

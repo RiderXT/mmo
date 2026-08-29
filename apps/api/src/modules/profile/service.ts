@@ -41,7 +41,7 @@ export async function getCharacterProfile(characterName: string) {
     gatherCombatBuild(characterId),
     prisma.inventoryItem.count({ where: { characterId, equippedSlot: { in: CORE_EQUIP_SLOTS } } }),
     prisma.characterSkill.findMany({
-      where: { characterId, unlocked: true },
+      where: { characterId, level: { gt: 0 } },
       include: { classSkill: { select: { name: true } } },
       orderBy: { classSkill: { name: "asc" } },
     }),

@@ -150,6 +150,8 @@ export interface ClassSkillDto {
   cooldownSeconds: number | null;
   baseManaCost: number | null;
   durationSeconds: number | null;
+  maxLevel: number;
+  levelMagnitudePct: number;
   category: SkillCategory;
   nodes: SkillTreeNodeDto[];
   imageUrl: string | null;

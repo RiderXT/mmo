@@ -44,7 +44,7 @@ export interface CharacterSkillDto {
   id: string;
   characterId: string;
   classSkillId: string;
-  unlocked: boolean;
+  level: number;
 }
 
 export const unlockSkill = (characterId: string, classSkillId: string) =>

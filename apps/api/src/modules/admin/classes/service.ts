@@ -42,6 +42,8 @@ function skillData(skill: ClassSkillInput) {
     cooldownSeconds: skill.cooldownSeconds ?? null,
     baseManaCost: skill.baseManaCost ?? null,
     durationSeconds: skill.durationSeconds ?? null,
+    maxLevel: skill.maxLevel,
+    levelMagnitudePct: skill.levelMagnitudePct,
     category: skill.category,
   };
 }
@@ -166,7 +168,7 @@ export async function updateCharacterClass(
 
   const toRemove = existing.skills.filter((s) => !skillNames.has(s.name));
   for (const skill of toRemove) {
-    const invested = await prisma.characterSkill.count({ where: { classSkillId: skill.id, unlocked: true } });
+    const invested = await prisma.characterSkill.count({ where: { classSkillId: skill.id, level: { gt: 0 } } });
     if (invested > 0) {
       throw new ClassError(
         `Nie można usunąć umiejętności "${skill.name}" — gracze już ją odblokowali`,

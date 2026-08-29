@@ -151,7 +151,7 @@ export function LiveCombatCard({ character, onClaimed }: { character: Character;
     classId ? (classesQuery.data?.find((c) => c.id === classId)?.name ?? null) : null;
 
   const unlockedClassSkillIds = new Set(
-    characterSkillsQuery.data?.filter((s) => s.unlocked).map((s) => s.classSkillId) ?? [],
+    characterSkillsQuery.data?.filter((s) => s.level > 0).map((s) => s.classSkillId) ?? [],
   );
   const activeSkillsForCooldown = (classQuery.data?.skills ?? [])
     .filter((s) => s.kind === "active" && s.cooldownSeconds && unlockedClassSkillIds.has(s.id))

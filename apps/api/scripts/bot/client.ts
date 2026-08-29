@@ -37,6 +37,7 @@ export interface ClassSkill {
   name: string;
   kind: "passive" | "active";
   unlockCost: number;
+  maxLevel: number;
   nodes: ClassSkillNode[];
 }
 
@@ -225,7 +226,7 @@ export class GameClient {
   }
 
   getCharacterSkills(characterId: string) {
-    return this.request<{ classSkillId: string; unlocked: boolean }[]>(`/api/characters/${characterId}/skills`);
+    return this.request<{ classSkillId: string; level: number }[]>(`/api/characters/${characterId}/skills`);
   }
 
   getCharacterSkillNodes(characterId: string) {

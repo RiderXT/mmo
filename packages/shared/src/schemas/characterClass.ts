@@ -24,9 +24,13 @@ export const ClassSkillInputSchema = z
     kind: SkillKindSchema,
     scalingStat: CoreStatKeySchema,
     scalingFactor: z.number().min(0).max(100).default(1),
-    // Skill points needed to unlock the skill's fixed base effect once. All further growth
-    // comes from tree nodes, not levels.
+    // Flat cost per level (same at every level, like SkillTreeNode.pointCost — not progressive).
     unlockCost: z.number().int().min(0).max(50).default(1),
+    // maxLevel=1 (default) preserves the original one-shot "unlock" model exactly; raising it
+    // lets the skill itself be leveled multiple times, each level beyond 1 adding
+    // levelMagnitudePct to its own power on top of whatever tree nodes add.
+    maxLevel: z.number().int().min(1).max(100).default(1),
+    levelMagnitudePct: z.number().min(0).max(5).default(0),
     // passive only
     targetStat: StatKeySchema.optional(),
     // active only

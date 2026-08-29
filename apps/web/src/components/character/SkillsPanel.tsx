@@ -47,8 +47,8 @@ type Selection = { type: "skill"; skillId: string } | { type: "node"; nodeId: st
 /** Skill-tree tile — same 1-slot footprint (w-14 h-14) and socket-corner treatment as an
  * equipment slot (see inventory/EquipSlotBox.tsx + ItemBox.tsx), so the tree reads as part of
  * the same visual system instead of a bespoke widget. `level` (shown top-left, "+N", mirroring
- * ItemBox's upgrade-level badge) is omitted for skill roots, which are a one-time unlock with no
- * real level to report — the gold border alone communicates "unlocked" there. */
+ * ItemBox's upgrade-level badge) is used identically for skill roots and tree nodes — both are
+ * leveled 0..maxLevel the same way (see docs/architecture.md, leveled base skills). */
 function Tile({
   level,
   locked,
@@ -78,12 +78,24 @@ function Tile({
       } ${selected ? "ring-2 ring-gold-bright ring-offset-2 ring-offset-ink" : ""}`}
     >
       {!locked && <SocketCorners />}
-      {locked ? (
+      {imageUrl ? (
+        <img
+          src={`${API_URL}${imageUrl}`}
+          alt=""
+          className={`h-8 w-8 object-contain ${locked ? "opacity-40 grayscale" : ""}`}
+        />
+      ) : locked ? (
         <LockGlyph className="h-5 w-5 text-parchment-faint" />
-      ) : imageUrl ? (
-        <img src={`${API_URL}${imageUrl}`} alt="" className="h-8 w-8 object-contain" />
       ) : (
         <SkillSygil className="h-6 w-6 text-parchment-dim" />
+      )}
+      {/* An uploaded icon still previews here when locked (dimmed) instead of being hidden behind
+       * the lock glyph entirely — only the corner badge below communicates the locked state, so
+       * the player can see what they're unlocking before spending points on it. */}
+      {locked && imageUrl && (
+        <span className="absolute bottom-0.5 right-0.5 rounded-full bg-ink/80 p-0.5">
+          <LockGlyph className="h-3 w-3 text-parchment-faint" />
+        </span>
       )}
       {level != null && level > 0 && (
         <span className="absolute left-0.5 top-0.5 text-xs text-gold-bright">+{level}</span>
@@ -145,7 +157,7 @@ export function SkillsPanel({ character }: { character: Character }) {
 
   if (!character.classId || !classQuery.data) return null;
 
-  const unlockedByClassSkillId = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s.unlocked]) ?? []);
+  const skillLevelById = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s.level]) ?? []);
   const nodeLevelById = new Map(nodesQuery.data?.map((n) => [n.nodeId, n.level]) ?? []);
   const skillsInCategory = classQuery.data.skills.filter((s) => s.category === category);
 
@@ -177,7 +189,8 @@ export function SkillsPanel({ character }: { character: Character }) {
       ) : (
         <div className="mt-4 flex flex-wrap justify-center gap-8">
           {skillsInCategory.map((skill) => {
-            const unlocked = unlockedByClassSkillId.get(skill.id) ?? false;
+            const skillLevel = skillLevelById.get(skill.id) ?? 0;
+            const skillMaxed = skillLevel >= skill.maxLevel;
             const depths = computeDepths(skill.nodes);
             const maxDepth = skill.nodes.length ? Math.max(...skill.nodes.map((n) => depths.get(n.id) ?? 0)) : -1;
             const rows = Array.from({ length: maxDepth + 1 }, (_, d) =>
@@ -188,15 +201,15 @@ export function SkillsPanel({ character }: { character: Character }) {
                 <SkillTooltip
                   title={skill.name}
                   kindLabel={skill.kind === "active" ? `Aktywna, cd ${skill.cooldownSeconds}s` : "Pasywna"}
-                  status={unlocked ? "Odblokowana" : `Nieodblokowana`}
+                  status={skillMaxed ? "Poziom maksymalny" : `Poziom ${skillLevel}/${skill.maxLevel}`}
                   description={skill.description || undefined}
-                  costLabel={!unlocked ? `Koszt odblokowania: ${skill.unlockCost} pkt` : null}
-                  locked={!unlocked}
+                  costLabel={!skillMaxed ? `Koszt: ${skill.unlockCost} pkt` : null}
+                  locked={false}
                 >
                   <Tile
-                    level={null}
-                    locked={!unlocked}
-                    maxed={false}
+                    level={skillLevel}
+                    locked={false}
+                    maxed={skillMaxed}
                     selected={selection?.type === "skill" && selection.skillId === skill.id}
                     imageUrl={skill.imageUrl}
                     onSelect={() => setSelection({ type: "skill", skillId: skill.id })}
@@ -208,7 +221,7 @@ export function SkillsPanel({ character }: { character: Character }) {
                       const level = nodeLevelById.get(node.id) ?? 0;
                       const parentLevel = node.requiresNodeId ? (nodeLevelById.get(node.requiresNodeId) ?? 0) : 1;
                       const requiredNode = node.requiresNodeId ? allNodesById.get(node.requiresNodeId) : null;
-                      const nodeLocked = !unlocked || parentLevel < 1;
+                      const nodeLocked = skillLevel < 1 || parentLevel < 1;
                       const maxed = level >= node.maxLevel;
                       return (
                         <div key={node.id} className="flex flex-col items-center">
@@ -252,25 +265,39 @@ export function SkillsPanel({ character }: { character: Character }) {
       )}
 
       <div className="mt-4 border-t border-line-soft/40 pt-3">
-        {selectedSkill && (
-          <div>
-            <p className="font-medium text-parchment">{selectedSkill.name}</p>
-            {selectedSkill.description && (
-              <p className="mt-0.5 text-xs text-parchment-faint">{selectedSkill.description}</p>
-            )}
-            {unlockedByClassSkillId.get(selectedSkill.id) ? (
-              <p className="mt-2 text-xs text-gold-bright">Umiejętność odblokowana.</p>
-            ) : (
-              <button
-                onClick={() => unlockSkillMutation.mutate(selectedSkill.id)}
-                disabled={character.unspentSkillPoints < selectedSkill.unlockCost || unlockSkillMutation.isPending}
-                className="mt-2 rounded-md bg-gold px-3 py-1 text-xs font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                Odblokuj (koszt: {selectedSkill.unlockCost})
-              </button>
-            )}
-          </div>
-        )}
+        {selectedSkill &&
+          (() => {
+            const level = skillLevelById.get(selectedSkill.id) ?? 0;
+            const maxed = level >= selectedSkill.maxLevel;
+            return (
+              <div>
+                <p className="font-medium text-parchment">{selectedSkill.name}</p>
+                {selectedSkill.description && (
+                  <p className="mt-0.5 text-xs text-parchment-faint">{selectedSkill.description}</p>
+                )}
+                {selectedSkill.maxLevel > 1 && selectedSkill.levelMagnitudePct > 0 && (
+                  <p className="mt-1 text-xs text-parchment-dim">
+                    +{Math.round(selectedSkill.levelMagnitudePct * 1000) / 10}% mocy za poziom (od 2. poziomu) —
+                    obecnie: +{Math.round(selectedSkill.levelMagnitudePct * Math.max(0, level - 1) * 1000) / 10}% mocy
+                  </p>
+                )}
+                <p className="text-xs tabular-nums text-parchment-dim">
+                  Poziom {level}/{selectedSkill.maxLevel}
+                </p>
+                {maxed ? (
+                  <p className="mt-2 text-xs text-gold-bright">Maksymalny poziom.</p>
+                ) : (
+                  <button
+                    onClick={() => unlockSkillMutation.mutate(selectedSkill.id)}
+                    disabled={character.unspentSkillPoints < selectedSkill.unlockCost || unlockSkillMutation.isPending}
+                    className="mt-2 rounded-md bg-gold px-3 py-1 text-xs font-medium text-ink hover:bg-gold-bright disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    {level === 0 ? "Odblokuj" : "Ulepsz"} (koszt: {selectedSkill.unlockCost})
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         {selectedNode &&
           (() => {
             const level = nodeLevelById.get(selectedNode.id) ?? 0;

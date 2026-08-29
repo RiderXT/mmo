@@ -68,6 +68,8 @@ function emptySkill(): SkillFormValue {
     scalingStat: "strength" as const,
     scalingFactor: 1,
     unlockCost: 1,
+    maxLevel: 1,
+    levelMagnitudePct: 0,
     targetStat: "attack" as const,
     effectType: undefined,
     cooldownSeconds: undefined,
@@ -124,6 +126,8 @@ function fromDto(cls: ClassDto): FormValue {
         scalingStat: s.scalingStat,
         scalingFactor: s.scalingFactor,
         unlockCost: s.unlockCost,
+        maxLevel: s.maxLevel,
+        levelMagnitudePct: s.levelMagnitudePct,
         targetStat: s.targetStat ?? undefined,
         effectType: s.effectType ?? undefined,
         cooldownSeconds: s.cooldownSeconds ?? undefined,
@@ -519,7 +523,7 @@ export function ClassesAdminPage() {
                       />
                     </label>
                     <label className="flex items-center gap-2 text-xs text-parchment-dim">
-                      koszt odblokowania (pkt)
+                      koszt za poziom (pkt)
                       <input
                         type="number"
                         min={0}
@@ -572,6 +576,49 @@ export function ClassesAdminPage() {
                       </label>
                     )}
                   </div>
+
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                      maks. poziom
+                      <input
+                        type="number"
+                        min={1}
+                        className={inputClass}
+                        value={skill.maxLevel}
+                        onChange={(e) => {
+                          const maxLevel = Number(e.target.value);
+                          // Same displayed-vs-real-state fix as effectType/kind above: the %
+                          // mocy input only shows once maxLevel > 1 and would otherwise display a
+                          // fallback default the state never actually received.
+                          updateSkill(
+                            idx,
+                            maxLevel > 1
+                              ? { maxLevel, levelMagnitudePct: skill.levelMagnitudePct || 0.1 }
+                              : { maxLevel },
+                          );
+                        }}
+                      />
+                    </label>
+                    {skill.maxLevel > 1 && (
+                      <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                        % mocy za poziom
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          className={inputClass}
+                          value={skill.levelMagnitudePct}
+                          onChange={(e) => updateSkill(idx, { levelMagnitudePct: Number(e.target.value) })}
+                        />
+                      </label>
+                    )}
+                  </div>
+                  {skill.maxLevel > 1 && (
+                    <p className="mt-1 text-[11px] text-parchment-faint">
+                      Umiejętność inwestowalna do poziomu {skill.maxLevel} (jak węzeł) — każdy poziom powyżej 1. dodaje{" "}
+                      {Math.round(skill.levelMagnitudePct * 1000) / 10}% mocy, koszt {skill.unlockCost} pkt za każdy poziom.
+                    </p>
+                  )}
 
                   {skill.kind === "active" && (skill.effectType === "damage" || skill.effectType === "heal") && (
                     <p className="mt-1 text-[11px] text-parchment-faint">

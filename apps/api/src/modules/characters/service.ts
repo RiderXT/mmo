@@ -149,6 +149,12 @@ export async function allocateStat(
   return updated;
 }
 
+/** Invests one more level into a ClassSkill's own base effect — callable repeatedly up to
+ * classSkill.maxLevel, same pattern as unlockNode below. The first call (no existing
+ * CharacterSkill row) creates it at level 1 — for a classSkill with the default maxLevel=1 this
+ * is the only call that will ever succeed, preserving the original one-shot "unlock" behavior
+ * exactly; every later call on a higher-maxLevel skill increments level by one, each costing the
+ * same flat unlockCost. */
 export async function unlockSkill(
   characterId: string,
   userId: string,
@@ -165,8 +171,8 @@ export async function unlockSkill(
   const existing = await prisma.characterSkill.findUnique({
     where: { characterId_classSkillId: { characterId, classSkillId } },
   });
-  if (existing?.unlocked) {
-    throw new CharacterError("Umiejętność jest już odblokowana", 400);
+  if (existing && existing.level >= classSkill.maxLevel) {
+    throw new CharacterError("Umiejętność jest już na maksymalnym poziomie", 400);
   }
   if (character.unspentSkillPoints < classSkill.unlockCost) {
     throw new CharacterError("Brak niewydanych punktów umiejętności", 400);
@@ -179,8 +185,8 @@ export async function unlockSkill(
     }),
     prisma.characterSkill.upsert({
       where: { characterId_classSkillId: { characterId, classSkillId } },
-      create: { characterId, classSkillId, unlocked: true },
-      update: { unlocked: true },
+      create: { characterId, classSkillId, level: 1 },
+      update: { level: { increment: 1 } },
     }),
   ]);
 
@@ -190,7 +196,7 @@ export async function unlockSkill(
     actorUserId: userId,
     actorCharacterId: characterId,
     requestId,
-    payload: { classSkillId, cost: classSkill.unlockCost },
+    payload: { classSkillId, cost: classSkill.unlockCost, newLevel: characterSkill.level },
   });
 
   return characterSkill;
@@ -218,7 +224,7 @@ export async function unlockNode(
   const parentSkill = await prisma.characterSkill.findUnique({
     where: { characterId_classSkillId: { characterId, classSkillId: node.classSkillId } },
   });
-  if (!parentSkill?.unlocked) {
+  if (!parentSkill || parentSkill.level < 1) {
     throw new CharacterError("Najpierw odblokuj umiejętność, do której należy ten węzeł", 400);
   }
 

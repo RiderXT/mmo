@@ -192,11 +192,15 @@ model ClassSkill {
   targetStat      String? // StatKey — passive only
   effectType      String? // SkillEffectType (@mmo/shared enums.ts) — active only
   cooldownSeconds Int? // active only, BASE cooldown (nodes with effect "cooldown" reduce it)
-  // Skill-tree redesign: the skill's own effect is now a FIXED base value, unlocked once for
-  // unlockCost points — all further growth comes from SkillTreeNode unlocks (any order), not
-  // from levels. baseManaCost replaces the old global 10+5*level formula for active skills.
-  unlockCost   Int  @default(1)
-  baseManaCost Int? // active only, BASE mana cost (nodes with effect "cost" reduce it)
+  // unlockCost is the FLAT cost per level (same at every level, like SkillTreeNode.pointCost —
+  // not progressive). maxLevel=1 (the default) preserves the original one-shot "unlock" model
+  // exactly; raising it lets the skill itself be leveled multiple times, each level beyond 1
+  // adding levelMagnitudePct to its own power on top of whatever SkillTreeNode unlocks add.
+  // baseManaCost replaces the old global 10+5*level formula for active skills.
+  unlockCost        Int   @default(1)
+  maxLevel          Int   @default(1)
+  levelMagnitudePct Float @default(0) // PER LEVEL beyond 1: +X% power (see gatherCombatBuild)
+  baseManaCost      Int? // active only, BASE mana cost (nodes with effect "cost" reduce it)
   // Only meaningful for buff-style effectType (attack_speed/defense/crit/block_chance/reflect) —
   // how long the self-buff lasts once activated. Null = fall back to a fixed default in combat.ts.
   durationSeconds Int?
@@ -241,7 +245,7 @@ model CharacterSkill {
   id           String  @id @default(cuid())
   characterId  String
   classSkillId String
-  unlocked     Boolean @default(false)
+  level        Int     @default(0) // 0 = not invested; 1 == the old `unlocked: true`; up to classSkill.maxLevel
 
   character  Character  @relation(fields: [characterId], references: [id], onDelete: Cascade)
   classSkill ClassSkill @relation(fields: [classSkillId], references: [id], onDelete: Cascade)

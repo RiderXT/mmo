@@ -4238,6 +4238,80 @@ umiejętność bez `durationSeconds` (dane sprzed tej zmiany) nadal generuje eve
 `tsc --noEmit` czysto na `shared`/`api`/`web`. Testowa umiejętność i konto testowe usunięte po
 weryfikacji.
 
+### Ikony zablokowanych umiejętności ukryte za kłódką
+
+User zgłosił: ikona umiejętności wgrana w panelu admina nie pokazuje się na `/skills`. Root cause:
+`Tile` w [SkillsPanel.tsx](../apps/web/src/components/character/SkillsPanel.tsx) renderował
+`LockGlyph` ZAMIAST obrazka, ilekroć umiejętność/węzeł był `locked` — niezależnie od tego, czy
+admin wgrał ikonę. Zweryfikowane empirycznie (curl do `/api/classes` potwierdził że `imageUrl`
+faktycznie wraca z API; dopiero na nieodblokowanej umiejętności front chował go za kłódką).
+
+Naprawa: `imageUrl` renderuje się ZAWSZE gdy istnieje (przygaszony — `opacity-40 grayscale` — gdy
+`locked`), z małą plakietką kłódki w rogu zamiast całkowitego zastąpienia ikony; `LockGlyph`
+wyśrodkowany zostaje tylko gdy nie ma jeszcze żadnej ikony do podglądu. Zweryfikowane w
+przeglądarce: odblokowana umiejętność pokazuje pełny obrazek, tymczasowo podpięty obrazek na wciąż
+zablokowanej umiejętności pokazuje przygaszoną wersję + plakietkę (bez nawigowania do innej
+zakładki). Sprzątnięcie testowego `imageUrl` i konta po weryfikacji.
+
+### Poziomowanie głównej umiejętności (nie tylko węzłów drzewka)
+
+User: węzły w drzewku umiejętności mają "maks. poziom", a sama główna umiejętność — nie (tylko
+jednorazowy `unlocked: boolean`). Potwierdzone z userem: główna umiejętność ma dostać PRAWDZIWE
+poziomowanie (każdy poziom zwiększa jej moc, analogicznie do węzłów), nie tylko kosmetyczne pole
+w adminie.
+
+**Migracja danych** — `CharacterSkill.unlocked: Boolean` zastąpione przez `level: Int @default(0)`
+(0 = brak inwestycji, 1 == stare `unlocked: true`), dokładnie tym samym wzorcem, jaki
+`CharacterSkillNode` już stosuje (`// existing pre-leveling rows meant "unlocked", level 1
+preserves that exactly`) — czyli DRUGA migracja tego typu w tym projekcie, nie pierwsza. Wykonana
+w 3 krokach żeby nigdy nie ryzykować utraty danych: (1) dodanie `level` obok `unlocked` —
+addytywny `prisma db push`; (2) backfill `UPDATE CharacterSkill SET level = 1 WHERE unlocked =
+true` (0 wierszy w dev.db — brak aktywnych postaci testowych w danym momencie); (3) usunięcie
+kolumny `unlocked` ze schematu — `prisma db push --accept-data-loss` (auto-tryb zablokował to jako
+potencjalnie destrukcyjne — user potwierdził wprost po wyjaśnieniu, że dane już bezpiecznie
+skopiowane do `level`).
+
+**Nowe pola `ClassSkill`** (oba pliki schematu): `maxLevel Int @default(1)` (jak
+`SkillTreeNode.maxLevel`) i `levelMagnitudePct Float @default(0)` (jak node'owe `magnitudePct`,
+ale PER LEVEL POWYŻEJ 1 — poziom 1 to nadal dokładnie ten sam bazowy efekt co stare "unlocked").
+Domyślne wartości (`maxLevel=1`, `levelMagnitudePct=0`) czynią migrację w 100% wstecznie zgodną:
+każda istniejąca umiejętność zachowuje się identycznie jak przed zmianą, dopóki admin świadomie
+nie podniesie `maxLevel`. `unlockCost` reinterpretowany jako FLAT koszt za KAŻDY poziom (jak
+`SkillTreeNode.pointCost` — nieprogresywny), nie tylko za pierwsze odblokowanie.
+
+**Backend**: `unlockSkill` w
+[characters/service.ts](../apps/api/src/modules/characters/service.ts) przepisany z "one-shot
+unlock" na dokładnie ten sam wzorzec co `unlockNode` (upsert `level: 1` / `level: {increment: 1}`,
+błąd gdy `level >= classSkill.maxLevel`). `unlockNode`'s gate na rodzica: `parentSkill.level < 1`
+zamiast `!parentSkill?.unlocked`. `gatherCombatBuild` w
+[expeditions/service.ts](../apps/api/src/modules/expeditions/service.ts): nowy
+`skillMagnitudeMultiplier(cs)` = `1 + levelMagnitudePct × max(0, poziom-1) + suma % z węzłów
+magnitude` — połączony w jedno miejsce, używany zarówno dla `passiveSkills` jak i `activeSkills`
+(poprzednio ten mnożnik pochodził WYŁĄCZNIE z węzłów). Filtry `cs.unlocked` → `cs.level > 0` w
+tymże pliku, `profile/service.ts` (publiczny profil — lista odblokowanych umiejętności) i
+`admin/classes/service.ts` (blokada usunięcia umiejętności w którą gracze już zainwestowali).
+
+**Frontend**: [SkillsPanel.tsx](../apps/web/src/components/character/SkillsPanel.tsx) — kafelek
+głównej umiejętności renderuje się teraz DOKŁADNIE jak węzeł drzewka: `level`/`maxed` zamiast
+binarnego `locked`, przycisk "Odblokuj"/"Ulepsz" (koszt: X) aż do `maxLevel`, linia z aktualnym
+bonusem mocy gdy `levelMagnitudePct > 0`. Panel admina
+([ClassesAdminPage.tsx](../apps/web/src/pages/admin/ClassesAdminPage.tsx)) dostał pola "maks.
+poziom" i "% mocy za poziom" (drugie tylko gdy `maxLevel > 1`) — z tym samym zabezpieczeniem co
+poprzednie pola tego formularza: `onChange` selecta/inputu wpisuje realną wartość domyślną do
+stanu przy przełączeniu, żeby wizualny fallback w JSX nigdy nie rozjechał się z realnym stanem
+(dokładnie ta sama klasa błędu co "musi mieć typ efektu i cooldown" z wcześniejszego wpisu).
+Zaktualizowano też skrypt bota ([scripts/bot/policy.ts](../apps/api/scripts/bot/policy.ts) i
+`client.ts`) żeby inwestował w umiejętności do ich `maxLevel` zamiast tylko raz.
+
+Zweryfikowane w przeglądarce end-to-end: tymczasowo ustawiono "Moc Umysłu" (Mag, pasywna,
+`scalingFactor=0.5`×`intelligence`) na `maxLevel=3`, `levelMagnitudePct=0.1`; zainwestowano 3 razy
+(0→1→2→3, koszt 1 pkt każdy, przycisk zmieniał się Odblokuj→Ulepsz→"Maksymalny poziom"); próba
+czwartej inwestycji przez bezpośrednie wywołanie API poprawnie odrzucona (409 "już na maksymalnym
+poziomie"); `combat-stats/breakdown` potwierdził dokładną matematykę: `0.5 × 5 (int) × 1.2
+(mnożnik na poziomie 3) = 3.0` w polu `attack.passive`. `tsc --noEmit` czysto na
+`shared`/`api`/`web`. Testowa konfiguracja umiejętności przywrócona (`maxLevel=1`,
+`levelMagnitudePct=0`), postać i konto testowe usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

@@ -92,19 +92,25 @@ export async function gatherCombatBuild(characterId: string) {
     ...(JSON.parse(inv.rolledStats) as StatBlock),
   }));
 
+  // Combines both growth sources into one multiplier: the skill's OWN level (levelMagnitudePct
+  // per level beyond 1 — 0 for every skill still at the old default maxLevel=1) plus whatever
+  // "magnitude" tree nodes the player has invested in (per-level, summed across nodes).
+  const skillMagnitudeMultiplier = (cs: (typeof characterSkills)[number]) =>
+    1 + cs.classSkill.levelMagnitudePct * Math.max(0, cs.level - 1) + sumNodePct(cs.classSkill, nodeLevels, "magnitude");
+
   const passiveSkills: PassiveSkillBonus[] = characterSkills
-    .filter((cs) => cs.classSkill.kind === "passive" && cs.unlocked && cs.classSkill.targetStat)
+    .filter((cs) => cs.classSkill.kind === "passive" && cs.level > 0 && cs.classSkill.targetStat)
     .map((cs) => ({
       scalingStat: cs.classSkill.scalingStat as CoreStatKey,
       scalingFactor: cs.classSkill.scalingFactor,
       targetStat: cs.classSkill.targetStat as StatKey,
-      magnitudeMultiplier: 1 + sumNodePct(cs.classSkill, nodeLevels, "magnitude"),
+      magnitudeMultiplier: skillMagnitudeMultiplier(cs),
     }));
 
   const activeSkills: ActiveSkillDef[] = characterSkills
-    .filter((cs) => cs.classSkill.kind === "active" && cs.unlocked && cs.classSkill.effectType && cs.classSkill.cooldownSeconds)
+    .filter((cs) => cs.classSkill.kind === "active" && cs.level > 0 && cs.classSkill.effectType && cs.classSkill.cooldownSeconds)
     .map((cs) => {
-      const magnitudeMultiplier = 1 + sumNodePct(cs.classSkill, nodeLevels, "magnitude");
+      const magnitudeMultiplier = skillMagnitudeMultiplier(cs);
       const costMultiplier = Math.max(0, 1 - sumNodePct(cs.classSkill, nodeLevels, "cost"));
       // 10% floor — tree nodes can shorten a cooldown a lot, but never to 0s.
       const cooldownMultiplier = Math.max(0.1, 1 - sumNodePct(cs.classSkill, nodeLevels, "cooldown"));
