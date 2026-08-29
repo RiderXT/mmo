@@ -78,7 +78,21 @@ export type CoreStatKey = z.infer<typeof CoreStatKeySchema>;
 export const SkillKindSchema = z.enum(["passive", "active"]);
 export type SkillKind = z.infer<typeof SkillKindSchema>;
 
-export const SkillEffectTypeSchema = z.enum(["damage", "heal"]);
+// Buff-style effects (attack_speed/defense/crit/block_chance/reflect) grant the caster a
+// temporary self-buff on activation; "power" is read as a percentage (power=10 -> +10%).
+// Proc-style effects (stun/poison) roll power% once on activation against the current monster
+// instead of buffing the caster — see simulateExpedition in combat.ts for exact semantics.
+export const SkillEffectTypeSchema = z.enum([
+  "damage",
+  "heal",
+  "attack_speed",
+  "defense",
+  "crit",
+  "block_chance",
+  "stun",
+  "poison",
+  "reflect",
+]);
 export type SkillEffectType = z.infer<typeof SkillEffectTypeSchema>;
 
 // Groups ClassSkill entries into player-facing skill-tree tabs (see SkillsPanel.tsx).

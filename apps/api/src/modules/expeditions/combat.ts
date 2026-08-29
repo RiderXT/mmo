@@ -1,4 +1,4 @@
-import type { StatBlock, StatKey, CoreStatKey, ExpeditionResult, CombatEvent } from "@mmo/shared";
+import type { StatBlock, StatKey, CoreStatKey, ExpeditionResult, CombatEvent, SkillEffectType } from "@mmo/shared";
 
 /**
  * Interpolates an item's stats between +0 (base) and +9 (maxUpgradeStats) by its current
@@ -57,7 +57,7 @@ export interface ActiveSkillDef {
   name: string;
   power: number; // scalingFactor * coreStat * magnitudeMultiplier, precomputed by the caller
   manaCost: number;
-  effectType: "damage" | "heal";
+  effectType: SkillEffectType;
   cooldownSeconds: number;
 }
 
@@ -228,6 +228,13 @@ const ROUND_SECONDS = 3;
 // character strong enough to never die must not be able to generate an unbounded eventLog just
 // because an admin later raises the duration-minutes setting. ~2.5h of simulated fighting.
 const MAX_ROUNDS = 3000;
+// How long a self-buff granted by an active skill (attack_speed/defense/crit/block_chance/
+// reflect) lasts from the moment it's activated — same window potion buffs use.
+const SKILL_BUFF_DURATION_SECONDS = DEFAULT_BUFF_DURATION_SECONDS;
+// "stun"/"poison" are proc-style: power% is rolled once, on activation, against the current
+// monster rather than buffing the caster.
+const POISON_DURATION_ROUNDS = 3;
+const POISON_DAMAGE_PCT_OF_MAX_HP = 0.05; // per round, of the monster's max hp at the moment poison was applied
 
 /**
  * Deterministic combat simulation for one full expedition. HP/mana persist across the whole
@@ -277,6 +284,13 @@ export function simulateExpedition(
   let attackBuffPct = 0;
   let defenseBuffUntil = 0;
   let defenseBuffPct = 0;
+  // Skill-only buffs (potions don't grant these) — same "buff until timestamp" pattern as above.
+  let critBuffUntil = 0;
+  let critBuffPct = 0;
+  let blockChanceUntil = 0;
+  let blockChancePct = 0;
+  let reflectChanceUntil = 0;
+  let reflectChancePct = 0;
   // Heal-over-time state for restore_hp/restore_mana potions configured with durationSeconds —
   // same "buff until timestamp" pattern as the buffs above, but adding a per-second amount
   // instead of a percentage multiplier.
@@ -284,6 +298,11 @@ export function simulateExpedition(
   let hpHotPerSecond = 0;
   let manaHotUntil = 0;
   let manaHotPerSecond = 0;
+  // Proc-style debuffs applied to whichever monster is currently being fought — cleared whenever
+  // a new monster spawns (see "currentMonster = pickWeighted(...)" below).
+  let monsterStunnedThisRound = false;
+  let monsterPoisonRoundsLeft = 0;
+  let monsterPoisonDamagePerRound = 0;
 
   function tryConsumePotion(p: PotionSlot, t: number): boolean {
     const remaining = potionRemaining.get(p.inventoryItemId) ?? 0;
@@ -392,6 +411,8 @@ export function simulateExpedition(
       currentMonster = pickWeighted(zone.monsters, (m) => m.spawnWeight);
       if (!currentMonster) break; // defensive — buildAndSimulate already guarantees a non-empty pool
       monsterHp = currentMonster.hp;
+      monsterPoisonRoundsLeft = 0;
+      monsterPoisonDamagePerRound = 0;
       events.push({
         t,
         type: "encounter_start",
@@ -408,24 +429,73 @@ export function simulateExpedition(
       if (t < nextAt || mana < skill.manaCost) continue;
       mana -= skill.manaCost;
       skillNextAvailable.set(skill.id, t + skill.cooldownSeconds);
-      if (skill.effectType === "damage") burstDamage += skill.power;
-      else hp = Math.min(stats.maxHp, hp + skill.power);
+
+      // Buff-style effects read `power` as a percentage (power=10 -> +10%); proc-style effects
+      // (stun/poison) read it as a one-shot success chance rolled against the current monster.
+      let success: boolean | undefined;
+      switch (skill.effectType) {
+        case "damage":
+          burstDamage += skill.power;
+          break;
+        case "heal":
+          hp = Math.min(stats.maxHp, hp + skill.power);
+          break;
+        case "attack_speed":
+          attackSpeedBuffUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          attackSpeedBuffPct = skill.power / 100;
+          break;
+        case "defense":
+          defenseBuffUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          defenseBuffPct = skill.power / 100;
+          break;
+        case "crit":
+          critBuffUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          critBuffPct = Math.min(1, Math.max(0, skill.power / 100));
+          break;
+        case "block_chance":
+          blockChanceUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          blockChancePct = Math.min(1, Math.max(0, skill.power / 100));
+          break;
+        case "reflect":
+          reflectChanceUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          reflectChancePct = Math.min(1, Math.max(0, skill.power / 100));
+          break;
+        case "stun":
+          success = Math.random() < Math.min(1, Math.max(0, skill.power / 100));
+          if (success) monsterStunnedThisRound = true;
+          break;
+        case "poison":
+          success = Math.random() < Math.min(1, Math.max(0, skill.power / 100));
+          if (success) {
+            monsterPoisonRoundsLeft = POISON_DURATION_ROUNDS;
+            monsterPoisonDamagePerRound = currentMonster.hp * POISON_DAMAGE_PCT_OF_MAX_HP;
+          }
+          break;
+      }
+
       events.push({
         t,
         type: "skill_activated",
         skillName: skill.name,
         effectType: skill.effectType,
         power: Math.round(skill.power),
+        success,
         playerHpAfter: Math.max(0, Math.round(hp)),
         playerManaAfter: Math.max(0, Math.round(mana)),
       });
     }
 
+    if (monsterPoisonRoundsLeft > 0) {
+      monsterHp -= monsterPoisonDamagePerRound;
+      monsterPoisonRoundsLeft -= 1;
+    }
+
     const effectiveAttack = stats.attack * (1 + (t <= attackBuffUntil ? attackBuffPct : 0));
     const speedMultiplier = (stats.attackSpeed * (1 + (t <= attackSpeedBuffUntil ? attackSpeedBuffPct : 0))) / 10;
     const effectiveDefense = stats.defense * (1 + (t <= defenseBuffUntil ? defenseBuffPct : 0));
+    const effectiveCritChance = Math.min(0.95, stats.critChance + (t <= critBuffUntil ? critBuffPct : 0));
 
-    const crit = Math.random() < stats.critChance;
+    const crit = Math.random() < effectiveCritChance;
     const playerDamage =
       Math.max(1, effectiveAttack - currentMonster.defense) * (crit ? stats.critDamage : 1) * speedMultiplier +
       burstDamage;
@@ -433,13 +503,26 @@ export function simulateExpedition(
 
     let monsterDamage = 0;
     let monsterEvaded = false;
-    if (monsterHp > 0) {
+    let monsterBlocked = false;
+    let reflectedDamage = 0;
+    const monsterStunned = monsterStunnedThisRound;
+    monsterStunnedThisRound = false;
+    if (monsterHp > 0 && !monsterStunned) {
       // The killing blow doesn't get countered — the monster only hits back if it survived.
       monsterEvaded = Math.random() < stats.evasion;
-      monsterDamage = monsterEvaded
-        ? 0
-        : Math.max(0, currentMonster.attack - effectiveDefense) * (1 - stats.damageReduction);
-      hp -= monsterDamage;
+      if (!monsterEvaded) {
+        const blockChance = t <= blockChanceUntil ? blockChancePct : 0;
+        monsterBlocked = blockChance > 0 && Math.random() < blockChance;
+      }
+      if (!monsterEvaded && !monsterBlocked) {
+        monsterDamage = Math.max(0, currentMonster.attack - effectiveDefense) * (1 - stats.damageReduction);
+        hp -= monsterDamage;
+        const reflectChance = t <= reflectChanceUntil ? reflectChancePct : 0;
+        if (reflectChance > 0 && Math.random() < reflectChance) {
+          reflectedDamage = monsterDamage;
+          monsterHp -= reflectedDamage;
+        }
+      }
     }
 
     events.push({
@@ -450,6 +533,9 @@ export function simulateExpedition(
       monsterHpAfter: Math.max(0, Math.round(monsterHp)),
       monsterDamage: Math.round(monsterDamage),
       monsterEvaded,
+      monsterStunned,
+      monsterBlocked,
+      reflectedDamage: Math.round(reflectedDamage),
       playerHpAfter: Math.max(0, Math.round(hp)),
     });
     roundsEmitted += 1;

@@ -4153,6 +4153,57 @@ sam wrócił do normalnego widoku Mapy świata z "Jesteś tutaj", potwierdzając
 faktycznie działa zamiast polegać na szczęśliwym trafieniu w jednym strzale. Flagi testowe i
 konto testowe usunięte po teście. `tsc --noEmit` czysto na `web`.
 
+### Edytor klas (admin): błędna walidacja "efekt+cooldown", utrata focusu, nowe typy efektów aktywnych
+
+User zgłosił: mimo wypełnienia wszystkich pól nowej aktywnej umiejętności formularz w
+[ClassesAdminPage.tsx](../apps/web/src/pages/admin/ClassesAdminPage.tsx) zwracał "Umiejętność
+aktywna musi mieć typ efektu i cooldown"; dodatkowo pole nazwy (i nazwy węzła) traciło focus po
+każdej wpisanej literze.
+
+**Fałszywa walidacja** — `<select>` pola "efekt" renderował `value={skill.effectType ?? "damage"}`:
+gdy `skill` był świeżo utworzony przez `emptySkill()` z `kind: "passive"` i user przełączał `kind`
+na "active" bez dotykania samego selecta efektu, select WIZUALNIE pokazywał "damage" (dzięki
+fallbackowi `??`), ale stan `skill.effectType` pozostawał `undefined` — `onChange` selecta nigdy
+się nie odpalił. Walidacja Zod (`ClassSkillInputSchema.refine` w
+[characterClass.ts](../packages/shared/src/schemas/characterClass.ts)) sprawdza realny stan, nie
+to co widać, więc odrzucała formularz mimo pozornie kompletnych pól. Naprawa: `onChange` selecta
+`kind` teraz od razu wpisuje realne domyślne wartości (`effectType: "damage"`, `cooldownSeconds:
+30`, `baseManaCost: 15`) zamiast polegać wyłącznie na wizualnym fallbacku w JSX.
+
+**Utrata focusu przy pisaniu** — karty umiejętności/węzłów miały
+`key={`${idx}-${skill.name}`}`/`key={`${nodeIdx}-${node.name}`}` — klucz zawierający właśnie
+wpisywaną wartość zmienia się przy KAŻDYM naciśnięciu klawisza, więc React odmontowywał i
+montował od nowa całą kartę (razem z inputem) po każdej literze, gubiąc focus. Naprawa: każdy
+wpis formularza (`emptySkill`/`emptyNode`/`fromDto`) dostaje teraz stabilne, raz wygenerowane
+`_key` (nieujęte w schemacie Zod — `z.object()` domyślnie usuwa nieznane pola przy `safeParse`,
+więc submit i tak wysyła czyste dane), a `key={skill._key}`/`key={node._key}` nigdy się nie
+zmienia w trakcie edycji.
+
+**Nowe typy efektów aktywnych umiejętności** — user poprosił o realne mechaniki bojowe wykraczające
+poza "obrażenia"/"leczenie": szybkość ataku, obronę, krytyk, szansę na blok, szansę na ogłuszenie
+(`stun` — przeciwnik nie zadaje obrażeń przez tę samą rundę), szansę na otrucie (`poison` — DoT na
+3 rundy, 5%/rundę z max HP przeciwnika w momencie trafienia) i szansę na odbicie ciosu (`reflect`).
+Rozszerzone `SkillEffectTypeSchema` w [enums.ts](../packages/shared/src/schemas/enums.ts) (pole w
+Prisma to zwykłe `String?`, więc bez migracji). Buff-style efekty (`attack_speed`/`defense`/`crit`/
+`block_chance`/`reflect`) czytają `power` jako procent (power=10 → +10%) i dają czasowy self-buff
+(60 s, jak istniejące bufy z mikstur); proc-style (`stun`/`poison`) losują `power`% jednorazowo przy
+aktywacji przeciw aktualnemu potworowi. Cała logika w `simulateExpedition`
+([combat.ts](../apps/api/src/modules/expeditions/combat.ts)) — nowe pola `monsterStunned`/
+`monsterBlocked`/`reflectedDamage` w evencie `round` i `success` w `skill_activated`
+([combatEvent.ts](../packages/shared/src/schemas/combatEvent.ts)), wyświetlane w
+[CombatLog.tsx](../apps/web/src/components/expedition/CombatLog.tsx) (nowa ikonka `stun` w
+[CombatIcon.tsx](../apps/web/src/components/expedition/CombatIcon.tsx)). Panel admina dostał
+polskie etykiety efektów i krótką podpowiedź jednostek (wartość vs %, self-buff vs jednorazowa
+szansa).
+
+Zweryfikowane: `tsc --noEmit` czysto na `shared`/`api`/`web`; w przeglądarce odtworzony dokładny
+scenariusz usera (nowa aktywna umiejętność, przełączenie kind bez dotykania selecta efektu, wpisanie
+nazwy litera po literze bez utraty focusu, zapis bez błędu walidacji); osobnym skryptem
+(`tsx scripts/_test_new_skill_effects.mts`, usunięty po teście) wywołano `simulateExpedition`
+bezpośrednio z umiejętnościami wszystkich 9 typów efektów — potwierdzone występowanie każdego
+`effectType` w logu, rundy z `monsterStunned`/`monsterBlocked`/`reflectedDamage>0`, brak wyjątków.
+Testowa umiejętność i konto testowe usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

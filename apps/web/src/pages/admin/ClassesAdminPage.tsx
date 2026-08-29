@@ -36,9 +36,29 @@ const CATEGORY_LABELS: Record<SkillCategory, string> = {
   survival: "Przetrwanie",
   tactics: "Taktyka",
 };
+const EFFECT_TYPE_LABELS: Record<(typeof EFFECT_TYPES)[number], string> = {
+  damage: "obrażenia",
+  heal: "leczenie",
+  attack_speed: "szybkość ataku",
+  defense: "obrona",
+  crit: "krytyk",
+  block_chance: "szansa na blok",
+  stun: "szansa na ogłuszenie",
+  poison: "szansa na otrucie",
+  reflect: "szansa na odbicie ciosu",
+};
 
-function emptySkill() {
+// A React `key` must stay stable across keystrokes — using `skill.name`/`node.name` in the key
+// (as this used to) remounts the whole card, and its inputs, on every character typed, which is
+// why the name field lost focus after one letter. `_key` is a form-local id, generated once per
+// entry and never touched by user input; the schema strips it on submit (plain z.object default).
+function newFormKey() {
+  return Math.random().toString(36).slice(2);
+}
+
+function emptySkill(): SkillFormValue {
   return {
+    _key: newFormKey(),
     name: "",
     description: "",
     kind: "passive" as const,
@@ -54,8 +74,9 @@ function emptySkill() {
   };
 }
 
-function emptyNode() {
+function emptyNode(): NodeFormValue {
   return {
+    _key: newFormKey(),
     name: "",
     description: "",
     effect: "magnitude" as const,
@@ -66,10 +87,14 @@ function emptyNode() {
   };
 }
 
-type SkillFormValue = CreateCharacterClassInput["skills"][number];
-type NodeFormValue = SkillFormValue["nodes"][number];
+type NodeFormValue = CreateCharacterClassInput["skills"][number]["nodes"][number] & { _key: string };
+type SkillFormValue = Omit<CreateCharacterClassInput["skills"][number], "nodes"> & {
+  _key: string;
+  nodes: NodeFormValue[];
+};
+type FormValue = Omit<CreateCharacterClassInput, "skills"> & { skills: SkillFormValue[] };
 
-function emptyForm(): CreateCharacterClassInput {
+function emptyForm(): FormValue {
   return {
     name: "",
     description: "",
@@ -80,7 +105,7 @@ function emptyForm(): CreateCharacterClassInput {
   };
 }
 
-function fromDto(cls: ClassDto): CreateCharacterClassInput {
+function fromDto(cls: ClassDto): FormValue {
   return {
     name: cls.name,
     description: cls.description,
@@ -88,6 +113,7 @@ function fromDto(cls: ClassDto): CreateCharacterClassInput {
     skills: cls.skills.map((s) => {
       const nodeNameById = new Map(s.nodes.map((n) => [n.id, n.name]));
       return {
+        _key: newFormKey(),
         name: s.name,
         description: s.description,
         kind: s.kind,
@@ -100,6 +126,7 @@ function fromDto(cls: ClassDto): CreateCharacterClassInput {
         baseManaCost: s.baseManaCost ?? undefined,
         category: s.category,
         nodes: s.nodes.map((n) => ({
+          _key: newFormKey(),
           name: n.name,
           description: n.description,
           effect: n.effect,
@@ -120,7 +147,7 @@ export function ClassesAdminPage() {
   const classesQuery = useQuery({ queryKey: ["admin-classes"], queryFn: listClasses });
   const itemsQuery = useQuery({ queryKey: ["admin-items"], queryFn: listItems });
   const [editingId, setEditingId] = useState<string | null | "new">(null);
-  const [form, setForm] = useState<CreateCharacterClassInput>(emptyForm());
+  const [form, setForm] = useState<FormValue>(emptyForm());
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -381,7 +408,7 @@ export function ClassesAdminPage() {
               {form.skills.map((skill, idx) => {
                 const skillDto = editingClass?.skills.find((s) => s.name === skill.name);
                 return (
-                <div key={`${idx}-${skill.name}`} className=" border border-line p-3">
+                <div key={skill._key} className=" border border-line p-3">
                   <div className="mb-2 flex items-center gap-3">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">
                       {skillDto?.imageUrl ? (
@@ -419,7 +446,24 @@ export function ClassesAdminPage() {
                     <select
                       className={inputClass}
                       value={skill.kind}
-                      onChange={(e) => updateSkill(idx, { kind: e.target.value as "passive" | "active" })}
+                      onChange={(e) => {
+                        const kind = e.target.value as "passive" | "active";
+                        // The effect/cooldown/mana inputs below only render once kind === "active"
+                        // and display a fallback default ("damage"/30/15) until touched — without
+                        // writing that default into state here too, the select LOOKS filled in but
+                        // the underlying value stays undefined, so validation fails with "musi mieć
+                        // typ efektu i cooldown" even though every field appears filled.
+                        if (kind === "active") {
+                          updateSkill(idx, {
+                            kind,
+                            effectType: skill.effectType ?? "damage",
+                            cooldownSeconds: skill.cooldownSeconds ?? 30,
+                            baseManaCost: skill.baseManaCost ?? 15,
+                          });
+                        } else {
+                          updateSkill(idx, { kind, targetStat: skill.targetStat ?? "attack" });
+                        }
+                      }}
                     >
                       {SKILL_KINDS.map((k) => (
                         <option key={k} value={k}>
@@ -505,13 +549,30 @@ export function ClassesAdminPage() {
                         >
                           {EFFECT_TYPES.map((e2) => (
                             <option key={e2} value={e2}>
-                              {e2}
+                              {EFFECT_TYPE_LABELS[e2]}
                             </option>
                           ))}
                         </select>
                       </label>
                     )}
                   </div>
+
+                  {skill.kind === "active" && (skill.effectType === "damage" || skill.effectType === "heal") && (
+                    <p className="mt-1 text-[11px] text-parchment-faint">
+                      mnożnik × staty = wartość {skill.effectType === "damage" ? "obrażeń" : "leczenia"} na aktywację.
+                    </p>
+                  )}
+                  {skill.kind === "active" &&
+                    skill.effectType &&
+                    skill.effectType !== "damage" &&
+                    skill.effectType !== "heal" && (
+                      <p className="mt-1 text-[11px] text-parchment-faint">
+                        mnożnik × staty = wartość % (np. 10 = 10%) —{" "}
+                        {skill.effectType === "stun" || skill.effectType === "poison"
+                          ? "szansa losowana raz przy aktywacji."
+                          : "tymczasowy bonus po aktywacji (60 s)."}
+                      </p>
+                    )}
 
                   {skill.kind === "active" && (
                     <div className="mt-2 flex flex-wrap gap-3">
@@ -551,7 +612,7 @@ export function ClassesAdminPage() {
                       {skill.nodes.map((node, nodeIdx) => {
                         const nodeDto = skillDto?.nodes.find((n) => n.name === node.name);
                         return (
-                        <div key={`${nodeIdx}-${node.name}`} className="border border-line-soft/60 p-2">
+                        <div key={node._key} className="border border-line-soft/60 p-2">
                           <div className="mb-2 flex items-center gap-2">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-line-soft bg-panel-raised">
                               {nodeDto?.imageUrl ? (

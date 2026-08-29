@@ -7,7 +7,8 @@ export type CombatIconKind =
   | "defeat"
   | "time"
   | "victory"
-  | "target";
+  | "target"
+  | "stun";
 
 /** Combat-log glyphs, drawn in the same stroke grammar as ItemTypeIcon (viewBox 0 0 24 24,
  * strokeWidth 1.4, round caps/joins) instead of emoji — keeps the log's iconography consistent
@@ -38,6 +39,7 @@ const ICON_SHAPES: Record<CombatIconKind, React.ReactNode> = {
       <circle cx="12" cy="12" r="2" />
     </>
   ),
+  stun: <path d="M12 2 L13.2 8.5 L19.8 7 L14.8 11.5 L19.8 16 L13.2 14.5 L12 21 L10.8 14.5 L4.2 16 L9.2 11.5 L4.2 7 L10.8 8.5 Z" />,
 };
 
 export function CombatIcon({ kind, className }: { kind: CombatIconKind; className?: string }) {

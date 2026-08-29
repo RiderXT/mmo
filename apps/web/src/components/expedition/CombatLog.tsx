@@ -1,6 +1,21 @@
 import { useEffect, useRef } from "react";
-import type { CombatEvent, ItemType } from "@mmo/shared";
+import type { CombatEvent, ItemType, SkillEffectType } from "@mmo/shared";
 import { CombatIcon, type CombatIconKind } from "./CombatIcon";
+
+// Mirrors the effect semantics implemented in apps/api/.../expeditions/combat.ts: buff-style
+// effects report `power` as a percentage, proc-style effects (stun/poison) report whether the
+// one-shot chance succeeded instead.
+const SKILL_EFFECT_DETAILS: Record<SkillEffectType, { text: (power: number, success?: boolean) => string }> = {
+  damage: { text: (power) => `+${power} obrażeń` },
+  heal: { text: (power) => `+${power} leczenia` },
+  attack_speed: { text: (power) => `+${power}% szybkości ataku` },
+  defense: { text: (power) => `+${power}% obrony` },
+  crit: { text: (power) => `+${power}% szansy na krytyk` },
+  block_chance: { text: (power) => `+${power}% szansy na blok` },
+  reflect: { text: (power) => `+${power}% szansy na odbicie ciosu` },
+  stun: { text: (_power, success) => (success ? "Ogłuszono przeciwnika!" : "Próba ogłuszenia nieudana") },
+  poison: { text: (_power, success) => (success ? "Zatruto przeciwnika!" : "Próba zatrucia nieudana") },
+};
 
 export interface LootItemLookup {
   name: string;
@@ -38,12 +53,14 @@ function PlayerLine({ event, roundNo }: { event: CombatEvent; roundNo?: number }
           <span className="mt-0.5 block text-[11px] font-normal text-parchment-faint">HP {event.playerHpAfter}</span>
         </LogLine>
       );
-    case "skill_activated":
+    case "skill_activated": {
+      const detail = SKILL_EFFECT_DETAILS[event.effectType];
       return (
         <LogLine tone="text-violet-300" icon="skill">
-          {event.skillName}: +{event.power} {event.effectType === "damage" ? "obrażeń" : "leczenia"}
+          {event.skillName}: {detail.text(event.power, event.success)}
         </LogLine>
       );
+    }
     case "potion_used":
       return (
         <LogLine tone="text-cyan-300" icon="potion">
@@ -82,13 +99,27 @@ function EnemyLine({ event, roundNo }: { event: CombatEvent; roundNo?: number })
           {event.monsterMaxHp} HP)
         </LogLine>
       );
-    case "round":
+    case "round": {
+      const negated = event.monsterStunned || event.monsterEvaded || event.monsterBlocked;
+      const icon: CombatIconKind = event.monsterStunned
+        ? "stun"
+        : event.monsterEvaded || event.monsterBlocked
+          ? "evade"
+          : "impact";
+      const text = event.monsterStunned
+        ? "Ogłuszony — nie zaatakował."
+        : event.monsterEvaded
+          ? "Unik! Potwór nie trafił."
+          : event.monsterBlocked
+            ? "Zablokowano cios!"
+            : `Otrzymano ${event.monsterDamage} obrażeń${event.reflectedDamage ? ` (odbito ${event.reflectedDamage})` : ""}`;
       return (
-        <LogLine tone={event.monsterEvaded ? "text-sky-300" : "text-red-300"} icon={event.monsterEvaded ? "evade" : "impact"}>
-          #{roundNo} {event.monsterEvaded ? "Unik! Potwór nie trafił." : `Otrzymano ${event.monsterDamage} obrażeń`}
+        <LogLine tone={negated ? "text-sky-300" : "text-red-300"} icon={icon}>
+          #{roundNo} {text}
           <span className="mt-0.5 block text-[11px] font-normal text-parchment-faint">wróg HP {event.monsterHpAfter}</span>
         </LogLine>
       );
+    }
     default:
       return null;
   }

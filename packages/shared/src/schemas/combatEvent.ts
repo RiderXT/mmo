@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SkillEffectTypeSchema } from "./enums.js";
 
 /**
  * One entry in an expedition's pre-computed combat log. `t` is elapsed seconds
@@ -29,14 +30,21 @@ export const CombatEventSchema = z.discriminatedUnion("type", [
     monsterHpAfter: z.number(),
     monsterDamage: z.number(),
     monsterEvaded: z.boolean(),
+    // Set when a "stun"/"block_chance"/"reflect" skill effect altered this exact round — see
+    // simulateExpedition in combat.ts. Omitted (falsy) on any log predating these effect types.
+    monsterStunned: z.boolean().optional(),
+    monsterBlocked: z.boolean().optional(),
+    reflectedDamage: z.number().optional(),
     playerHpAfter: z.number(),
   }),
   z.object({
     t: z.number(),
     type: z.literal("skill_activated"),
     skillName: z.string(),
-    effectType: z.enum(["damage", "heal"]),
+    effectType: SkillEffectTypeSchema,
     power: z.number(),
+    // Only meaningful for proc-style effects (stun/poison) — whether the chance succeeded.
+    success: z.boolean().optional(),
     playerHpAfter: z.number(),
     playerManaAfter: z.number(),
   }),

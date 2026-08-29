@@ -190,7 +190,7 @@ model ClassSkill {
   scalingStat     String // CoreStatKey
   scalingFactor   Float   @default(1)
   targetStat      String? // StatKey — passive only
-  effectType      String? // "damage" | "heal" — active only
+  effectType      String? // SkillEffectType (@mmo/shared enums.ts) — active only
   cooldownSeconds Int? // active only, BASE cooldown (nodes with effect "cooldown" reduce it)
   // Skill-tree redesign: the skill's own effect is now a FIXED base value, unlocked once for
   // unlockCost points — all further growth comes from SkillTreeNode unlocks (any order), not
