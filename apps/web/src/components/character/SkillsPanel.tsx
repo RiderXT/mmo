@@ -82,7 +82,7 @@ function Tile({
         <img
           src={`${API_URL}${imageUrl}`}
           alt=""
-          className={`h-8 w-8 object-contain ${locked ? "opacity-40 grayscale" : ""}`}
+          className={`absolute inset-0 h-full w-full object-contain p-1 ${locked ? "opacity-40 grayscale" : ""}`}
         />
       ) : locked ? (
         <LockGlyph className="h-5 w-5 text-parchment-faint" />

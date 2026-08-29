@@ -4312,6 +4312,19 @@ poziomie"); `combat-stats/breakdown` potwierdził dokładną matematykę: `0.5 �
 `shared`/`api`/`web`. Testowa konfiguracja umiejętności przywrócona (`maxLevel=1`,
 `levelMagnitudePct=0`), postać i konto testowe usunięte po weryfikacji.
 
+### Dogrywka: ikony umiejętności nie wypełniały całego kafelka
+
+User (ze zrzutem ekranu): ikony umiejętności w [SkillsPanel.tsx](../apps/web/src/components/character/SkillsPanel.tsx)
+zajmowały tylko część kwadratowego kafelka, zamiast go wypełniać. Root cause: `Tile`'s `<img>` miał
+zaszyty na sztywno `h-8 w-8` wewnątrz kontenera `h-14 w-14` — obrazek zajmował ~57% kafelka
+niezależnie od proporcji źródłowego pliku, podczas gdy każdy inny kontener ikon w tym repo
+(`ItemBox.tsx`, `ShopItemBox.tsx`, `ActivePotionsSummary.tsx`, admin preview boxes) konsekwentnie
+używa `absolute inset-0 h-full w-full object-contain p-1`. Naprawa: ujednolicono `Tile` do tego
+samego wzorca. Zweryfikowane pomiarem `getBoundingClientRect()` w przeglądarce: obrazek rósł z
+20×20px do 54×54px wewnątrz kafelka 56×56px (poprzednio dzielił DOM z dekoracyjnym narożnikiem
+`SocketCorners`, stąd trzeba było odróżnić właściwy `<img>` po `src`). Konto i postać testowa
+usunięte po weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
