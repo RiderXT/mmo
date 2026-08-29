@@ -59,6 +59,10 @@ export interface ActiveSkillDef {
   manaCost: number;
   effectType: SkillEffectType;
   cooldownSeconds: number;
+  // Only meaningful for buff-style effectType (attack_speed/defense/crit/block_chance/reflect) —
+  // how long the self-buff lasts once activated. Undefined falls back to
+  // SKILL_BUFF_DURATION_SECONDS below (skills created before this field existed).
+  durationSeconds?: number;
 }
 
 export interface PotionSlot {
@@ -433,6 +437,7 @@ export function simulateExpedition(
       // Buff-style effects read `power` as a percentage (power=10 -> +10%); proc-style effects
       // (stun/poison) read it as a one-shot success chance rolled against the current monster.
       let success: boolean | undefined;
+      const buffDuration = skill.durationSeconds ?? SKILL_BUFF_DURATION_SECONDS;
       switch (skill.effectType) {
         case "damage":
           burstDamage += skill.power;
@@ -441,23 +446,23 @@ export function simulateExpedition(
           hp = Math.min(stats.maxHp, hp + skill.power);
           break;
         case "attack_speed":
-          attackSpeedBuffUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          attackSpeedBuffUntil = t + buffDuration;
           attackSpeedBuffPct = skill.power / 100;
           break;
         case "defense":
-          defenseBuffUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          defenseBuffUntil = t + buffDuration;
           defenseBuffPct = skill.power / 100;
           break;
         case "crit":
-          critBuffUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          critBuffUntil = t + buffDuration;
           critBuffPct = Math.min(1, Math.max(0, skill.power / 100));
           break;
         case "block_chance":
-          blockChanceUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          blockChanceUntil = t + buffDuration;
           blockChancePct = Math.min(1, Math.max(0, skill.power / 100));
           break;
         case "reflect":
-          reflectChanceUntil = t + SKILL_BUFF_DURATION_SECONDS;
+          reflectChanceUntil = t + buffDuration;
           reflectChancePct = Math.min(1, Math.max(0, skill.power / 100));
           break;
         case "stun":

@@ -149,6 +149,7 @@ export interface ClassSkillDto {
   effectType: SkillEffectType | null;
   cooldownSeconds: number | null;
   baseManaCost: number | null;
+  durationSeconds: number | null;
   category: SkillCategory;
   nodes: SkillTreeNodeDto[];
   imageUrl: string | null;

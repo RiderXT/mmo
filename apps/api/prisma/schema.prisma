@@ -196,6 +196,9 @@ model ClassSkill {
   // from levels. baseManaCost replaces the old global 10+5*level formula for active skills.
   unlockCost   Int  @default(1)
   baseManaCost Int? // active only, BASE mana cost (nodes with effect "cost" reduce it)
+  // Only meaningful for buff-style effectType (attack_speed/defense/crit/block_chance/reflect) —
+  // how long the self-buff lasts once activated. Null = fall back to a fixed default in combat.ts.
+  durationSeconds Int?
   category     String @default("combat") // "combat" | "survival" | "tactics" — groups skills into UI tabs
   // Uploaded artwork path (e.g. "/uploads/skills/xxx.png"), served statically like Item.imageUrl
   // — see modules/admin/classes. Null = fall back to the generic SkillSygil placeholder.

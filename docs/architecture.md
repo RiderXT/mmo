@@ -4204,6 +4204,40 @@ bezpośrednio z umiejętnościami wszystkich 9 typów efektów — potwierdzone 
 `effectType` w logu, rundy z `monsterStunned`/`monsterBlocked`/`reflectedDamage>0`, brak wyjątków.
 Testowa umiejętność i konto testowe usunięte po weryfikacji.
 
+### Konfigurowalny czas trwania buffa umiejętności aktywnej (osobno od cooldownu)
+
+User poprosił o możliwość ustawienia dla umiejętności aktywnej osobnego "czasu aktywności" obok
+cooldownu (przykład: +10% ataku, czas trwania 30s, cooldown 40s). Wcześniej wszystkie efekty
+buff-style (`attack_speed`/`defense`/`crit`/`block_chance`/`reflect`) używały jednego, zaszytego
+na sztywno `SKILL_BUFF_DURATION_SECONDS` (60s) w
+[combat.ts](../apps/api/src/modules/expeditions/combat.ts) — nie do skonfigurowania per
+umiejętność.
+
+Dodano opcjonalne pole `durationSeconds` (int, 1–3600) do `ClassSkillInputSchema`
+([characterClass.ts](../packages/shared/src/schemas/characterClass.ts)) i `ClassSkill` w Prisma
+(`String?`-owe pole obok istniejących, więc `prisma db push` czysto addytywny, bez resetu
+`dev.db`) — dotyczy TYLKO efektów buff-style; dla `damage`/`heal` (natychmiastowe) i
+`stun`/`poison` (jednorazowy proc) pole jest nieużywane. `simulateExpedition` czyta
+`skill.durationSeconds ?? SKILL_BUFF_DURATION_SECONDS` przy każdej aktywacji — brak wartości
+(umiejętności zapisane przed tą zmianą) zachowuje się identycznie jak wcześniej (60s).
+
+Panel admina ([ClassesAdminPage.tsx](../apps/web/src/pages/admin/ClassesAdminPage.tsx)) pokazuje
+pole "czas trwania (s)" tylko dla efektów z `BUFF_EFFECT_TYPES`, z fallbackiem 30s. Zastosowano
+DOKŁADNIE tę samą poprawkę co przy błędzie walidacji z poprzedniego wpisu: `onChange` selecta
+"efekt" wpisuje realną wartość domyślną do stanu przy przełączeniu na typ buff-style (analogicznie
+do `kind`-selecta ustawiającego domyślny `cooldownSeconds`/`baseManaCost`) — inaczej pole
+wyglądałoby na wypełnione (fallback "30" w JSX), a `durationSeconds` zostałoby `undefined` w
+stanie.
+
+Zweryfikowane w przeglądarce: dodana umiejętność z efektem "szybkość ataku", czas trwania 30s,
+cooldown 40s (dokładny przykład z prośby usera) — zapis bez błędu, po przeładowaniu formularza z
+bazy oba pola wciąż pokazują 30/40 (roundtrip przez `skillData` w
+[modules/admin/classes/service.ts](../apps/api/src/modules/admin/classes/service.ts) potwierdzony).
+Osobnym skryptem (`tsx scripts/_test_skill_duration.mts`, usunięty po teście) potwierdzono że
+umiejętność bez `durationSeconds` (dane sprzed tej zmiany) nadal generuje eventy bez wyjątków.
+`tsc --noEmit` czysto na `shared`/`api`/`web`. Testowa umiejętność i konto testowe usunięte po
+weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`

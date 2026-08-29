@@ -115,6 +115,7 @@ export async function gatherCombatBuild(characterId: string) {
         manaCost: Math.max(1, Math.round((cs.classSkill.baseManaCost ?? 15) * costMultiplier)),
         effectType: cs.classSkill.effectType as ActiveSkillDef["effectType"],
         cooldownSeconds: Math.max(1, Math.round(cs.classSkill.cooldownSeconds! * cooldownMultiplier)),
+        durationSeconds: cs.classSkill.durationSeconds ?? undefined,
       };
     });
 

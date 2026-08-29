@@ -41,6 +41,7 @@ function skillData(skill: ClassSkillInput) {
     effectType: skill.effectType ?? null,
     cooldownSeconds: skill.cooldownSeconds ?? null,
     baseManaCost: skill.baseManaCost ?? null,
+    durationSeconds: skill.durationSeconds ?? null,
     category: skill.category,
   };
 }

@@ -33,6 +33,10 @@ export const ClassSkillInputSchema = z
     effectType: SkillEffectTypeSchema.optional(),
     cooldownSeconds: z.number().int().min(1).max(3600).optional(),
     baseManaCost: z.number().int().min(0).max(1000).optional(),
+    // Only meaningful for buff-style effectType (attack_speed/defense/crit/block_chance/reflect)
+    // — how long the self-buff lasts once activated. Falls back to a fixed default in combat.ts
+    // when unset (e.g. skills created before this field existed).
+    durationSeconds: z.number().int().min(1).max(3600).optional(),
     category: SkillCategorySchema.default("combat"),
     nodes: z.array(SkillTreeNodeInputSchema).default([]),
   })

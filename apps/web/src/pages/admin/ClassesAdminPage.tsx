@@ -47,6 +47,9 @@ const EFFECT_TYPE_LABELS: Record<(typeof EFFECT_TYPES)[number], string> = {
   poison: "szansa na otrucie",
   reflect: "szansa na odbicie ciosu",
 };
+// Only these effect types grant a temporary self-buff with its own duration (see combat.ts) —
+// damage/heal are instant, stun/poison are a one-shot proc against the monster.
+const BUFF_EFFECT_TYPES = new Set(["attack_speed", "defense", "crit", "block_chance", "reflect"]);
 
 // A React `key` must stay stable across keystrokes — using `skill.name`/`node.name` in the key
 // (as this used to) remounts the whole card, and its inputs, on every character typed, which is
@@ -69,6 +72,7 @@ function emptySkill(): SkillFormValue {
     effectType: undefined,
     cooldownSeconds: undefined,
     baseManaCost: undefined,
+    durationSeconds: undefined,
     category: "combat" as const,
     nodes: [],
   };
@@ -124,6 +128,7 @@ function fromDto(cls: ClassDto): FormValue {
         effectType: s.effectType ?? undefined,
         cooldownSeconds: s.cooldownSeconds ?? undefined,
         baseManaCost: s.baseManaCost ?? undefined,
+        durationSeconds: s.durationSeconds ?? undefined,
         category: s.category,
         nodes: s.nodes.map((n) => ({
           _key: newFormKey(),
@@ -545,7 +550,18 @@ export function ClassesAdminPage() {
                         <select
                           className={inputClass}
                           value={skill.effectType ?? "damage"}
-                          onChange={(e) => updateSkill(idx, { effectType: e.target.value as CreateCharacterClassInput["skills"][number]["effectType"] })}
+                          onChange={(e) => {
+                            const effectType = e.target.value as CreateCharacterClassInput["skills"][number]["effectType"];
+                            // Same reasoning as the kind-select fix above: the duration input
+                            // below only shows for buff-style effects and displays a "30" fallback
+                            // until touched — write that default into state here too, or the field
+                            // looks filled while durationSeconds stays undefined.
+                            if (effectType && BUFF_EFFECT_TYPES.has(effectType)) {
+                              updateSkill(idx, { effectType, durationSeconds: skill.durationSeconds ?? 30 });
+                            } else {
+                              updateSkill(idx, { effectType });
+                            }
+                          }}
                         >
                           {EFFECT_TYPES.map((e2) => (
                             <option key={e2} value={e2}>
@@ -570,7 +586,7 @@ export function ClassesAdminPage() {
                         mnożnik × staty = wartość % (np. 10 = 10%) —{" "}
                         {skill.effectType === "stun" || skill.effectType === "poison"
                           ? "szansa losowana raz przy aktywacji."
-                          : "tymczasowy bonus po aktywacji (60 s)."}
+                          : "tymczasowy bonus po aktywacji — zobacz „czas trwania” poniżej."}
                       </p>
                     )}
 
@@ -595,6 +611,18 @@ export function ClassesAdminPage() {
                           onChange={(e) => updateSkill(idx, { baseManaCost: Number(e.target.value) })}
                         />
                       </label>
+                      {skill.effectType && BUFF_EFFECT_TYPES.has(skill.effectType) && (
+                        <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                          czas trwania (s)
+                          <input
+                            type="number"
+                            min={1}
+                            className={`${inputClass} w-24`}
+                            value={skill.durationSeconds ?? 30}
+                            onChange={(e) => updateSkill(idx, { durationSeconds: Number(e.target.value) })}
+                          />
+                        </label>
+                      )}
                     </div>
                   )}
 
