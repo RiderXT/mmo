@@ -4344,6 +4344,60 @@ dopasować się do zera-paddingu z admina. Zweryfikowane pomiarem: obrazek rośn
 paddingiem) do 54×54px liczonych już od samej krawędzi `border` (różnica 56→54 to tylko grubość
 obramowania przycisku, nie padding) — identyczne proporcje jak w boksie podglądu admina.
 
+### Karta umiejętności jako lista z odroczonym rozdaniem punktów (wg mockupu)
+
+User poprosił o przeprojektowanie karty umiejętności wg wzoru z lokalnego pliku
+`Ironveil MMO Mockups.html` (DesignSync/`/design-login` niedostępne w tej nieinteraktywnej
+sesji — user wskazał plik na dysku jako alternatywę). Sekcja "SKILL POINTS PAGE" w mockupie
+pokazuje płaską listę: ikona + nazwa/opis + "Rank X/Y" + przycisk "+", bez zagnieżdżonych węzłów i
+bez przycisku zatwierdzania — te dwa ostatnie to nowe wymagania z treści prośby, nie z mockupu.
+
+**Model odroczonego rozdania** — kliknięcie "+" NIE wydaje punktu od razu (inaczej niż wcześniej):
+zamiast tego inkrementuje lokalny stan `pending: Map<classSkillId, number>` w
+[SkillsPanel.tsx](../apps/web/src/components/character/SkillsPanel.tsx), nic nie trafia do API aż
+do kliknięcia "Zatwierdź rozdanie punktów" na dole karty. Każdy wiersz na bieżąco pokazuje
+`Poziom {committed} +{staged} oczek./{maxLevel}` oraz linię "Kolejny punkt (koszt X pkt): ..." z
+realną wartością (patrz niżej) — przelicza się przy każdym +/− przed jakimkolwiek wydatkiem.
+Stopka pokazuje `{unspentSkillPoints - zarezerwowane}` jako pozostały budżet plus
+"(zarezerwowano N)", i przycisk "Anuluj" czyszczący cały `pending` bez wywołań API.
+
+Zatwierdzenie NIE jest nowym endpointem batch — wywołuje istniejący `POST .../unlock-skill`
+sekwencyjnie (await w pętli, nie równolegle — współdzielony budżet punktów) raz na każdy
+zarezerwowany poziom. Częściowa awaria w środku pętli (np. wyścig z inną kartą przeglądarki) nie
+czyści całego `pending` — zostają w nim tylko NIEpotwierdzone jeszcze inkrementy, reszta faktycznie
+się powiodła i została odjęta.
+
+**Podgląd delty "co doda następny punkt"** — nowy `nextPointDelta()` liczy dokładnie ten sam wzór
+co `skillMagnitudeMultiplier` w `gatherCombatBuild`
+([expeditions/service.ts](../apps/api/src/modules/expeditions/service.ts)), pomijając wkład
+węzłów (są osobną inwestycją, mają własny podgląd w tooltipie) — `scalingFactor × core[stat] × (1
++ levelMagnitudePct × max(0, poziom-1))`, różnica między poziomem obecnym a +1. Dla umiejętności
+pasywnych: etykieta polska danego `targetStat` (`STAT_LABELS`), z automatycznym formatowaniem %
+dla ułamkowych statystyk (`critChance`/`critDamage`/`evasion`/`damageReduction`/`movementSpeed` —
+te samo są przechowywane jako 0..1, patrz `computeDerivedStats`). Dla aktywnych: etykieta wg
+`effectType`, lustrzane odbicie `SKILL_EFFECT_DETAILS` z
+[CombatLog.tsx](../apps/web/src/components/expedition/CombatLog.tsx) (ten sam katalog efektów,
+tylko jako zapowiedź inwestycji zamiast logu walki). Pusty `ClassSkill.description` (częste w
+danych testowych) dostaje syntetyzowany fallback z tych samych etykiet, żeby wiersz nigdy nie był
+pusty.
+
+**Węzły drzewka bez zmian** — inwestowanie w węzeł zostaje dokładnie takie jak wcześniej
+(natychmiastowe, `unlockNode` bez stagingu) — mockup nie ma pojęcia zagnieżdżonego drzewka, więc
+to świadomie POZA zakresem tej zmiany. Drzewko chowa się teraz pod rozwijanym wierszem umiejętności
+(strzałka ▼/▲, tylko gdy `skill.nodes.length > 0`) zamiast być zawsze widoczne obok siatki kafelków
+— ta sama logika renderowania (`NodeTree`, wydzielona z dotychczasowego kodu), tylko przeniesiona.
+
+Zweryfikowane w przeglądarce end-to-end: staging 2 punktów na jednej umiejętności (podgląd delty
+poprawnie przeliczał się po każdym kliknięciu — stały przyrost liniowy `0.25` potwierdzony
+matematycznie), cofnięcie jednego przyciskiem "−", zatwierdzenie 2 umiejętności naraz (serwer:
+`level` odpowiednio 1, punkty odjęte poprawnie), blokada przycisku "+" po wyczerpaniu budżetu
+(sprawdzone `disabled: true` na DOM), pełne zatwierdzenie 4 kolejnych umiejętności do zera punktów
+— stan serwera (`GET .../skills`, `unspentSkillPoints`) zgodny z oczekiwaniami co do joty. Osobno:
+tymczasowo dodany węzeł potwierdził że rozwijanie wiersza + selekcja + inwestycja w węzeł (stary,
+niezmieniony przepływ) nadal działają bez zarzutu w nowym układzie listy. `tsc --noEmit` czysto na
+`web`. Cała testowa konfiguracja (maxLevel/levelMagnitudePct, węzeł, konta, postacie) usunięta po
+weryfikacji.
+
 ## Weryfikacja przeprowadzona
 
 - `pnpm typecheck` przechodzi dla `shared`, `api`, `web`
