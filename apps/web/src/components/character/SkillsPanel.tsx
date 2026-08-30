@@ -79,6 +79,28 @@ function nextPointDelta(skill: ClassSkillDto, core: CoreStats, effectiveLevel: n
   return null;
 }
 
+/** Once committedLevel reaches classSkill.bookGateFromLevel - 1, points no longer apply — only
+ * successful skill-book reads (see readSkillBook in modules/characters/service.ts) push the level
+ * further, up to maxLevel. */
+function isBookGated(skill: ClassSkillDto, committedLevel: number): boolean {
+  return skill.bookGateFromLevel != null && committedLevel >= skill.bookGateFromLevel - 1;
+}
+
+function booksRequiredForLevel(skill: ClassSkillDto, level: number): number {
+  return skill.bookRequirements.find((r) => r.level === level)?.booksRequired ?? 1;
+}
+
+/** Current running total granted by every successfully-read skill book so far, formatted for
+ * display — independent of levelMagnitudePct's per-level formula (see CharacterSkillDto). */
+function currentBookBonusLine(skill: ClassSkillDto, cs: { bookMagnitudePct: number; bookCostFlatAmount: number; bookCooldownFlatAmount: number } | undefined): string | null {
+  if (!cs) return null;
+  const parts: string[] = [];
+  if (cs.bookMagnitudePct > 0) parts.push(`+${Math.round(cs.bookMagnitudePct * 1000) / 10}% mocy`);
+  if (cs.bookCostFlatAmount > 0) parts.push(`-${Math.round(cs.bookCostFlatAmount * 10) / 10} do many`);
+  if (cs.bookCooldownFlatAmount > 0) parts.push(`-${Math.round(cs.bookCooldownFlatAmount * 10) / 10}s odnowienia`);
+  return parts.length ? `Z ksiąg: ${parts.join(", ")}` : null;
+}
+
 /** Falls back to a synthesized one-liner when the admin left ClassSkill.description empty, so a
  * row never renders with a blank "what does this add" line. */
 function fallbackDescription(skill: ClassSkillDto): string {
@@ -297,6 +319,7 @@ export function SkillsPanel({ character }: { character: Character }) {
   if (!character.classId || !classQuery.data) return null;
 
   const skillLevelById = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s.level]) ?? []);
+  const characterSkillById = new Map(skillsQuery.data?.map((s) => [s.classSkillId, s]) ?? []);
   const nodeLevelById = new Map(nodesQuery.data?.map((n) => [n.nodeId, n.level]) ?? []);
   const skillsInCategory = classQuery.data.skills.filter((s) => s.category === category);
   const allNodesById = new Map(classQuery.data.skills.flatMap((s) => s.nodes.map((n) => [n.id, n] as const)));
@@ -320,6 +343,7 @@ export function SkillsPanel({ character }: { character: Character }) {
     const committed = skillLevelById.get(skill.id) ?? 0;
     const staged = pending.get(skill.id) ?? 0;
     if (committed + staged >= skill.maxLevel || remainingPoints < skill.unlockCost) return;
+    if (isBookGated(skill, committed)) return;
     setPending(new Map(pending).set(skill.id, staged + 1));
   }
 
@@ -385,11 +409,14 @@ export function SkillsPanel({ character }: { character: Character }) {
             const stagedLevel = pending.get(skill.id) ?? 0;
             const effectiveLevel = committedLevel + stagedLevel;
             const maxed = effectiveLevel >= skill.maxLevel;
-            const canAdd = !maxed && remainingPoints >= skill.unlockCost;
+            const bookGated = isBookGated(skill, committedLevel);
+            const canAdd = !maxed && !bookGated && remainingPoints >= skill.unlockCost;
             const hasNodes = skill.nodes.length > 0;
             const expanded = expandedSkillId === skill.id;
-            const delta = maxed ? null : nextPointDelta(skill, core, effectiveLevel);
+            const delta = maxed || bookGated ? null : nextPointDelta(skill, core, effectiveLevel);
             const description = skill.description || fallbackDescription(skill);
+            const characterSkill = characterSkillById.get(skill.id);
+            const bookBonusLine = currentBookBonusLine(skill, characterSkill);
 
             return (
               <div key={skill.id} className="border border-line-soft/60 bg-panel-raised/40">
@@ -422,6 +449,14 @@ export function SkillsPanel({ character }: { character: Character }) {
                         Kolejny punkt (koszt {skill.unlockCost} pkt): {delta}
                       </p>
                     )}
+                    {bookGated && !maxed && (
+                      <p className="mt-1 text-xs text-gold-bright">
+                        Postęp książek: {characterSkill?.pendingSkillBooksRead ?? 0}/
+                        {booksRequiredForLevel(skill, committedLevel + 1)} do poziomu {committedLevel + 1} — przeczytaj
+                        książkę z ekwipunku (prawy klik → Przeczytaj)
+                      </p>
+                    )}
+                    {bookBonusLine && <p className="mt-0.5 text-xs text-parchment-dim">{bookBonusLine}</p>}
                   </div>
                   <div className="flex shrink-0 items-center gap-3" onClick={(e) => e.stopPropagation()}>
                     <span className="min-w-[110px] text-right text-sm tabular-nums text-parchment-dim">
@@ -439,6 +474,10 @@ export function SkillsPanel({ character }: { character: Character }) {
                     )}
                     {maxed ? (
                       <span className="text-xs text-gold-bright">MAX</span>
+                    ) : bookGated ? (
+                      <span className="text-xs text-parchment-faint" title="Dalszy wzrost tylko przez czytanie książek">
+                        KSIĘGI
+                      </span>
                     ) : (
                       <button
                         onClick={() => addPending(skill)}

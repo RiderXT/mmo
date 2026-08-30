@@ -70,7 +70,12 @@ function gatherData(input: CreateItemInput) {
 function bookData(input: CreateItemInput) {
   return {
     bookSkillTypeId: input.bookSkillTypeId ?? null,
+    bookClassSkillId: input.bookClassSkillId ?? null,
     bookSuccessChance: input.bookSuccessChance ?? null,
+    bookEffect: input.bookEffect ?? null,
+    bookMagnitudePct: input.bookMagnitudePct ?? null,
+    bookFlatAmount: input.bookFlatAmount ?? null,
+    bookCooldownSeconds: input.bookCooldownSeconds ?? null,
   };
 }
 

@@ -4443,3 +4443,75 @@ weryfikacji.
   punktach, przeciągnięcie itemu do nowego slotu ekwipunku (`equip-weapon`) i do aktywnego
   slotu potionów (`active-0`), pełny cykl ekspedycji zakończony lootem w ekwipunku. Po drodze
   znaleziono i naprawiono brak `goldReward` w `createMonster` (patrz sekcja modułów wyżej).
+
+## Dwutorowy rozwój umiejętności: punkty (1-10) + księgi (11-20) (post-mapa-ekspedycji)
+
+Docelowe przeprojektowanie systemu umiejętności klasowych na życzenie użytkownika: 5 umiejętności
+na klasę, punkt umiejętności co 2 poziomy postaci (nie co 1 — tak, żeby do lvl 100 wychodziło
+dokładnie 5×10=50 punktów), poziomy 1-10 rozwijane punktami jak dotychczas, poziomy powyżej
+(np. 11-20) wyłącznie przez udane czytanie odpowiednich ksiąg-itemów. Drzewka węzłów (`SkillTreeNode`)
+świadomie zostają w kodzie nietknięte, ale nieużywane w nowej treści — zadeklarowane wprost jako
+zadel na przyszłość.
+
+- **`skillPointsForLevelRange(oldLevel, newLevel)`** (nowy helper w `packages/shared`) —
+  `Math.floor(newLevel/2) - Math.floor(oldLevel/2)`, NIE `Math.floor(levelsGained/2)` (to źle liczy
+  skoki wielopoziomowe, np. 3→6 musi dać 2 punkty za poziomy 4 i 6, nie 1). Podmienione we
+  wszystkich 4 miejscach przyznających/cofających punkty umiejętności (ekspedycje, daily login,
+  admin-grant, admin-revert) — `unspentStatPoints` (`*4`/poziom) zostaje bez zmian, to inna waluta.
+- **Generalizacja istniejącego mechanizmu czytania ksiąg zbieractwa** (dotąd tylko dla
+  `PassiveSkillType`) na `ClassSkill`: nowe `ClassSkill.bookGateFromLevel` (od którego poziomu
+  punkty przestają działać) + `ClassSkillBookRequirement` (ile udanych książek na dany poziom,
+  brak wiersza = domyślnie 1, mirror istniejącego wzorca węzłów drzewka w adminie). Nowy
+  `readSkillBook()` (`characters/service.ts`) strukturalnie kopiuje `readBook`'s gatherKind-branch:
+  losuje `bookSuccessChance` (+ ewentualny `nextReadBonusPct`), na sukces **zawsze** dolicza bonus
+  konkretnej książki do skumulowanego pola na `CharacterSkill` (książki dają WŁASNY stały bonus,
+  nie formułę poziomu — potwierdzone z userem wprost), niezależnie czy akurat przekracza próg
+  poziomu; osobno awansuje `level` gdy próg osiągnięty. Trzy niezależne akumulatory
+  (`bookMagnitudePct`/`bookCostFlatAmount`/`bookCooldownFlatAmount`) dodają się ADDYTYWNIE do
+  dokładnie tych samych formuł w `gatherCombatBuild`, którymi i tak już (od zawsze) karmiły się
+  węzły drzewka — zero nowych ścieżek liczenia.
+- **Ten sam mechanizm rozszerzony o stronę zbieractwa**: `PassiveSkillBookRequirement` (per-poziom
+  nadpisanie `booksRequiredPerLevel`, ten sam fallback-na-1 co wyżej), `CharacterPassiveSkill`
+  dostał `bookChanceBonus`/`bookSpeedBonus` akumulowane identycznie i dodawane w
+  `getPassiveSkillGatherBonus` obok istniejących `level × ...PerLevel` członów — istniejące
+  umiejętności zbieractwa (Rybak, Górnik) i ich XP-owe poziomy 1-9 bez żadnej zmiany zachowania.
+- **Cooldown per-item, nie per-umiejętność** (drugie wprost potwierdzone ustalenie z userem):
+  `Item.bookCooldownSeconds` + `InventoryItem.lastReadAt`, wspólny helper
+  `apps/api/src/lib/bookCooldown.ts` używany przez OBIE funkcje czytania; `lastReadAt` ustawiane
+  przy KAŻDEJ próbie (sukces i porażka — cooldown dotyczy próby, nie wyniku).
+- **`Item`** rozszerzony o `bookClassSkillId` (wzajemnie wykluczające się z istniejącym
+  `bookSkillTypeId`), `bookEffect` (`magnitude`/`cost`/`cooldown` dla umiejętności klasowych,
+  `chance`/`speed` dla pasywnych), `bookMagnitudePct` (% — magnitude/chance/speed) i osobne
+  `bookFlatAmount` (płaska wartość — cost/cooldown, bo przykłady usera to konkretne "-3 many",
+  "-2s", nie procenty).
+- **Trzy nowe itemy wspomagające pętlę czytania** (`potionEffect`, obsługiwane przez rozszerzony
+  `useBuffItem` z opcjonalnym celem — `targetInventoryItemId`/`targetClassSkillId`): `reset_book_cooldown`
+  (czyści `lastReadAt` wskazanej książki), `boost_next_book_chance` (ustawia `nextReadBonusPct` na
+  wskazanej książce = `Item.potionMagnitudePct` użytego itemu — zużywa się przy najbliższym
+  czytaniu tej książki, niezależnie od wyniku), `reset_class_skill_books` (cofnięcie umiejętności do
+  `bookGateFromLevel - 1` i wyzerowanie wszystkich 3 akumulatorów bonusu — do testowania innej
+  kombinacji ksiąg). Frontend: nowy `UseOnTargetModal.tsx` (wzorzec `PotionThresholdModal.tsx`) —
+  `EquipmentTab.tsx` otwiera go zamiast strzelać mutacją od razu, gdy klikany item wymaga celu.
+- **Admin**: `ClassesAdminPage.tsx`/`PassiveSkillsAdminPage.tsx` dostały listę wymagań
+  poziom→liczba książek (ten sam add/remove wzorzec co węzły drzewka, stabilny `_key` — nie kluczować
+  po edytowalnym `level`, inaczej focus gubi się po każdej cyfrze, jak przy wcześniejszym buggu w
+  tym samym pliku); `ItemsAdminPage.tsx`'s sekcja book przebudowana o przełącznik celu
+  (pasywna/klasowa, decoupled lokalny stan — pierwsza wersja radiobuttonów była martwa, bo
+  `onChange` czyścił tylko PRZECIWNE pole, które i tak było już `null`), wybór efektu i
+  warunkowe pole kwoty/cooldownu.
+- **Gracz**: `SkillsPanel.tsx` — umiejętność w fazie książkowej pokazuje "KSIĘGI"/pasek postępu
+  zamiast przycisku "+" (serwer i tak odrzuci punkt, ale front nie powinien pozwalać go
+  wystawiać); `PassiveSkillsPanel.tsx` czyta wymóg z `bookRequirements` (fallback na stałą jak
+  dotychczas).
+
+Zweryfikowane end-to-end przez curl na koncie testowym (klasowa umiejętność "Moc Umysłu" tymczasowo
+z `maxLevel=12`, `bookGateFromLevel=11`, wymaganiami 11→1/12→2 książki; strona zbieractwa —
+istniejący, prawdziwy "Rybak" z tymczasowym nadpisaniem 11→1 zamiast domyślnych 2): blokada
+`unlockSkill` od poziomu bramy z poprawnym komunikatem, udane czytanie awansujące poziom i
+akumulujące bonus (`bookMagnitudePct`/`bookChanceBonus` dokładnie równe sumie przeczytanych
+książek), odrzucenie przez cooldown z poprawnym komunikatem czasu, wszystkie 3 itemy Części D
+(reset cooldownu, boost szansy — `nextReadBonusPct` poprawnie ustawiony i wyzerowany po zużyciu,
+reset poziomu do bramy) działające zgodnie z projektem. `pnpm --filter shared build` oraz
+`tsc --noEmit` na `shared`/`api`/`web` czyste. Cała testowa konfiguracja (konto, postać, 5
+tymczasowych itemów, nadpisania `maxLevel`/`bookGateFromLevel`/wymagań na "Moc Umysłu" i "Rybak")
+usunięta po weryfikacji.

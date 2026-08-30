@@ -2,6 +2,7 @@ import { prisma } from "../../../lib/prismaClient.js";
 import { logAction } from "../../../lib/gameLog.js";
 import { addLootToInventory } from "../../inventory/service.js";
 import { computeLevel } from "../../expeditions/service.js";
+import { skillPointsForLevelRange } from "@mmo/shared";
 import type { AdminGrantInput, AdminCharacterDto } from "@mmo/shared";
 
 export class AdminCharacterError extends Error {
@@ -74,7 +75,7 @@ export async function grantToCharacter(
         level: newLevel,
         gold: character.gold + goldGained,
         unspentStatPoints: character.unspentStatPoints + levelsGained * 4,
-        unspentSkillPoints: character.unspentSkillPoints + levelsGained * 1,
+        unspentSkillPoints: character.unspentSkillPoints + skillPointsForLevelRange(character.level, newLevel),
       },
     });
   });

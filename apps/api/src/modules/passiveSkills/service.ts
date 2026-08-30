@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
+import { checkBookCooldown } from "../../lib/bookCooldown.js";
 import type { GatherKind, PassiveSkillDto, ReadBookInput } from "@mmo/shared";
 
 export class PassiveSkillError extends Error {
@@ -30,7 +31,7 @@ export async function listPassiveSkillsForCharacter(
   await assertCharacterOwnership(characterId, userId);
 
   const [types, characterSkills] = await Promise.all([
-    prisma.passiveSkillType.findMany({ orderBy: { name: "asc" } }),
+    prisma.passiveSkillType.findMany({ orderBy: { name: "asc" }, include: { bookRequirements: true } }),
     prisma.characterPassiveSkill.findMany({ where: { characterId } }),
   ]);
   const progressBySkillTypeId = new Map(characterSkills.map((s) => [s.skillTypeId, s]));
@@ -50,7 +51,10 @@ export async function listPassiveSkillsForCharacter(
       xp: progress?.xp ?? 0,
       bookGateFromLevel: t.bookGateFromLevel,
       booksRequiredPerLevel: t.booksRequiredPerLevel,
+      bookRequirements: t.bookRequirements.map((r) => ({ level: r.level, booksRequired: r.booksRequired })),
       pendingBooksRead: progress?.pendingBooksRead ?? 0,
+      bookChanceBonus: progress?.bookChanceBonus ?? 0,
+      bookSpeedBonus: progress?.bookSpeedBonus ?? 0,
     };
   });
 }
@@ -114,8 +118,8 @@ export async function getPassiveSkillGatherBonus(
   let chanceBonusPct = 0;
   let speedBonusPct = 0;
   for (const row of rows) {
-    chanceBonusPct += row.level * row.skillType.chanceBonusPerLevel;
-    speedBonusPct += row.level * row.skillType.speedBonusPerLevel;
+    chanceBonusPct += row.level * row.skillType.chanceBonusPerLevel + row.bookChanceBonus;
+    speedBonusPct += row.level * row.skillType.speedBonusPerLevel + row.bookSpeedBonus;
   }
   return { chanceBonusPct, speedBonusPct };
 }
@@ -125,7 +129,7 @@ export async function readBook(input: ReadBookInput & { characterId: string }, u
 
   const inventoryItem = await prisma.inventoryItem.findUnique({
     where: { id: input.inventoryItemId },
-    include: { item: { include: { bookSkillType: true } } },
+    include: { item: { include: { bookSkillType: { include: { bookRequirements: true } } } } },
   });
   if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
     throw new PassiveSkillError("Nie znaleziono przedmiotu", 404);
@@ -135,6 +139,11 @@ export async function readBook(input: ReadBookInput & { characterId: string }, u
   }
   const skillType = inventoryItem.item.bookSkillType;
 
+  const remainingCooldown = checkBookCooldown(inventoryItem, inventoryItem.item);
+  if (remainingCooldown != null) {
+    throw new PassiveSkillError(`Ta książka jest jeszcze w trakcie odnowienia (${remainingCooldown}s)`, 400);
+  }
+
   const existing = await prisma.characterPassiveSkill.findUnique({
     where: { characterId_skillTypeId: { characterId: input.characterId, skillTypeId: skillType.id } },
   });
@@ -142,6 +151,11 @@ export async function readBook(input: ReadBookInput & { characterId: string }, u
   if (currentLevel >= skillType.maxLevel) {
     throw new PassiveSkillError(`Umiejętność "${skillType.name}" jest już na maksymalnym poziomie`, 400);
   }
+
+  const effectiveChance = (inventoryItem.item.bookSuccessChance ?? 0) + (inventoryItem.nextReadBonusPct ?? 0);
+  const bookEffect = inventoryItem.item.bookEffect;
+  const bonusField = bookEffect === "chance" ? "bookChanceBonus" : bookEffect === "speed" ? "bookSpeedBonus" : null;
+  const bonusAmount = inventoryItem.item.bookMagnitudePct ?? 0;
 
   // Gathering-tied skills (gatherKind set) level up primarily from XP earned while
   // fishing/mining (see grantGatherXp) — books only matter once the skill is gated at/above
@@ -164,27 +178,41 @@ export async function readBook(input: ReadBookInput & { characterId: string }, u
       );
     }
 
-    const success = Math.random() < (inventoryItem.item.bookSuccessChance ?? 0);
+    const success = Math.random() < effectiveChance;
+    const booksRequired =
+      skillType.bookRequirements.find((r) => r.level === nextLevel)?.booksRequired ?? skillType.booksRequiredPerLevel;
     const pendingBefore = existing?.pendingBooksRead ?? 0;
-    const leveledUp = success && pendingBefore + 1 >= skillType.booksRequiredPerLevel;
+    const leveledUp = success && pendingBefore + 1 >= booksRequired;
 
     const { newLevel, pendingBooksRead } = await prisma.$transaction(async (tx) => {
       if (inventoryItem.quantity <= 1) {
         await tx.inventoryItem.delete({ where: { id: inventoryItem.id } });
       } else {
-        await tx.inventoryItem.update({ where: { id: inventoryItem.id }, data: { quantity: inventoryItem.quantity - 1 } });
+        await tx.inventoryItem.update({
+          where: { id: inventoryItem.id },
+          data: { quantity: inventoryItem.quantity - 1, lastReadAt: new Date(), nextReadBonusPct: null },
+        });
       }
 
       if (!success) return { newLevel: currentLevel, pendingBooksRead: pendingBefore };
 
+      const bonusDelta = bonusField ? { [bonusField]: { increment: bonusAmount } } : {};
       const updated = await tx.characterPassiveSkill.upsert({
         where: { characterId_skillTypeId: { characterId: input.characterId, skillTypeId: skillType.id } },
-        create: leveledUp
-          ? { characterId: input.characterId, skillTypeId: skillType.id, level: 1, xp: 0, pendingBooksRead: 0 }
-          : { characterId: input.characterId, skillTypeId: skillType.id, level: 0, xp: currentXp, pendingBooksRead: 1 },
-        update: leveledUp
-          ? { level: { increment: 1 }, xp: Math.max(0, currentXp - skillType.xpPerLevel), pendingBooksRead: 0 }
-          : { pendingBooksRead: { increment: 1 } },
+        create: {
+          characterId: input.characterId,
+          skillTypeId: skillType.id,
+          ...(leveledUp
+            ? { level: 1, xp: 0, pendingBooksRead: 0 }
+            : { level: 0, xp: currentXp, pendingBooksRead: 1 }),
+          ...(bonusField ? { [bonusField]: bonusAmount } : {}),
+        },
+        update: {
+          ...(leveledUp
+            ? { level: { increment: 1 }, xp: Math.max(0, currentXp - skillType.xpPerLevel), pendingBooksRead: 0 }
+            : { pendingBooksRead: { increment: 1 } }),
+          ...bonusDelta,
+        },
       });
       return { newLevel: updated.level, pendingBooksRead: updated.pendingBooksRead };
     });
@@ -204,25 +232,29 @@ export async function readBook(input: ReadBookInput & { characterId: string }, u
       newLevel,
       skillName: skillType.name,
       pendingBooksRead,
-      booksRequiredPerLevel: skillType.booksRequiredPerLevel,
+      booksRequiredPerLevel: booksRequired,
     };
   }
 
-  const success = Math.random() < (inventoryItem.item.bookSuccessChance ?? 0);
+  const success = Math.random() < effectiveChance;
 
   const newLevel = await prisma.$transaction(async (tx) => {
     if (inventoryItem.quantity <= 1) {
       await tx.inventoryItem.delete({ where: { id: inventoryItem.id } });
     } else {
-      await tx.inventoryItem.update({ where: { id: inventoryItem.id }, data: { quantity: inventoryItem.quantity - 1 } });
+      await tx.inventoryItem.update({
+        where: { id: inventoryItem.id },
+        data: { quantity: inventoryItem.quantity - 1, lastReadAt: new Date(), nextReadBonusPct: null },
+      });
     }
 
     if (!success) return currentLevel;
 
+    const bonusDelta = bonusField ? { [bonusField]: { increment: bonusAmount } } : {};
     const updated = await tx.characterPassiveSkill.upsert({
       where: { characterId_skillTypeId: { characterId: input.characterId, skillTypeId: skillType.id } },
-      create: { characterId: input.characterId, skillTypeId: skillType.id, level: 1 },
-      update: { level: { increment: 1 } },
+      create: { characterId: input.characterId, skillTypeId: skillType.id, level: 1, ...(bonusField ? { [bonusField]: bonusAmount } : {}) },
+      update: { level: { increment: 1 }, ...bonusDelta },
     });
     return updated.level;
   });

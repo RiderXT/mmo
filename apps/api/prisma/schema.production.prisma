@@ -208,12 +208,33 @@ model ClassSkill {
   // Uploaded artwork path (e.g. "/uploads/skills/xxx.png"), served statically like Item.imageUrl
   // — see modules/admin/classes. Null = fall back to the generic SkillSygil placeholder.
   imageUrl String?
+  // From this level onward (inclusive), unlockSkill() no longer accepts points — the skill can
+  // only keep leveling via successful skill-book reads targeting it (Item.bookClassSkillId), up to
+  // maxLevel. Null = no gate, points alone govern all the way to maxLevel exactly as before this
+  // field existed (fully backward compatible). Mirrors PassiveSkillType.bookGateFromLevel.
+  bookGateFromLevel Int?
 
-  class           CharacterClass   @relation(fields: [classId], references: [id], onDelete: Cascade)
-  characterSkills CharacterSkill[]
-  nodes           SkillTreeNode[]
+  class            CharacterClass             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  characterSkills  CharacterSkill[]
+  nodes            SkillTreeNode[]
+  bookRequirements ClassSkillBookRequirement[]
+  books            Item[]                     @relation("BookForClassSkill")
 
   @@unique([classId, name])
+}
+
+// How many successful skill-book reads are required to advance INTO a given level, beyond
+// ClassSkill.bookGateFromLevel. No row for a level = falls back to 1 (see
+// modules/characters/service.ts readSkillBook). Mirrors PassiveSkillBookRequirement.
+model ClassSkillBookRequirement {
+  id            String @id @default(cuid())
+  classSkillId  String
+  level         Int
+  booksRequired Int    @default(1)
+
+  classSkill ClassSkill @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
+
+  @@unique([classSkillId, level])
 }
 
 // An upgrade unlockable within a ClassSkill's own tree (own node list, not spanning multiple
@@ -246,6 +267,19 @@ model CharacterSkill {
   characterId  String
   classSkillId String
   level        Int     @default(0) // 0 = not invested; 1 == the old `unlocked: true`; up to classSkill.maxLevel
+  // Successful skill-book reads accumulated toward the CURRENT target level's requirement
+  // (ClassSkillBookRequirement) — resets to 0 on level-up. Only meaningful once level has reached
+  // classSkill.bookGateFromLevel - 1. Mirrors CharacterPassiveSkill.pendingBooksRead.
+  pendingSkillBooksRead Int @default(0)
+  // Running totals of every successfully-read skill book's own fixed bonus for this skill —
+  // NOT a per-level formula (unlike levelMagnitudePct): each book grants its own specific amount,
+  // accumulated book-by-book regardless of whether that particular read crossed a level threshold.
+  // Added into gatherCombatBuild's formulas additively, alongside sumNodePct's node contribution
+  // (nodes and books coexist additively — nodes are dormant/unused going forward but their
+  // contribution stays wired in, evaluating to 0 when no nodes are configured).
+  bookMagnitudePct       Float @default(0) // sum of every successful "magnitude" book's bonus (%)
+  bookCostFlatAmount     Float @default(0) // sum of every successful "cost" book's bonus (flat mana)
+  bookCooldownFlatAmount Float @default(0) // sum of every successful "cooldown" book's bonus (flat seconds)
 
   character  Character  @relation(fields: [characterId], references: [id], onDelete: Cascade)
   classSkill ClassSkill @relation(fields: [classSkillId], references: [id], onDelete: Cascade)
@@ -310,12 +344,28 @@ model PassiveSkillType {
   // auto-levels — booksRequiredPerLevel successful book reads (still gated by bookSuccessChance,
   // a book can still be "wasted") are required on top. Null = no gate, pure XP leveling forever.
   bookGateFromLevel     Int?
+  // Flat DEFAULT fallback — used for any level with no row in bookRequirements below. Kept as-is
+  // so every existing configured skill keeps working unmigrated.
   booksRequiredPerLevel Int      @default(1)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  characterSkills CharacterPassiveSkill[]
-  books           Item[]                   @relation("BookForPassiveSkill")
+  characterSkills  CharacterPassiveSkill[]
+  books            Item[]                        @relation("BookForPassiveSkill")
+  bookRequirements PassiveSkillBookRequirement[]
+}
+
+// Per-level override of PassiveSkillType.booksRequiredPerLevel — no row for a given level falls
+// back to that flat default. Mirrors ClassSkillBookRequirement.
+model PassiveSkillBookRequirement {
+  id            String @id @default(cuid())
+  skillTypeId   String
+  level         Int
+  booksRequired Int
+
+  skillType PassiveSkillType @relation(fields: [skillTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([skillTypeId, level])
 }
 
 model CharacterPassiveSkill {
@@ -328,6 +378,12 @@ model CharacterPassiveSkill {
   xp               Int @default(0)
   // Successful book reads accumulated toward the book gate at the CURRENT level — resets on level-up.
   pendingBooksRead Int @default(0)
+  // Running totals of every successfully-read gathering book's own fixed bonus — same "book grants
+  // its own fixed amount" principle as CharacterSkill above, additive into
+  // getPassiveSkillGatherBonus() alongside the existing level*chanceBonusPerLevel/
+  // level*speedBonusPerLevel terms (which stay unchanged, driving PRE-gate XP levels only).
+  bookChanceBonus Float @default(0)
+  bookSpeedBonus  Float @default(0)
 
   character Character        @relation(fields: [characterId], references: [id], onDelete: Cascade)
   skillType PassiveSkillType @relation(fields: [skillTypeId], references: [id], onDelete: Cascade)
@@ -454,10 +510,30 @@ model Item {
   // Only meaningful when type === "bait". Flat % bonus to catch/mine chance while carried in an
   // active slot (InventoryItem.activeSlotIndex) — NOT consumed, unlike potions.
   baitChanceBonusPct  Float?
-  // Only meaningful when type === "book". Which passive skill reading this book attempts to level
-  // up, and the chance (0..1) that a read succeeds — see modules/passiveSkills.
+  // Only meaningful when type === "book". Which skill reading this book attempts to level up —
+  // exactly one of bookSkillTypeId (passive/gathering skill) or bookClassSkillId (class skill) is
+  // set, never both (enforced in CreateItemSchema) — and the chance (0..1) that a read succeeds.
+  // See modules/passiveSkills (readBook) and modules/characters (readSkillBook).
   bookSkillTypeId     String?
+  bookClassSkillId    String?
   bookSuccessChance   Float?
+  // Which axis this book's bonus applies to on success. "magnitude"|"cost"|"cooldown" when
+  // bookClassSkillId is set (magnitude = % power, added into skillMagnitudeMultiplier like a
+  // node's magnitudePct; cost/cooldown = FLAT amount subtracted after the node %-multiplier
+  // already applied — see gatherCombatBuild). "chance"|"speed" when bookSkillTypeId is set
+  // (mirrors chanceBonusPerLevel/speedBonusPerLevel, added as CharacterPassiveSkill.bookChanceBonus/
+  // bookSpeedBonus). Null = book not yet fully configured.
+  bookEffect          String?
+  // The book's own fixed bonus amount, as a PERCENTAGE (0..1-ish scale) — used when bookEffect is
+  // "magnitude"/"chance"/"speed".
+  bookMagnitudePct    Float?
+  // The book's own fixed bonus amount, as a FLAT number (e.g. "-3 MP", "-2s") — used when
+  // bookEffect is "cost"/"cooldown". Two separate fields because the units genuinely differ; see
+  // bookMagnitudePct above for the percentage-based effects.
+  bookFlatAmount      Float?
+  // Minimum seconds between two read attempts of THIS item (a failed read still starts the
+  // cooldown, same as a successful one) — see InventoryItem.lastReadAt. Null = no cooldown.
+  bookCooldownSeconds Int?
   // Only meaningful when type === "catalyst" — optional item placed in a free anvil slot
   // (alongside the auto-filled required materials) that adds this flat % to the upgrade's
   // success chance when consumed — see modules/inventory upgradeItem.
@@ -476,6 +552,7 @@ model Item {
 
   class               CharacterClass? @relation(fields: [classId], references: [id])
   bookSkillType       PassiveSkillType? @relation("BookForPassiveSkill", fields: [bookSkillTypeId], references: [id], onDelete: SetNull)
+  bookClassSkill      ClassSkill?       @relation("BookForClassSkill", fields: [bookClassSkillId], references: [id], onDelete: SetNull)
   monsterDrops        MonsterDrop[]
   zoneDrops           ZoneDrop[]
   inventoryItems      InventoryItem[]
@@ -608,6 +685,13 @@ model InventoryItem {
   // gathering.settings.successesPerToolUpgrade (see modules/inventory/service.ts upgradeItem) and
   // resets to 0 on a successful upgrade.
   gatherSuccessCount Int @default(0)
+  // Only meaningful for type "book" — set to now() on EVERY read attempt (success or failure both
+  // count), compared against Item.bookCooldownSeconds. Null = never read yet / no cooldown.
+  lastReadAt DateTime?
+  // Only meaningful for type "book" — a one-shot success-chance bonus (0..1) from a
+  // "boost_next_book_chance" consumable, added to Item.bookSuccessChance on the NEXT read attempt
+  // of this stack, then cleared regardless of the roll's outcome. See modules/inventory useBuffItem.
+  nextReadBonusPct Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

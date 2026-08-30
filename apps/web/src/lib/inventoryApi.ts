@@ -17,6 +17,9 @@ export interface InventoryItemDto {
   // Only meaningful for type rod/pickaxe — successful gathers performed with this specific tool
   // since its last upgrade. See gathering.settings.successesPerToolUpgrade / upgradeItem gating.
   gatherSuccessCount: number;
+  // Only meaningful for type "book" — see item.bookCooldownSeconds below / readBook / readSkillBook.
+  lastReadAt: string | null;
+  nextReadBonusPct: number | null;
   item: {
     id: string;
     name: string;
@@ -45,6 +48,12 @@ export interface InventoryItemDto {
     potionDurationSec: number | null;
     // Only meaningful when type === "catalyst" — see AnvilTab's catalyst slots / upgradeItem.
     catalystSuccessChanceBonusPct: number | null;
+    // Only meaningful when type === "book" — exactly one of the two is set (mutually exclusive),
+    // driving which read endpoint EquipmentTab dispatches to. See readBook (passive) /
+    // readSkillBook (class), bookCooldownSeconds gates re-reading (see InventoryItem.lastReadAt).
+    bookSkillTypeId: string | null;
+    bookClassSkillId: string | null;
+    bookCooldownSeconds: number | null;
   };
 }
 
@@ -102,18 +111,23 @@ export const clearActiveSlot = (characterId: string, inventoryItemId: string) =>
     body: JSON.stringify({ inventoryItemId }),
   });
 
-export interface UseBuffItemResultDto {
-  effect: "buff_exp" | "buff_gold" | "buff_drop";
-  multiplier: number;
-  until: string;
-}
+export type UseBuffItemResultDto =
+  | { effect: "buff_exp" | "buff_gold" | "buff_drop"; multiplier: number; until: string }
+  | { effect: "reset_book_cooldown" | "boost_next_book_chance"; targetInventoryItemId: string }
+  | { effect: "reset_class_skill_books"; resetToLevel: number };
 
-/** Consumes a potionTrigger "on_use" item for its personal exp/gold/drop multiplier — see the
+/** Consumes a potionTrigger "on_use" item — either a personal exp/gold/drop multiplier, or (for
+ * the 3 book-utility effects) an action targeting a specific book (targetInventoryItemId) or
+ * book-gated class skill (targetClassSkillId) the player picks in UseOnTargetModal first. See the
  * "Użyj" context-menu entry in EquipmentTab. */
-export const useBuffItem = (characterId: string, inventoryItemId: string) =>
+export const useBuffItem = (
+  characterId: string,
+  inventoryItemId: string,
+  target?: { targetInventoryItemId?: string; targetClassSkillId?: string },
+) =>
   apiFetch<UseBuffItemResultDto>(`/api/inventory/${characterId}/use-buff-item`, {
     method: "POST",
-    body: JSON.stringify({ inventoryItemId }),
+    body: JSON.stringify({ inventoryItemId, ...target }),
   });
 
 export const sellItem = (characterId: string, inventoryItemId: string) =>

@@ -20,7 +20,7 @@ import {
   type DerivedStats,
   type DerivedStatsBreakdown,
 } from "./combat.js";
-import { computeLevel, expRewardForLevel } from "@mmo/shared";
+import { computeLevel, expRewardForLevel, skillPointsForLevelRange } from "@mmo/shared";
 import type { ExpeditionResult, StatBlock, CoreStatKey, StatKey, CombatEvent, BattleTacticsInput } from "@mmo/shared";
 
 export class ExpeditionError extends Error {
@@ -92,11 +92,17 @@ export async function gatherCombatBuild(characterId: string) {
     ...(JSON.parse(inv.rolledStats) as StatBlock),
   }));
 
-  // Combines both growth sources into one multiplier: the skill's OWN level (levelMagnitudePct
-  // per level beyond 1 — 0 for every skill still at the old default maxLevel=1) plus whatever
-  // "magnitude" tree nodes the player has invested in (per-level, summed across nodes).
+  // Combines three growth sources into one multiplier: the skill's OWN level (levelMagnitudePct
+  // per level beyond 1 — 0 for every skill still at the old default maxLevel=1), whatever
+  // "magnitude" tree nodes the player has invested in (per-level, summed across nodes — dormant,
+  // evaluates to 0 unless a class still has nodes configured), and cs.bookMagnitudePct — the sum
+  // of every successful skill-book's own fixed % bonus, accumulated independently of level
+  // (see readSkillBook in modules/characters/service.ts).
   const skillMagnitudeMultiplier = (cs: (typeof characterSkills)[number]) =>
-    1 + cs.classSkill.levelMagnitudePct * Math.max(0, cs.level - 1) + sumNodePct(cs.classSkill, nodeLevels, "magnitude");
+    1 +
+    cs.classSkill.levelMagnitudePct * Math.max(0, cs.level - 1) +
+    sumNodePct(cs.classSkill, nodeLevels, "magnitude") +
+    cs.bookMagnitudePct;
 
   const passiveSkills: PassiveSkillBonus[] = characterSkills
     .filter((cs) => cs.classSkill.kind === "passive" && cs.level > 0 && cs.classSkill.targetStat)
@@ -118,9 +124,18 @@ export async function gatherCombatBuild(characterId: string) {
         id: cs.classSkillId,
         name: cs.classSkill.name,
         power: cs.classSkill.scalingFactor * core[cs.classSkill.scalingStat as CoreStatKey] * magnitudeMultiplier,
-        manaCost: Math.max(1, Math.round((cs.classSkill.baseManaCost ?? 15) * costMultiplier)),
+        // Node cost/cooldown reduction is a %-multiplier (unchanged); book cost/cooldown reduction
+        // is a FLAT amount (cs.bookCostFlatAmount/bookCooldownFlatAmount — see readSkillBook),
+        // subtracted after the multiplier already applied.
+        manaCost: Math.max(
+          1,
+          Math.round((cs.classSkill.baseManaCost ?? 15) * costMultiplier) - cs.bookCostFlatAmount,
+        ),
         effectType: cs.classSkill.effectType as ActiveSkillDef["effectType"],
-        cooldownSeconds: Math.max(1, Math.round(cs.classSkill.cooldownSeconds! * cooldownMultiplier)),
+        cooldownSeconds: Math.max(
+          1,
+          Math.round(cs.classSkill.cooldownSeconds! * cooldownMultiplier) - cs.bookCooldownFlatAmount,
+        ),
         durationSeconds: cs.classSkill.durationSeconds ?? undefined,
       };
     });
@@ -582,7 +597,7 @@ export async function applyExpeditionReward(
         level: newLevel,
         gold: character.gold + result.goldGained,
         unspentStatPoints: character.unspentStatPoints + levelsGained * 4,
-        unspentSkillPoints: character.unspentSkillPoints + levelsGained * 1,
+        unspentSkillPoints: character.unspentSkillPoints + skillPointsForLevelRange(character.level, newLevel),
         monstersKilled: { increment: result.monstersDefeated },
         // currentZoneId intentionally left untouched (Etap 9) — the character stays in the
         // zone after combat ends/is left early, until they explicitly travel elsewhere.

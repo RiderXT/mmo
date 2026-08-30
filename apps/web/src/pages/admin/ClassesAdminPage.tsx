@@ -70,6 +70,8 @@ function emptySkill(): SkillFormValue {
     unlockCost: 1,
     maxLevel: 1,
     levelMagnitudePct: 0,
+    bookGateFromLevel: undefined,
+    bookRequirements: [],
     targetStat: "attack" as const,
     effectType: undefined,
     cooldownSeconds: undefined,
@@ -93,10 +95,18 @@ function emptyNode(): NodeFormValue {
   };
 }
 
+function emptyBookRequirement(level: number): BookRequirementFormValue {
+  return { _key: newFormKey(), level, booksRequired: 1 };
+}
+
 type NodeFormValue = CreateCharacterClassInput["skills"][number]["nodes"][number] & { _key: string };
-type SkillFormValue = Omit<CreateCharacterClassInput["skills"][number], "nodes"> & {
+type BookRequirementFormValue = CreateCharacterClassInput["skills"][number]["bookRequirements"][number] & {
+  _key: string;
+};
+type SkillFormValue = Omit<CreateCharacterClassInput["skills"][number], "nodes" | "bookRequirements"> & {
   _key: string;
   nodes: NodeFormValue[];
+  bookRequirements: BookRequirementFormValue[];
 };
 type FormValue = Omit<CreateCharacterClassInput, "skills"> & { skills: SkillFormValue[] };
 
@@ -128,6 +138,8 @@ function fromDto(cls: ClassDto): FormValue {
         unlockCost: s.unlockCost,
         maxLevel: s.maxLevel,
         levelMagnitudePct: s.levelMagnitudePct,
+        bookGateFromLevel: s.bookGateFromLevel ?? undefined,
+        bookRequirements: s.bookRequirements.map((r) => ({ _key: newFormKey(), level: r.level, booksRequired: r.booksRequired })),
         targetStat: s.targetStat ?? undefined,
         effectType: s.effectType ?? undefined,
         cooldownSeconds: s.cooldownSeconds ?? undefined,
@@ -226,6 +238,13 @@ export function ClassesAdminPage() {
     const nextNodes = [...skill.nodes];
     nextNodes[nodeIdx] = { ...nextNodes[nodeIdx], ...patch };
     updateSkill(skillIdx, { nodes: nextNodes });
+  }
+
+  function updateBookRequirement(skillIdx: number, reqIdx: number, patch: Partial<BookRequirementFormValue>) {
+    const skill = form.skills[skillIdx];
+    const next = [...skill.bookRequirements];
+    next[reqIdx] = { ...next[reqIdx], ...patch };
+    updateSkill(skillIdx, { bookRequirements: next });
   }
 
   return (
@@ -618,6 +637,91 @@ export function ClassesAdminPage() {
                       Umiejętność inwestowalna do poziomu {skill.maxLevel} (jak węzeł) — każdy poziom powyżej 1. dodaje{" "}
                       {Math.round(skill.levelMagnitudePct * 1000) / 10}% mocy, koszt {skill.unlockCost} pkt za każdy poziom.
                     </p>
+                  )}
+
+                  {skill.maxLevel > 1 && (
+                    <div className="mt-2 border-t border-line-soft/40 pt-2">
+                      <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                        brama książek (poziom)
+                        <input
+                          type="number"
+                          min={2}
+                          max={skill.maxLevel}
+                          placeholder="brak"
+                          className={`${inputClass} w-24`}
+                          value={skill.bookGateFromLevel ?? ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            updateSkill(idx, { bookGateFromLevel: raw === "" ? undefined : Number(raw) });
+                          }}
+                        />
+                      </label>
+                      {skill.bookGateFromLevel != null && (
+                        <>
+                          <p className="mt-1 text-[11px] text-parchment-faint">
+                            Od poziomu {skill.bookGateFromLevel} punkty umiejętności już nie działają — dalszy wzrost
+                            (do poziomu {skill.maxLevel}) tylko przez czytanie książek celujących w tę umiejętność
+                            (patrz zakładka Itemy → typ "book"). Bez wiersza dla danego poziomu poniżej: domyślnie
+                            1 książka.
+                          </p>
+                          <div className="mt-2 flex items-center justify-between">
+                            <p className="text-xs font-medium text-parchment-dim">
+                              Wymagania książek per poziom ({skill.bookRequirements.length})
+                            </p>
+                            <button
+                              onClick={() =>
+                                updateSkill(idx, {
+                                  bookRequirements: [
+                                    ...skill.bookRequirements,
+                                    emptyBookRequirement(skill.bookGateFromLevel!),
+                                  ],
+                                })
+                              }
+                              className="text-xs text-gold-bright hover:underline"
+                            >
+                              + Dodaj poziom
+                            </button>
+                          </div>
+                          <div className="mt-1 space-y-1">
+                            {skill.bookRequirements.map((req, reqIdx) => (
+                              <div key={req._key} className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                                  poziom
+                                  <input
+                                    type="number"
+                                    min={skill.bookGateFromLevel ?? undefined}
+                                    max={skill.maxLevel}
+                                    className={`${inputClass} w-20`}
+                                    value={req.level}
+                                    onChange={(e) => updateBookRequirement(idx, reqIdx, { level: Number(e.target.value) })}
+                                  />
+                                </label>
+                                <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                                  książek potrzeba
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    className={`${inputClass} w-20`}
+                                    value={req.booksRequired}
+                                    onChange={(e) => updateBookRequirement(idx, reqIdx, { booksRequired: Number(e.target.value) })}
+                                  />
+                                </label>
+                                <button
+                                  onClick={() =>
+                                    updateSkill(idx, {
+                                      bookRequirements: skill.bookRequirements.filter((_, i) => i !== reqIdx),
+                                    })
+                                  }
+                                  className="text-xs text-red-400 hover:underline"
+                                >
+                                  Usuń
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
 
                   {skill.kind === "active" && (skill.effectType === "damage" || skill.effectType === "heal") && (

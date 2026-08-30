@@ -119,7 +119,12 @@ export interface ItemDto {
   gatherChanceBonusPctMax: number | null;
   baitChanceBonusPct: number | null;
   bookSkillTypeId: string | null;
+  bookClassSkillId: string | null;
   bookSuccessChance: number | null;
+  bookEffect: "magnitude" | "cost" | "cooldown" | "chance" | "speed" | null;
+  bookMagnitudePct: number | null;
+  bookFlatAmount: number | null;
+  bookCooldownSeconds: number | null;
   catalystSuccessChanceBonusPct: number | null;
   imageUrl: string | null;
 }
@@ -137,6 +142,11 @@ export interface SkillTreeNodeDto {
   imageUrl: string | null;
 }
 
+export interface ClassSkillBookRequirementDto {
+  level: number;
+  booksRequired: number;
+}
+
 export interface ClassSkillDto {
   id: string;
   name: string;
@@ -152,6 +162,8 @@ export interface ClassSkillDto {
   durationSeconds: number | null;
   maxLevel: number;
   levelMagnitudePct: number;
+  bookGateFromLevel: number | null;
+  bookRequirements: ClassSkillBookRequirementDto[];
   category: SkillCategory;
   nodes: SkillTreeNodeDto[];
   imageUrl: string | null;
@@ -431,6 +443,7 @@ export interface PassiveSkillTypeDto {
   xpPerGatherAction: number;
   bookGateFromLevel: number | null;
   booksRequiredPerLevel: number;
+  bookRequirements: { level: number; booksRequired: number }[];
 }
 export const listPassiveSkillTypes = () => apiFetch<PassiveSkillTypeDto[]>("/api/admin/passive-skills");
 export const createPassiveSkillType = (input: CreatePassiveSkillTypeInput) =>

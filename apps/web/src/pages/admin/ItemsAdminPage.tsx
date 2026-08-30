@@ -58,7 +58,12 @@ function emptyForm(): CreateItemInput {
     gatherChanceBonusPctMax: null,
     baitChanceBonusPct: null,
     bookSkillTypeId: null,
+    bookClassSkillId: null,
     bookSuccessChance: null,
+    bookEffect: null,
+    bookMagnitudePct: null,
+    bookFlatAmount: null,
+    bookCooldownSeconds: null,
     catalystSuccessChanceBonusPct: null,
   };
 }
@@ -97,7 +102,12 @@ function fromDto(item: ItemDto): CreateItemInput {
     gatherChanceBonusPctMax: item.gatherChanceBonusPctMax,
     baitChanceBonusPct: item.baitChanceBonusPct,
     bookSkillTypeId: item.bookSkillTypeId,
+    bookClassSkillId: item.bookClassSkillId,
     bookSuccessChance: item.bookSuccessChance,
+    bookEffect: item.bookEffect,
+    bookMagnitudePct: item.bookMagnitudePct,
+    bookFlatAmount: item.bookFlatAmount,
+    bookCooldownSeconds: item.bookCooldownSeconds,
     catalystSuccessChanceBonusPct: item.catalystSuccessChanceBonusPct,
     potion:
       item.type === "consumable" && item.potionTrigger && item.potionEffect
@@ -199,6 +209,11 @@ export function ItemsAdminPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<CreateItemInput["type"] | "all">("all");
   const [classFilter, setClassFilter] = useState<string>("all");
+  // UI-only toggle for the book target-type radio — can't derive this from
+  // form.bookSkillTypeId/bookClassSkillId alone, since BOTH start null for a fresh book (neither
+  // radio's onChange has anything to set until a specific skill is actually picked from the
+  // resulting dropdown), which would otherwise make the "Umiejętność klasowa" radio inert.
+  const [bookTargetType, setBookTargetType] = useState<"passive" | "class">("passive");
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -240,12 +255,14 @@ export function ItemsAdminPage() {
     setForm(emptyForm());
     setError(null);
     setEditingId("new");
+    setBookTargetType("passive");
   }
 
   function openEdit(item: ItemDto) {
     setForm(fromDto(item));
     setError(null);
     setEditingId(item.id);
+    setBookTargetType(item.bookClassSkillId ? "class" : "passive");
   }
 
   function handleSubmit() {
@@ -419,7 +436,12 @@ export function ItemsAdminPage() {
                     gatherChanceBonusPctMax: type === "rod" || type === "pickaxe" ? form.gatherChanceBonusPctMax : null,
                     baitChanceBonusPct: type === "bait" ? form.baitChanceBonusPct : null,
                     bookSkillTypeId: type === "book" ? form.bookSkillTypeId : null,
+                    bookClassSkillId: type === "book" ? form.bookClassSkillId : null,
                     bookSuccessChance: type === "book" ? form.bookSuccessChance : null,
+                    bookEffect: type === "book" ? form.bookEffect : null,
+                    bookMagnitudePct: type === "book" ? form.bookMagnitudePct : null,
+                    bookFlatAmount: type === "book" ? form.bookFlatAmount : null,
+                    bookCooldownSeconds: type === "book" ? form.bookCooldownSeconds : null,
                     catalystSuccessChanceBonusPct:
                       type === "catalyst" ? form.catalystSuccessChanceBonusPct : null,
                   });
@@ -971,24 +993,70 @@ export function ItemsAdminPage() {
           {form.type === "book" && (
             <div className="border border-rarity-uncommon/40 bg-rarity-uncommon/10 p-3">
               <p className="mb-2 text-xs font-medium text-parchment-dim">
-                Czytanie tej książki (prawy klik → Przeczytaj) zużywa jedną sztukę i ma podaną
-                szansę na podniesienie wybranej umiejętności pasywnej o 1 poziom.
+                Czytanie tej książki (prawy klik → Przeczytaj) zużywa jedną sztukę, ma podaną szansę
+                powodzenia, i przy sukcesie zawsze dolicza swój własny bonus do celu (niezależnie od
+                tego, czy to akurat przekracza próg kolejnego poziomu).
               </p>
+              <div className="mb-3 flex gap-4 text-xs text-parchment-dim">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    checked={bookTargetType === "passive"}
+                    onChange={() => {
+                      setBookTargetType("passive");
+                      setForm({ ...form, bookClassSkillId: null, bookEffect: null });
+                    }}
+                  />
+                  Umiejętność pasywna
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    checked={bookTargetType === "class"}
+                    onChange={() => {
+                      setBookTargetType("class");
+                      setForm({ ...form, bookSkillTypeId: null, bookEffect: null });
+                    }}
+                  />
+                  Umiejętność klasowa
+                </label>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Umiejętność pasywna">
-                  <select
-                    className={inputClass}
-                    value={form.bookSkillTypeId ?? ""}
-                    onChange={(e) => setForm({ ...form, bookSkillTypeId: e.target.value || null })}
-                  >
-                    <option value="">— wybierz —</option>
-                    {passiveSkillsQuery.data?.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                {bookTargetType === "class" ? (
+                  <Field label="Umiejętność klasowa">
+                    <select
+                      className={inputClass}
+                      value={form.bookClassSkillId ?? ""}
+                      onChange={(e) => setForm({ ...form, bookClassSkillId: e.target.value || null })}
+                    >
+                      <option value="">— wybierz —</option>
+                      {classesQuery.data?.map((c) => (
+                        <optgroup key={c.id} label={c.name}>
+                          {c.skills.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </Field>
+                ) : (
+                  <Field label="Umiejętność pasywna">
+                    <select
+                      className={inputClass}
+                      value={form.bookSkillTypeId ?? ""}
+                      onChange={(e) => setForm({ ...form, bookSkillTypeId: e.target.value || null })}
+                    >
+                      <option value="">— wybierz —</option>
+                      {passiveSkillsQuery.data?.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
                 <Field label="Szansa powodzenia (0–1)">
                   <input
                     type="number"
@@ -1001,6 +1069,71 @@ export function ItemsAdminPage() {
                       setForm({ ...form, bookSuccessChance: e.target.value === "" ? null : Number(e.target.value) })
                     }
                   />
+                </Field>
+                <Field label="Efekt książki">
+                  <select
+                    className={inputClass}
+                    value={form.bookEffect ?? ""}
+                    onChange={(e) => setForm({ ...form, bookEffect: (e.target.value || null) as CreateItemInput["bookEffect"] })}
+                  >
+                    <option value="">— wybierz —</option>
+                    {bookTargetType === "class" ? (
+                      <>
+                        <option value="magnitude">moc (+X%)</option>
+                        <option value="cost">koszt many (-X)</option>
+                        <option value="cooldown">odnowienie (-Xs)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="chance">szansa (+X%)</option>
+                        <option value="speed">szybkość (+X%)</option>
+                      </>
+                    )}
+                  </select>
+                </Field>
+                {(form.bookEffect === "magnitude" || form.bookEffect === "chance" || form.bookEffect === "speed") && (
+                  <Field label="Wartość % (np. 0,05 = +5%)">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className={inputClass}
+                      value={form.bookMagnitudePct ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, bookMagnitudePct: e.target.value === "" ? null : Number(e.target.value) })
+                      }
+                    />
+                  </Field>
+                )}
+                {(form.bookEffect === "cost" || form.bookEffect === "cooldown") && (
+                  <Field label={form.bookEffect === "cost" ? "Wartość płaska (np. 3 = -3 MP)" : "Wartość płaska (np. 2 = -2s)"}>
+                    <input
+                      type="number"
+                      step="1"
+                      min={0}
+                      className={inputClass}
+                      value={form.bookFlatAmount ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, bookFlatAmount: e.target.value === "" ? null : Number(e.target.value) })
+                      }
+                    />
+                  </Field>
+                )}
+                <Field label="Cooldown czytania (s, puste = brak)">
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={form.bookCooldownSeconds ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, bookCooldownSeconds: e.target.value === "" ? null : Number(e.target.value) })
+                    }
+                  />
+                  {form.bookCooldownSeconds != null && form.bookCooldownSeconds > 0 && (
+                    <span className="mt-1 block text-[11px] text-parchment-faint">
+                      ≈ {Math.round((form.bookCooldownSeconds / 3600) * 10) / 10} h
+                    </span>
+                  )}
                 </Field>
               </div>
             </div>

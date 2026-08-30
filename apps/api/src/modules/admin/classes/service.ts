@@ -6,7 +6,7 @@ import { logAction } from "../../../lib/gameLog.js";
 import type { CreateCharacterClassInput, ClassSkillInput, SkillTreeNodeInput } from "@mmo/shared";
 
 const classInclude = {
-  skills: { include: { nodes: true } },
+  skills: { include: { nodes: true, bookRequirements: true } },
   starterItems: { include: { item: { select: { id: true, name: true } } } },
 } as const;
 
@@ -44,6 +44,7 @@ function skillData(skill: ClassSkillInput) {
     durationSeconds: skill.durationSeconds ?? null,
     maxLevel: skill.maxLevel,
     levelMagnitudePct: skill.levelMagnitudePct,
+    bookGateFromLevel: skill.bookGateFromLevel ?? null,
     category: skill.category,
   };
 }
@@ -118,6 +119,7 @@ export async function createCharacterClass(
             name: s.name,
             ...skillData(s),
             nodes: { create: s.nodes.map((n) => ({ name: n.name, ...nodeData(n) })) },
+            bookRequirements: { create: s.bookRequirements },
           })),
         },
         starterItems: {
@@ -222,6 +224,15 @@ export async function updateCharacterClass(
         create: { classId: id, name: skill.name, ...skillData(skill) },
         update: skillData(skill),
       });
+
+      // Book-level requirements are just curve parameters, not something a player "unlocks" —
+      // unlike nodes, no invested-count guard is needed before replacing them wholesale.
+      await tx.classSkillBookRequirement.deleteMany({ where: { classSkillId: classSkill.id } });
+      if (skill.bookRequirements.length) {
+        await tx.classSkillBookRequirement.createMany({
+          data: skill.bookRequirements.map((r) => ({ classSkillId: classSkill.id, ...r })),
+        });
+      }
 
       const nodesToRemove = nodeRemovalsBySkillId.get(classSkill.id);
       if (nodesToRemove?.length) {

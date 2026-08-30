@@ -1,6 +1,7 @@
 import { prisma } from "../../../lib/prismaClient.js";
 import { logAction } from "../../../lib/gameLog.js";
 import { computeLevel, applyExpeditionReward } from "../../expeditions/service.js";
+import { skillPointsForLevelRange } from "@mmo/shared";
 import type { ExpeditionResult } from "@mmo/shared";
 
 /** Expeditions currently withheld by the automatic plausibility check (checkRewardPlausibility
@@ -96,7 +97,10 @@ export async function revertExpedition(expeditionId: string, adminUserId: string
     const levelsLost = Math.max(0, character.level - newLevel);
     const newGold = Math.max(0, character.gold - payload.goldGained);
     const newUnspentStatPoints = Math.max(0, character.unspentStatPoints - levelsLost * 4);
-    const newUnspentSkillPoints = Math.max(0, character.unspentSkillPoints - levelsLost * 1);
+    const newUnspentSkillPoints = Math.max(
+      0,
+      character.unspentSkillPoints - skillPointsForLevelRange(newLevel, character.level),
+    );
 
     for (const loot of payload.loot) {
       let remaining = loot.quantity;

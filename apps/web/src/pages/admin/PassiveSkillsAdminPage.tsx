@@ -17,7 +17,16 @@ const GATHER_KIND_LABELS: Record<string, string> = {
   mining: "Kopanie",
 };
 
-function emptyForm(): CreatePassiveSkillTypeInput {
+// Stable form-local id, same reasoning as ClassesAdminPage.tsx's newFormKey — `level` itself is
+// user-editable, so keying rows by it would remount the input (and lose focus) on every keystroke.
+function newFormKey() {
+  return Math.random().toString(36).slice(2);
+}
+
+type BookRequirementFormValue = CreatePassiveSkillTypeInput["bookRequirements"][number] & { _key: string };
+type FormValue = Omit<CreatePassiveSkillTypeInput, "bookRequirements"> & { bookRequirements: BookRequirementFormValue[] };
+
+function emptyForm(): FormValue {
   return {
     name: "",
     description: "",
@@ -29,10 +38,11 @@ function emptyForm(): CreatePassiveSkillTypeInput {
     xpPerGatherAction: 1,
     bookGateFromLevel: null,
     booksRequiredPerLevel: 1,
+    bookRequirements: [],
   };
 }
 
-function fromDto(skill: PassiveSkillTypeDto): CreatePassiveSkillTypeInput {
+function fromDto(skill: PassiveSkillTypeDto): FormValue {
   return {
     name: skill.name,
     description: skill.description,
@@ -44,6 +54,7 @@ function fromDto(skill: PassiveSkillTypeDto): CreatePassiveSkillTypeInput {
     xpPerGatherAction: skill.xpPerGatherAction,
     bookGateFromLevel: skill.bookGateFromLevel,
     booksRequiredPerLevel: skill.booksRequiredPerLevel,
+    bookRequirements: skill.bookRequirements.map((r) => ({ _key: newFormKey(), level: r.level, booksRequired: r.booksRequired })),
   };
 }
 
@@ -51,7 +62,7 @@ export function PassiveSkillsAdminPage() {
   const queryClient = useQueryClient();
   const skillsQuery = useQuery({ queryKey: ["admin-passive-skills"], queryFn: listPassiveSkillTypes });
   const [editingId, setEditingId] = useState<string | null | "new">(null);
-  const [form, setForm] = useState<CreatePassiveSkillTypeInput>(emptyForm());
+  const [form, setForm] = useState<FormValue>(emptyForm());
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -92,6 +103,12 @@ export function PassiveSkillsAdminPage() {
       return;
     }
     saveMutation.mutate(parsed.data);
+  }
+
+  function updateBookRequirement(reqIdx: number, patch: Partial<BookRequirementFormValue>) {
+    const next = [...form.bookRequirements];
+    next[reqIdx] = { ...next[reqIdx], ...patch };
+    setForm({ ...form, bookRequirements: next });
   }
 
   return (
@@ -269,7 +286,7 @@ export function PassiveSkillsAdminPage() {
                 disabled={!form.gatherKind}
               />
             </Field>
-            <Field label="Wymagane książki po bramce">
+            <Field label="Wymagane książki po bramce (domyślnie)">
               <input
                 type="number"
                 min={1}
@@ -281,6 +298,64 @@ export function PassiveSkillsAdminPage() {
               />
             </Field>
           </div>
+
+          {form.gatherKind && form.bookGateFromLevel != null && (
+            <div className="border-t border-line-soft/40 pt-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-parchment-dim">
+                  Nadpisania per poziom ({form.bookRequirements.length}) — opcjonalne, bez wpisu używa wartości
+                  domyślnej powyżej
+                </p>
+                <button
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      bookRequirements: [
+                        ...form.bookRequirements,
+                        { _key: newFormKey(), level: form.bookGateFromLevel!, booksRequired: 1 },
+                      ],
+                    })
+                  }
+                  className="text-xs text-gold-bright hover:underline"
+                >
+                  + Dodaj poziom
+                </button>
+              </div>
+              <div className="mt-1 space-y-1">
+                {form.bookRequirements.map((req, reqIdx) => (
+                  <div key={req._key} className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                      poziom
+                      <input
+                        type="number"
+                        min={form.bookGateFromLevel ?? undefined}
+                        max={form.maxLevel}
+                        className={`${inputClass} w-20`}
+                        value={req.level}
+                        onChange={(e) => updateBookRequirement(reqIdx, { level: Number(e.target.value) })}
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                      książek potrzeba
+                      <input
+                        type="number"
+                        min={1}
+                        className={`${inputClass} w-20`}
+                        value={req.booksRequired}
+                        onChange={(e) => updateBookRequirement(reqIdx, { booksRequired: Number(e.target.value) })}
+                      />
+                    </label>
+                    <button
+                      onClick={() => setForm({ ...form, bookRequirements: form.bookRequirements.filter((_, i) => i !== reqIdx) })}
+                      className="text-xs text-red-400 hover:underline"
+                    >
+                      Usuń
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && (
             <p role="alert" className="text-sm text-red-400">

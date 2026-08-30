@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { computeLevel } from "@mmo/shared";
+import { computeLevel, skillPointsForLevelRange } from "@mmo/shared";
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
 
@@ -147,7 +147,7 @@ export async function claimDailyLoginReward(characterId: string, userId: string,
           exp: newExp,
           level: newLevel,
           unspentStatPoints: { increment: levelsGained * 4 },
-          unspentSkillPoints: { increment: levelsGained * 1 },
+          unspentSkillPoints: { increment: skillPointsForLevelRange(character.level, newLevel) },
         },
       });
     }

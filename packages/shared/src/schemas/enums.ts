@@ -115,5 +115,11 @@ export const PotionEffectSchema = z.enum([
   "buff_exp",
   "buff_gold",
   "buff_drop",
+  // Book-progression utility items — each requires a target (a specific book InventoryItem for
+  // the first two, a book-gated CharacterSkill for the third), unlike the buffs above which apply
+  // globally with no target. See modules/inventory useBuffItem, UseOnTargetModal.tsx.
+  "reset_book_cooldown",
+  "boost_next_book_chance", // magnitudePct = the % bonus applied to the target book's next read
+  "reset_class_skill_books",
 ]);
 export type PotionEffect = z.infer<typeof PotionEffectSchema>;

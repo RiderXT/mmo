@@ -45,6 +45,10 @@ export interface CharacterSkillDto {
   characterId: string;
   classSkillId: string;
   level: number;
+  pendingSkillBooksRead: number;
+  bookMagnitudePct: number;
+  bookCostFlatAmount: number;
+  bookCooldownFlatAmount: number;
 }
 
 export const unlockSkill = (characterId: string, classSkillId: string) =>
@@ -55,6 +59,21 @@ export const unlockSkill = (characterId: string, classSkillId: string) =>
 
 export const getCharacterSkills = (characterId: string) =>
   apiFetch<CharacterSkillDto[]>(`/api/characters/${characterId}/skills`);
+
+export interface ReadSkillBookResult {
+  success: boolean;
+  leveledUp: boolean;
+  newLevel: number;
+  skillName: string;
+  pendingSkillBooksRead: number;
+  booksRequired: number;
+}
+
+export const readSkillBook = (characterId: string, inventoryItemId: string) =>
+  apiFetch<ReadSkillBookResult>(`/api/characters/${characterId}/read-skill-book`, {
+    method: "POST",
+    body: JSON.stringify({ inventoryItemId }),
+  });
 
 export interface CharacterSkillNodeDto {
   id: string;

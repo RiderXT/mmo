@@ -17,6 +17,7 @@ import { ItemBox, ItemBoxPreview } from "../../components/inventory/ItemBox";
 import { ItemContextMenu, type ItemContextMenuTarget } from "../../components/inventory/ItemContextMenu";
 import { TabDropButton } from "../../components/inventory/TabDropButton";
 import { PotionThresholdModal } from "../../components/inventory/PotionThresholdModal";
+import { UseOnTargetModal, type TargetableBookEffect } from "../../components/inventory/UseOnTargetModal";
 import { PanelFrame } from "../../components/common/PanelFrame";
 import { ApiError } from "../../lib/apiClient";
 import { getPlayerClass } from "../../lib/classesApi";
@@ -37,6 +38,7 @@ import {
   type InventoryItemDto,
 } from "../../lib/inventoryApi";
 import { readBook } from "../../lib/passiveSkillsApi";
+import { readSkillBook, getCharacterSkills } from "../../lib/charactersApi";
 import { getGatheringSettings } from "../../lib/gatheringApi";
 
 const GRID_SLOTS = INVENTORY_GRID_SLOTS_PER_TAB;
@@ -90,6 +92,7 @@ export function EquipmentTab({ character }: { character: Character }) {
   const [activeDragItem, setActiveDragItem] = useState<InventoryItemDto | null>(null);
   const [contextMenu, setContextMenu] = useState<ItemContextMenuTarget | null>(null);
   const [thresholdTarget, setThresholdTarget] = useState<InventoryItemDto | null>(null);
+  const [useTargetItem, setUseTargetItem] = useState<InventoryItemDto | null>(null);
   // Require a small pointer movement before a drag starts, so a plain click/tap doesn't get
   // swallowed by the drag sensor as an accidental micro-drag.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -106,6 +109,13 @@ export function EquipmentTab({ character }: { character: Character }) {
   const inventoryQuery = useQuery({
     queryKey: ["inventory", characterId],
     queryFn: () => listInventory(characterId),
+  });
+
+  // Only needed to build the target picker for "reset_class_skill_books" (which skills are
+  // actually in their book phase right now) — see useTargetModal below.
+  const characterSkillsQuery = useQuery({
+    queryKey: ["character-skills", characterId],
+    queryFn: () => getCharacterSkills(characterId),
   });
 
   function invalidateInventory() {
@@ -208,20 +218,67 @@ export function EquipmentTab({ character }: { character: Character }) {
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się przeczytać książki"),
   });
 
+  const readSkillBookMutation = useMutation({
+    mutationFn: (inventoryItemId: string) => readSkillBook(characterId, inventoryItemId),
+    onSuccess: (data) => {
+      invalidateInventoryAndCombatStats();
+      queryClient.invalidateQueries({ queryKey: ["character-skills", characterId] });
+      setActionError(null);
+      setChestResult(
+        data.leveledUp
+          ? `Przeczytano książkę — ${data.skillName}: poziom ${data.newLevel}!`
+          : data.success
+            ? `Przeczytano książkę — ${data.skillName}: postęp ${data.pendingSkillBooksRead}/${data.booksRequired} do awansu.`
+            : `Nie udało się nauczyć (${data.skillName}) — książka zużyta.`,
+      );
+      setTimeout(() => setChestResult(null), 5000);
+    },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się przeczytać książki"),
+  });
+
+  // Dispatches to whichever read endpoint the clicked book actually targets — ItemContextMenu's
+  // "Przeczytaj" entry is generic (canRead just checks item.type === "book"), the branching lives
+  // here based on which of the two mutually-exclusive target fields is set.
+  function handleRead(inventoryItemId: string) {
+    const item = items.find((i) => i.id === inventoryItemId);
+    if (item?.item.bookClassSkillId) readSkillBookMutation.mutate(inventoryItemId);
+    else readBookMutation.mutate(inventoryItemId);
+  }
+
   const useBuffItemMutation = useMutation({
-    mutationFn: (inventoryItemId: string) => useBuffItem(characterId, inventoryItemId),
+    mutationFn: (vars: { inventoryItemId: string; targetInventoryItemId?: string; targetClassSkillId?: string }) =>
+      useBuffItem(characterId, vars.inventoryItemId, vars),
     onSuccess: (data) => {
       invalidateInventory();
       queryClient.invalidateQueries({ queryKey: ["character", characterId] });
+      queryClient.invalidateQueries({ queryKey: ["character-skills", characterId] });
       setActionError(null);
-      const durationMinutes = Math.max(0, (new Date(data.until).getTime() - Date.now()) / 60000);
-      setChestResult(
-        `Użyto: +${Math.round((data.multiplier - 1) * 100)}% ${BUFF_EFFECT_LABELS[data.effect]} przez ${Math.round(durationMinutes)} min!`,
-      );
+      if (data.effect === "buff_exp" || data.effect === "buff_gold" || data.effect === "buff_drop") {
+        const durationMinutes = Math.max(0, (new Date(data.until).getTime() - Date.now()) / 60000);
+        setChestResult(
+          `Użyto: +${Math.round((data.multiplier - 1) * 100)}% ${BUFF_EFFECT_LABELS[data.effect]} przez ${Math.round(durationMinutes)} min!`,
+        );
+      } else if (data.effect === "reset_class_skill_books") {
+        setChestResult(`Zresetowano postęp książek — umiejętność wróciła do poziomu ${data.resetToLevel}.`);
+      } else {
+        setChestResult(
+          data.effect === "reset_book_cooldown" ? "Zresetowano odnowienie książki!" : "Zwiększono szansę na następne czytanie!",
+        );
+      }
       setTimeout(() => setChestResult(null), 5000);
     },
     onError: (err) => setActionError(err instanceof ApiError ? err.message : "Nie udało się użyć przedmiotu"),
   });
+
+  const TARGETABLE_BOOK_EFFECTS = new Set<string>(["reset_book_cooldown", "boost_next_book_chance", "reset_class_skill_books"]);
+
+  function handleUse(item: InventoryItemDto) {
+    if (item.item.potionEffect && TARGETABLE_BOOK_EFFECTS.has(item.item.potionEffect)) {
+      setUseTargetItem(item);
+      return;
+    }
+    useBuffItemMutation.mutate({ inventoryItemId: item.id });
+  }
 
   // Tap-to-activate: assigns the first free active slot rather than letting the caller pick one,
   // so this path can never target an already-occupied slot.
@@ -464,10 +521,46 @@ export function EquipmentTab({ character }: { character: Character }) {
             const item = items.find((i) => i.id === id);
             if (item) setThresholdTarget(item);
           }}
-          onRead={(id) => readBookMutation.mutate(id)}
-          onUse={(id) => useBuffItemMutation.mutate(id)}
+          onRead={(id) => handleRead(id)}
+          onUse={(id) => {
+            const item = items.find((i) => i.id === id);
+            if (item) handleUse(item);
+          }}
         />
       )}
+
+      {useTargetItem &&
+        (() => {
+          const effect = useTargetItem.item.potionEffect as TargetableBookEffect;
+          const options =
+            effect === "reset_class_skill_books"
+              ? (classQuery.data?.skills ?? [])
+                  .filter((s) => s.bookGateFromLevel != null)
+                  .filter((s) => {
+                    const cs = characterSkillsQuery.data?.find((x) => x.classSkillId === s.id);
+                    return (cs?.level ?? 0) >= s.bookGateFromLevel! - 1;
+                  })
+                  .map((s) => ({ id: s.id, label: s.name }))
+              : items
+                  .filter((i) => i.item.type === "book" && i.id !== useTargetItem.id)
+                  .map((i) => ({ id: i.id, label: `${i.item.name} ×${i.quantity}` }));
+          return (
+            <UseOnTargetModal
+              itemName={useTargetItem.item.name}
+              effect={effect}
+              options={options}
+              onConfirm={(targetId) => {
+                useBuffItemMutation.mutate(
+                  effect === "reset_class_skill_books"
+                    ? { inventoryItemId: useTargetItem.id, targetClassSkillId: targetId }
+                    : { inventoryItemId: useTargetItem.id, targetInventoryItemId: targetId },
+                );
+                setUseTargetItem(null);
+              }}
+              onCancel={() => setUseTargetItem(null)}
+            />
+          );
+        })()}
 
       {thresholdTarget &&
         (thresholdTarget.item.potionTrigger === "hp_below" || thresholdTarget.item.potionTrigger === "mana_below") && (

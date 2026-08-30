@@ -76,6 +76,10 @@ export type ClearActiveSlotInput = z.infer<typeof ClearActiveSlotSchema>;
 
 export const UseBuffItemSchema = z.object({
   inventoryItemId: z.string(),
+  // Required only for the 3 book-utility effects (reset_book_cooldown/boost_next_book_chance
+  // target a book stack; reset_class_skill_books targets a ClassSkill) — see useBuffItem.
+  targetInventoryItemId: z.string().optional(),
+  targetClassSkillId: z.string().optional(),
 });
 export type UseBuffItemInput = z.infer<typeof UseBuffItemSchema>;
 

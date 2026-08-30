@@ -17,6 +17,14 @@ export const SkillTreeNodeInputSchema = z.object({
 });
 export type SkillTreeNodeInput = z.infer<typeof SkillTreeNodeInputSchema>;
 
+// How many successful skill-book reads are required to advance INTO this level (beyond
+// ClassSkill.bookGateFromLevel). No entry for a level = falls back to 1 server-side.
+export const ClassSkillBookRequirementInputSchema = z.object({
+  level: z.number().int().min(1).max(1000),
+  booksRequired: z.number().int().min(1).max(100).default(1),
+});
+export type ClassSkillBookRequirementInput = z.infer<typeof ClassSkillBookRequirementInputSchema>;
+
 export const ClassSkillInputSchema = z
   .object({
     name: z.string().trim().min(2).max(60),
@@ -31,6 +39,11 @@ export const ClassSkillInputSchema = z
     // levelMagnitudePct to its own power on top of whatever tree nodes add.
     maxLevel: z.number().int().min(1).max(100).default(1),
     levelMagnitudePct: z.number().min(0).max(5).default(0),
+    // From this level onward, points no longer work — only successful skill-book reads. .min(2)
+    // because unlockSkill's first-ever investment always lands at level 1; a gate at 1 would mean
+    // points never apply at all, which this field isn't meant to express.
+    bookGateFromLevel: z.number().int().min(2).max(100).nullable().optional(),
+    bookRequirements: z.array(ClassSkillBookRequirementInputSchema).default([]),
     // passive only
     targetStat: StatKeySchema.optional(),
     // active only
@@ -77,6 +90,17 @@ export const ClassSkillInputSchema = z
       message: "Węzły mają nieprawidłową lub cykliczną zależność 'wymaga węzła'",
       path: ["nodes"],
     },
+  )
+  .refine((s) => s.bookGateFromLevel == null || s.bookGateFromLevel <= s.maxLevel, {
+    message: "Brama książek nie może być powyżej maksymalnego poziomu",
+    path: ["bookGateFromLevel"],
+  })
+  .refine(
+    (s) => {
+      const levels = s.bookRequirements.map((r) => r.level);
+      return new Set(levels).size === levels.length;
+    },
+    { message: "Wymagania książek mają zduplikowany poziom", path: ["bookRequirements"] },
   );
 export type ClassSkillInput = z.infer<typeof ClassSkillInputSchema>;
 

@@ -365,12 +365,105 @@ const BUFF_FIELDS_BY_EFFECT: Record<string, { multiplier: "expBuffMultiplier" | 
   buff_drop: { multiplier: "dropBuffMultiplier", until: "dropBuffUntil" },
 };
 
-/** Consumes a "Użyj"-triggered item (Item.potionTrigger === "on_use") to grant a personal,
- * time-limited exp/gold/drop multiplier — see lib/personalBuffs.ts. Unlike active-slot potions,
- * this is consumed immediately on the player's decision, not carried into a specific expedition.
- * Using a new item of the same effect OVERWRITES the previous one (no stacking/extending). */
+// Book-progression utility effects — unlike the buffs above (which apply globally to the
+// character, no target needed) these require the caller to pick a target: a specific book
+// InventoryItem for the first two, a book-gated CharacterSkill for the third. See
+// UseOnTargetModal.tsx on the frontend and modules/characters/service.ts readSkillBook.
+const BOOK_UTILITY_EFFECTS = new Set(["reset_book_cooldown", "boost_next_book_chance", "reset_class_skill_books"]);
+
+async function useBookUtilityItem(
+  input: { characterId: string; inventoryItemId: string; targetInventoryItemId?: string; targetClassSkillId?: string },
+  inventoryItem: { id: string; quantity: number },
+  item: { potionEffect: string | null; potionMagnitudePct: number | null },
+  userId: string,
+  requestId?: string,
+) {
+  function consumeUtilityItem(tx: Prisma.TransactionClient) {
+    return inventoryItem.quantity <= 1
+      ? tx.inventoryItem.delete({ where: { id: inventoryItem.id } })
+      : tx.inventoryItem.update({ where: { id: inventoryItem.id }, data: { quantity: inventoryItem.quantity - 1 } });
+  }
+
+  if (item.potionEffect === "reset_class_skill_books") {
+    if (!input.targetClassSkillId) throw new InventoryError("Wybierz umiejętność do zresetowania", 400);
+    const characterSkill = await prisma.characterSkill.findUnique({
+      where: { characterId_classSkillId: { characterId: input.characterId, classSkillId: input.targetClassSkillId } },
+      include: { classSkill: true },
+    });
+    if (!characterSkill || characterSkill.classSkill.bookGateFromLevel == null) {
+      throw new InventoryError("Ta umiejętność nie ma fazy książkowej", 400);
+    }
+    const gateLevel = characterSkill.classSkill.bookGateFromLevel - 1;
+    if (characterSkill.level < gateLevel) {
+      throw new InventoryError("Ta umiejętność nie jest jeszcze w fazie książkowej", 400);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await consumeUtilityItem(tx);
+      await tx.characterSkill.update({
+        where: { id: characterSkill.id },
+        data: {
+          level: gateLevel,
+          pendingSkillBooksRead: 0,
+          bookMagnitudePct: 0,
+          bookCostFlatAmount: 0,
+          bookCooldownFlatAmount: 0,
+        },
+      });
+    });
+
+    await logAction({
+      module: "inventory",
+      action: "use_buff_item",
+      actorUserId: userId,
+      actorCharacterId: input.characterId,
+      requestId,
+      payload: { inventoryItemId: input.inventoryItemId, effect: item.potionEffect, classSkillId: input.targetClassSkillId, resetToLevel: gateLevel },
+    });
+
+    return { effect: item.potionEffect, resetToLevel: gateLevel };
+  }
+
+  if (!input.targetInventoryItemId) throw new InventoryError("Wybierz książkę", 400);
+  const targetBook = await prisma.inventoryItem.findUnique({
+    where: { id: input.targetInventoryItemId },
+    include: { item: { select: { type: true } } },
+  });
+  if (!targetBook || targetBook.characterId !== input.characterId || targetBook.item.type !== "book") {
+    throw new InventoryError("Nie znaleziono docelowej książki", 404);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await consumeUtilityItem(tx);
+    await tx.inventoryItem.update({
+      where: { id: targetBook.id },
+      data:
+        item.potionEffect === "reset_book_cooldown"
+          ? { lastReadAt: null }
+          : { nextReadBonusPct: item.potionMagnitudePct ?? 0 },
+    });
+  });
+
+  await logAction({
+    module: "inventory",
+    action: "use_buff_item",
+    actorUserId: userId,
+    actorCharacterId: input.characterId,
+    requestId,
+    payload: { inventoryItemId: input.inventoryItemId, effect: item.potionEffect, targetInventoryItemId: input.targetInventoryItemId },
+  });
+
+  return { effect: item.potionEffect, targetInventoryItemId: input.targetInventoryItemId };
+}
+
+/** Consumes a "Użyj"-triggered item (Item.potionTrigger === "on_use"). Two families: personal
+ * time-limited exp/gold/drop multipliers (see lib/personalBuffs.ts — applied globally, no target,
+ * overwrites any previous buff of the same effect rather than stacking/extending), and
+ * book-progression utility effects (BOOK_UTILITY_EFFECTS — require a target, see
+ * useBookUtilityItem above). Unlike active-slot potions, both are consumed immediately on the
+ * player's decision, not carried into a specific expedition. */
 export async function useBuffItem(
-  input: { characterId: string; inventoryItemId: string },
+  input: { characterId: string; inventoryItemId: string; targetInventoryItemId?: string; targetClassSkillId?: string },
   userId: string,
   requestId?: string,
 ) {
@@ -387,6 +480,11 @@ export async function useBuffItem(
   if (item.type !== "consumable" || item.potionTrigger !== "on_use" || !item.potionEffect) {
     throw new InventoryError("Tego przedmiotu nie można użyć w ten sposób", 400);
   }
+
+  if (BOOK_UTILITY_EFFECTS.has(item.potionEffect)) {
+    return useBookUtilityItem(input, inventoryItem, item, userId, requestId);
+  }
+
   const fields = BUFF_FIELDS_BY_EFFECT[item.potionEffect];
   if (!fields) {
     throw new InventoryError("Tego przedmiotu nie można użyć w ten sposób", 400);

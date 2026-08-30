@@ -75,10 +75,19 @@ export const CreateItemSchema = z
     gatherChanceBonusPctMax: z.number().min(0).max(1).nullable().optional(),
     // Only meaningful for type === "bait". Flat % bonus while carried in an active slot.
     baitChanceBonusPct: z.number().min(0).max(1).nullable().optional(),
-    // Only meaningful for type === "book". Which passive skill reading this book targets, and the
-    // chance (0..1) that a read succeeds.
+    // Only meaningful for type === "book". Exactly one of bookSkillTypeId (passive/gathering
+    // skill) / bookClassSkillId (class skill) is set, never both — enforced below.
     bookSkillTypeId: z.string().nullable().optional(),
+    bookClassSkillId: z.string().nullable().optional(),
     bookSuccessChance: z.number().min(0).max(1).nullable().optional(),
+    // "magnitude"|"cost"|"cooldown" when bookClassSkillId set; "chance"|"speed" when
+    // bookSkillTypeId set. bookMagnitudePct is a % (magnitude/chance/speed); bookFlatAmount is a
+    // flat number (cost/cooldown — e.g. "-3 MP", "-2s", not a percentage).
+    bookEffect: z.enum(["magnitude", "cost", "cooldown", "chance", "speed"]).nullable().optional(),
+    bookMagnitudePct: z.number().min(0).max(5).nullable().optional(),
+    bookFlatAmount: z.number().min(0).max(100000).nullable().optional(),
+    // Minimum seconds between two read attempts of this book (success or failure both count).
+    bookCooldownSeconds: z.number().int().min(0).max(31_536_000).nullable().optional(),
     // Only meaningful for type === "catalyst". Flat % added to an anvil upgrade's success chance
     // when placed in one of the anvil's free (non-material) slots — see AnvilTab.
     catalystSuccessChanceBonusPct: z.number().min(0).max(1).nullable().optional(),
@@ -94,6 +103,24 @@ export const CreateItemSchema = z
   .refine((val) => val.type !== "consumable" || !!val.potion, {
     message: "Przedmiot typu consumable musi mieć skonfigurowane działanie potionu",
     path: ["potion"],
+  })
+  .refine((val) => !(val.bookSkillTypeId && val.bookClassSkillId), {
+    message: "Książka może celować tylko w jedną umiejętność (pasywną albo klasową)",
+    path: ["bookClassSkillId"],
+  })
+  .refine(
+    (val) =>
+      !val.bookEffect ||
+      (val.bookSkillTypeId ? ["chance", "speed"].includes(val.bookEffect) : ["magnitude", "cost", "cooldown"].includes(val.bookEffect)),
+    { message: "Efekt książki nie pasuje do wybranego celu", path: ["bookEffect"] },
+  )
+  .refine(
+    (val) => val.bookEffect !== "magnitude" && val.bookEffect !== "chance" && val.bookEffect !== "speed" || val.bookMagnitudePct != null,
+    { message: "Ten efekt książki wymaga podania wartości procentowej", path: ["bookMagnitudePct"] },
+  )
+  .refine((val) => (val.bookEffect !== "cost" && val.bookEffect !== "cooldown") || val.bookFlatAmount != null, {
+    message: "Ten efekt książki wymaga podania wartości płaskiej",
+    path: ["bookFlatAmount"],
   });
 export type CreateItemInput = z.infer<typeof CreateItemSchema>;
 

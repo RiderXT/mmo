@@ -31,3 +31,11 @@ export function expRewardForLevel(level: number): number {
   const needed = expForLevel(level + 1) - expForLevel(level);
   return Math.max(1, Math.round(needed / KILLS_PER_LEVEL));
 }
+
+/** +1 skill point per 2 character levels gained (crossing 3->6 must give 2, for levels 4 and 6 —
+ * NOT Math.floor(levelsGained/2), which undercounts whenever the range's parity doesn't happen to
+ * align with a clean multiple of 2). Symmetric: pass (newLevel, oldLevel) to get the negative of
+ * what was granted, for reverting a level-up. */
+export function skillPointsForLevelRange(oldLevel: number, newLevel: number): number {
+  return Math.floor(newLevel / 2) - Math.floor(oldLevel / 2);
+}

@@ -3,7 +3,8 @@ import { logAction } from "../../lib/gameLog.js";
 import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import { addLootToInventory } from "../inventory/service.js";
 import { tryPayReferralReward } from "../../lib/referralRewards.js";
-import type { CreateCharacterInput, CoreStatKey } from "@mmo/shared";
+import { checkBookCooldown } from "../../lib/bookCooldown.js";
+import type { CreateCharacterInput, CoreStatKey, ReadSkillBookInput } from "@mmo/shared";
 
 export class CharacterError extends Error {
   constructor(
@@ -174,6 +175,12 @@ export async function unlockSkill(
   if (existing && existing.level >= classSkill.maxLevel) {
     throw new CharacterError("Umiejętność jest już na maksymalnym poziomie", 400);
   }
+  if (classSkill.bookGateFromLevel != null && (existing?.level ?? 0) >= classSkill.bookGateFromLevel - 1) {
+    throw new CharacterError(
+      `Umiejętność "${classSkill.name}" od poziomu ${classSkill.bookGateFromLevel} rośnie już tylko przez czytanie książek`,
+      400,
+    );
+  }
   if (character.unspentSkillPoints < classSkill.unlockCost) {
     throw new CharacterError("Brak niewydanych punktów umiejętności", 400);
   }
@@ -269,4 +276,116 @@ export async function unlockNode(
   });
 
   return characterSkillNode;
+}
+
+/** Reads a skill book targeting a ClassSkill — the book-gated continuation of unlockSkill, past
+ * classSkill.bookGateFromLevel. Structurally mirrors passiveSkills/service.ts's readBook
+ * (gatherKind branch): validates the book targets this skill and isn't past maxLevel, checks the
+ * per-item cooldown, rolls bookSuccessChance (boosted by any pending nextReadBonusPct on this
+ * stack), and on success ALWAYS accumulates the book's own fixed bonus onto CharacterSkill's
+ * running totals — independent of whether this particular read also crosses the current level's
+ * ClassSkillBookRequirement threshold (each book grants its own bonus; "level" is just a derived
+ * progress counter, see docs/architecture.md). The book is consumed either way. */
+export async function readSkillBook(
+  input: ReadSkillBookInput & { characterId: string },
+  userId: string,
+  requestId?: string,
+) {
+  const character = await assertOwnership(input.characterId, userId);
+
+  const inventoryItem = await prisma.inventoryItem.findUnique({
+    where: { id: input.inventoryItemId },
+    include: { item: { include: { bookClassSkill: { include: { bookRequirements: true } } } } },
+  });
+  if (!inventoryItem || inventoryItem.characterId !== input.characterId) {
+    throw new CharacterError("Nie znaleziono przedmiotu", 404);
+  }
+  if (inventoryItem.item.type !== "book" || !inventoryItem.item.bookClassSkill) {
+    throw new CharacterError("Ten przedmiot nie jest książką umiejętności klasowej", 400);
+  }
+  const classSkill = inventoryItem.item.bookClassSkill;
+  if (classSkill.classId !== character.classId) {
+    throw new CharacterError("Ta książka nie dotyczy umiejętności klasy tej postaci", 400);
+  }
+
+  const existing = await prisma.characterSkill.findUnique({
+    where: { characterId_classSkillId: { characterId: input.characterId, classSkillId: classSkill.id } },
+  });
+  const currentLevel = existing?.level ?? 0;
+  if (currentLevel >= classSkill.maxLevel) {
+    throw new CharacterError(`Umiejętność "${classSkill.name}" jest już na maksymalnym poziomie`, 400);
+  }
+  const nextLevel = currentLevel + 1;
+  if (classSkill.bookGateFromLevel == null || nextLevel < classSkill.bookGateFromLevel) {
+    throw new CharacterError(
+      `Umiejętność "${classSkill.name}" rośnie z punktów umiejętności — ta książka nie jest jeszcze potrzebna`,
+      400,
+    );
+  }
+
+  const remainingCooldown = checkBookCooldown(inventoryItem, inventoryItem.item);
+  if (remainingCooldown != null) {
+    throw new CharacterError(`Ta książka jest jeszcze w trakcie odnowienia (${remainingCooldown}s)`, 400);
+  }
+
+  const effectiveChance = (inventoryItem.item.bookSuccessChance ?? 0) + (inventoryItem.nextReadBonusPct ?? 0);
+  const success = Math.random() < effectiveChance;
+  const booksRequired =
+    classSkill.bookRequirements.find((r) => r.level === nextLevel)?.booksRequired ?? 1;
+  const pendingBefore = existing?.pendingSkillBooksRead ?? 0;
+  const leveledUp = success && pendingBefore + 1 >= booksRequired;
+
+  const bookEffect = inventoryItem.item.bookEffect;
+  const bonusField =
+    bookEffect === "magnitude" ? "bookMagnitudePct" : bookEffect === "cost" ? "bookCostFlatAmount" : bookEffect === "cooldown" ? "bookCooldownFlatAmount" : null;
+  const bonusAmount = bookEffect === "magnitude" ? (inventoryItem.item.bookMagnitudePct ?? 0) : (inventoryItem.item.bookFlatAmount ?? 0);
+
+  const { newLevel, pendingSkillBooksRead } = await prisma.$transaction(async (tx) => {
+    if (inventoryItem.quantity <= 1) {
+      await tx.inventoryItem.delete({ where: { id: inventoryItem.id } });
+    } else {
+      await tx.inventoryItem.update({
+        where: { id: inventoryItem.id },
+        data: { quantity: inventoryItem.quantity - 1, lastReadAt: new Date(), nextReadBonusPct: null },
+      });
+    }
+
+    if (!success) {
+      return { newLevel: currentLevel, pendingSkillBooksRead: pendingBefore };
+    }
+
+    const bonusDelta = bonusField ? { [bonusField]: { increment: bonusAmount } } : {};
+    const updated = await tx.characterSkill.upsert({
+      where: { characterId_classSkillId: { characterId: input.characterId, classSkillId: classSkill.id } },
+      create: {
+        characterId: input.characterId,
+        classSkillId: classSkill.id,
+        level: leveledUp ? currentLevel + 1 : currentLevel,
+        pendingSkillBooksRead: leveledUp ? 0 : 1,
+        ...(bonusField ? { [bonusField]: bonusAmount } : {}),
+      },
+      update: leveledUp
+        ? { level: { increment: 1 }, pendingSkillBooksRead: 0, ...bonusDelta }
+        : { pendingSkillBooksRead: { increment: 1 }, ...bonusDelta },
+    });
+    return { newLevel: updated.level, pendingSkillBooksRead: updated.pendingSkillBooksRead };
+  });
+
+  await logAction({
+    module: "characters",
+    action: "read_skill_book",
+    actorUserId: userId,
+    actorCharacterId: input.characterId,
+    requestId,
+    payload: { inventoryItemId: input.inventoryItemId, classSkillId: classSkill.id, success, leveledUp, newLevel, pendingSkillBooksRead },
+  });
+
+  return {
+    success,
+    leveledUp,
+    newLevel,
+    skillName: classSkill.name,
+    pendingSkillBooksRead,
+    booksRequired,
+  };
 }

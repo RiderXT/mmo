@@ -31,11 +31,15 @@ export function PassiveSkillsPanel({ characterId }: { characterId: string }) {
           {skills.map((skill) => {
             const pct = skill.maxLevel > 0 ? (skill.level / skill.maxLevel) * 100 : 0;
             const gatherLabel = skill.gatherKind ? GATHER_KIND_LABELS[skill.gatherKind] ?? skill.gatherKind : null;
-            const chanceBonus = Math.round(skill.level * skill.chanceBonusPerLevel * 1000) / 10;
-            const speedBonus = Math.round(skill.level * skill.speedBonusPerLevel * 1000) / 10;
+            // Book bonuses accumulate independently of the level*perLevel formula (each book grants
+            // its own fixed amount — see CharacterPassiveSkill.bookChanceBonus/bookSpeedBonus) —
+            // shown as one combined total, the player doesn't need the XP-vs-book split.
+            const chanceBonus = Math.round((skill.level * skill.chanceBonusPerLevel + skill.bookChanceBonus) * 1000) / 10;
+            const speedBonus = Math.round((skill.level * skill.speedBonusPerLevel + skill.bookSpeedBonus) * 1000) / 10;
             const nextLevel = skill.level + 1;
             const gated =
               skill.gatherKind != null && skill.bookGateFromLevel != null && nextLevel >= skill.bookGateFromLevel;
+            const booksRequired = skill.bookRequirements.find((r) => r.level === nextLevel)?.booksRequired ?? skill.booksRequiredPerLevel;
             const xpPct = skill.xpPerLevel > 0 ? (skill.xp / skill.xpPerLevel) * 100 : 0;
             const xpReady = skill.xp >= skill.xpPerLevel;
             return (
@@ -63,9 +67,9 @@ export function PassiveSkillsPanel({ characterId }: { characterId: string }) {
                 )}
                 {gated && xpReady && skill.level < skill.maxLevel && (
                   <p className="mt-1 text-xs text-gold-bright">
-                    Gotowe do awansu — przeczytaj jeszcze {skill.booksRequiredPerLevel - skill.pendingBooksRead}{" "}
-                    {skill.booksRequiredPerLevel - skill.pendingBooksRead === 1 ? "książkę" : "książki"} (
-                    {skill.pendingBooksRead}/{skill.booksRequiredPerLevel}).
+                    Gotowe do awansu — przeczytaj jeszcze {booksRequired - skill.pendingBooksRead}{" "}
+                    {booksRequired - skill.pendingBooksRead === 1 ? "książkę" : "książki"} (
+                    {skill.pendingBooksRead}/{booksRequired}).
                   </p>
                 )}
                 {gatherLabel && (skill.chanceBonusPerLevel > 0 || skill.speedBonusPerLevel > 0) && (
