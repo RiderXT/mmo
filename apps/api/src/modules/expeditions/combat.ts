@@ -207,11 +207,15 @@ export function computeDerivedStatsBreakdown(
   };
 }
 
-function randomInt(min: number, max: number): number {
+// Exported for lobbyCombat.ts, which reuses these two pure helpers unchanged for its own
+// concurrent-monster-slot loop — everything else below is solo-specific (single hp/mana/buff
+// state, one round per single monster), which is why lobbyCombat.ts has its own loop rather than
+// calling simulateExpedition itself.
+export function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function pickWeighted<T>(items: T[], weight: (item: T) => number): T | null {
+export function pickWeighted<T>(items: T[], weight: (item: T) => number): T | null {
   if (items.length === 0) return null;
   const totalWeight = items.reduce((sum, item) => sum + weight(item), 0);
   let roll = Math.random() * totalWeight;

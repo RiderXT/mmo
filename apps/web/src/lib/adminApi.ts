@@ -6,6 +6,7 @@ import type {
   ItemType,
   StatKey,
   CoreStatKey,
+  CombatRole,
   SkillKind,
   SkillEffectType,
   PotionConfig,
@@ -174,6 +175,7 @@ export interface ClassDto {
   name: string;
   description: string;
   primaryStat: CoreStatKey;
+  combatRole: CombatRole;
   skills: ClassSkillDto[];
   startingGold: number;
   starterItems: { id: string; itemId: string; quantity: number; item: { id: string; name: string } }[];
@@ -444,6 +446,10 @@ export interface PassiveSkillTypeDto {
   bookGateFromLevel: number | null;
   booksRequiredPerLevel: number;
   bookRequirements: { level: number; booksRequired: number }[];
+  targetStat: StatKey | null;
+  scalingStat: CoreStatKey | null;
+  scalingFactor: number;
+  magnitudePctPerLevel: number;
 }
 export const listPassiveSkillTypes = () => apiFetch<PassiveSkillTypeDto[]>("/api/admin/passive-skills");
 export const createPassiveSkillType = (input: CreatePassiveSkillTypeInput) =>

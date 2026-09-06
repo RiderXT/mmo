@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CoreStatKeySchema, SkillKindSchema, SkillEffectTypeSchema, StatKeySchema, SkillCategorySchema } from "./enums.js";
+import { CoreStatKeySchema, SkillKindSchema, SkillEffectTypeSchema, StatKeySchema, SkillCategorySchema, CombatRoleSchema } from "./enums.js";
 
 // An upgrade unlockable within a ClassSkill's own tree. magnitudePct is a PER-LEVEL percentage
 // modifier: +X% power for "magnitude", or -X% cost/cooldown for "cost"/"cooldown" (sign applied
@@ -115,6 +115,8 @@ export const CreateCharacterClassSchema = z.object({
   name: z.string().trim().min(2).max(60),
   description: z.string().trim().max(2000).optional().default(""),
   primaryStat: CoreStatKeySchema,
+  // Lobby group-fight role — see modules/lobbies. Irrelevant for solo play.
+  combatRole: CombatRoleSchema.default("dps"),
   skills: z.array(ClassSkillInputSchema).default([]),
   startingGold: z.number().int().min(0).max(999999).default(0),
   starterItems: z.array(ClassStarterItemInputSchema).default([]),

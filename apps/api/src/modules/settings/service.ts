@@ -1,6 +1,13 @@
 import { prisma } from "../../lib/prismaClient.js";
 import { logAction } from "../../lib/gameLog.js";
-import { GatheringSettingsSchema, type GatheringSettings, ReferralSettingsSchema, type ReferralSettings } from "@mmo/shared";
+import {
+  GatheringSettingsSchema,
+  type GatheringSettings,
+  ReferralSettingsSchema,
+  type ReferralSettings,
+  LobbySettingsSchema,
+  type LobbySettings,
+} from "@mmo/shared";
 
 export const EXPEDITION_DURATION_KEY = "expedition.defaultDurationMinutes";
 const EXPEDITION_DURATION_DEFAULT = 30;
@@ -163,6 +170,40 @@ export async function setReferralSettings(
     actorUserId,
     requestId,
     payload: { key: REFERRAL_SETTINGS_KEY, ...validated },
+  });
+
+  return validated;
+}
+
+export const LOBBY_SETTINGS_KEY = "lobby.settings";
+const LOBBY_SETTINGS_DEFAULT: LobbySettings = LobbySettingsSchema.parse({});
+
+export async function getLobbySettings(): Promise<LobbySettings> {
+  const row = await prisma.settings.findUnique({ where: { key: LOBBY_SETTINGS_KEY } });
+  if (!row) return LOBBY_SETTINGS_DEFAULT;
+  const parsed = LobbySettingsSchema.safeParse(JSON.parse(row.value));
+  return parsed.success ? parsed.data : LOBBY_SETTINGS_DEFAULT;
+}
+
+export async function setLobbySettings(
+  input: LobbySettings,
+  actorUserId: string,
+  requestId?: string,
+): Promise<LobbySettings> {
+  const validated = LobbySettingsSchema.parse(input);
+
+  await prisma.settings.upsert({
+    where: { key: LOBBY_SETTINGS_KEY },
+    create: { key: LOBBY_SETTINGS_KEY, value: JSON.stringify(validated) },
+    update: { value: JSON.stringify(validated) },
+  });
+
+  await logAction({
+    module: "admin:settings",
+    action: "update",
+    actorUserId,
+    requestId,
+    payload: { key: LOBBY_SETTINGS_KEY, ...validated },
   });
 
   return validated;

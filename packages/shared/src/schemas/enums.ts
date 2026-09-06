@@ -78,6 +78,12 @@ export type CoreStatKey = z.infer<typeof CoreStatKeySchema>;
 export const SkillKindSchema = z.enum(["passive", "active"]);
 export type SkillKind = z.infer<typeof SkillKindSchema>;
 
+// A class's role inside a Lobby group fight (see modules/lobbies, lobbyCombat.ts). "lure" members
+// deal/take no direct combat damage; they pull extra concurrent monster slots that target the
+// lobby's "dps" members instead. Meaningless for solo expeditions. Admin-assignable to any class.
+export const CombatRoleSchema = z.enum(["dps", "lure"]);
+export type CombatRole = z.infer<typeof CombatRoleSchema>;
+
 // Buff-style effects (attack_speed/defense/crit/block_chance/reflect) grant the caster a
 // temporary self-buff on activation; "power" is read as a percentage (power=10 -> +10%).
 // Proc-style effects (stun/poison) roll power% once on activation against the current monster

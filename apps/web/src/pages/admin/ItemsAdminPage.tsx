@@ -1087,6 +1087,11 @@ export function ItemsAdminPage() {
                       <>
                         <option value="chance">szansa (+X%)</option>
                         <option value="speed">szybkość (+X%)</option>
+                        {/* Tylko dla umiejętności bojowej (bez rodzaju zbieractwa) — np. "Walka w
+                            grupie". Dla umiejętności zbierackiej serwer i tak by to odrzucił. */}
+                        {passiveSkillsQuery.data?.find((s) => s.id === form.bookSkillTypeId)?.gatherKind == null && (
+                          <option value="magnitude">moc (+X%)</option>
+                        )}
                       </>
                     )}
                   </select>

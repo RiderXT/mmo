@@ -113,6 +113,7 @@ export async function createCharacterClass(
         name: input.name,
         description: input.description,
         primaryStat: input.primaryStat,
+        combatRole: input.combatRole,
         startingGold: input.startingGold,
         skills: {
           create: input.skills.map((s) => ({
@@ -258,6 +259,7 @@ export async function updateCharacterClass(
         name: input.name,
         description: input.description,
         primaryStat: input.primaryStat,
+        combatRole: input.combatRole,
         startingGold: input.startingGold,
         starterItems: {
           create: input.starterItems.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),

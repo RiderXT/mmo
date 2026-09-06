@@ -10,10 +10,8 @@ export interface ReadBookResult {
   leveledUp: boolean;
   newLevel: number;
   skillName: string;
-  // Only present for gatherKind-tied skills once past the book gate — see readBook in
-  // apps/api's passiveSkills/service.ts.
-  pendingBooksRead?: number;
-  booksRequiredPerLevel?: number;
+  pendingBooksRead: number;
+  booksRequiredPerLevel: number;
 }
 
 export const listPassiveSkills = (characterId: string) =>

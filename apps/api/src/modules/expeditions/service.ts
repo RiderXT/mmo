@@ -56,9 +56,17 @@ export async function assertCharacterOwnership(characterId: string, userId: stri
   return character;
 }
 
-/** Gathers the character's full combat build (base stats, equipped item stats, passive/active skills, active-slot potions) — shared by the expedition simulation, the standalone combat-stats readout, and the public profile page (modules/profile). */
-export async function gatherCombatBuild(characterId: string) {
-  const [character, equipped, characterSkills, characterSkillNodes, activePotionItems] = await Promise.all([
+/** Gathers the character's full combat build (base stats, equipped item stats, passive/active
+ * skills, active-slot potions) — shared by the expedition simulation, the standalone combat-stats
+ * readout, and the public profile page (modules/profile).
+ *
+ * includeGroupCombatBonus folds in this character's level in any combat-flavored (gatherKind
+ * null) CharacterPassiveSkill — e.g. "Walka w grupie" — INTO the same passiveSkills array
+ * computeDerivedStats already consumes. Left false (default) for every solo-play caller: that
+ * bonus is specifically a group-fight reward, not a passive always-on stat, so only
+ * lobbyCombat.ts's per-member build ever passes true. */
+export async function gatherCombatBuild(characterId: string, opts: { includeGroupCombatBonus?: boolean } = {}) {
+  const [character, equipped, characterSkills, characterSkillNodes, activePotionItems, groupCombatSkills] = await Promise.all([
     prisma.character.findUniqueOrThrow({ where: { id: characterId } }),
     prisma.inventoryItem.findMany({
       where: { characterId, equippedSlot: { not: null } },
@@ -73,6 +81,12 @@ export async function gatherCombatBuild(characterId: string) {
       where: { characterId, activeSlotIndex: { not: null } },
       include: { item: true },
     }),
+    opts.includeGroupCombatBonus
+      ? prisma.characterPassiveSkill.findMany({
+          where: { characterId, level: { gt: 0 }, skillType: { gatherKind: null, targetStat: { not: null } } },
+          include: { skillType: true },
+        })
+      : Promise.resolve([]),
   ]);
   const nodeLevels = new Map(characterSkillNodes.map((n) => [n.nodeId, n.level]));
 
@@ -111,7 +125,15 @@ export async function gatherCombatBuild(characterId: string) {
       scalingFactor: cs.classSkill.scalingFactor,
       targetStat: cs.classSkill.targetStat as StatKey,
       magnitudeMultiplier: skillMagnitudeMultiplier(cs),
-    }));
+    }))
+    .concat(
+      groupCombatSkills.map((gs) => ({
+        scalingStat: gs.skillType.scalingStat as CoreStatKey,
+        scalingFactor: gs.skillType.scalingFactor,
+        targetStat: gs.skillType.targetStat as StatKey,
+        magnitudeMultiplier: gs.level * gs.skillType.magnitudePctPerLevel + gs.bookCombatMagnitudePct,
+      })),
+    );
 
   const activeSkills: ActiveSkillDef[] = characterSkills
     .filter((cs) => cs.classSkill.kind === "active" && cs.level > 0 && cs.classSkill.effectType && cs.classSkill.cooldownSeconds)

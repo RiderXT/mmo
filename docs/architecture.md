@@ -4603,3 +4603,70 @@ długiego ręcznego klikania — potwierdzone przez curl, że backend działał 
 powtórzone na świeżej sesji zalogowania z tym samym wynikiem, więc to nie był bug funkcji.)
 `tsc --noEmit` czysto na `api` i `web`. Konto testowe i pozostałe postacie usunięte po
 weryfikacji.
+
+## System wspólnego lobby — Część A (model danych) i Część B (silnik walki)
+
+Pełny plan (5 części: model danych, silnik walki, backend lobby, admin UI, UI gracza) zapisany
+i zaakceptowany w `C:\Users\Dell\.claude\plans\keen-waddling-ember.md` po rekonesansie kodu
+(`combat.ts`/`service.ts` nie mają dziś pojęcia "liczby potworów" — solo to sekwencyjna pętla
+jeden-potwór-na-raz; `Character.activeExpeditionId` jest `@unique` 1:1 i ta zasada przenika cały
+pipeline) oraz dwóch ustaleń z userem: walka lobby jest symulowana na raz (jak solo, bez
+WebSocket/real-time), a "lurowanie" to nowe pole `combatRole` na `CharacterClass`
+(`"dps"|"lure"`), nie sztywno zakodowana nowa klasa. Ta sesja wdrożenia obejmuje pierwsze dwie
+części (backend lobby, admin UI ustawień i UI gracza — w kolejnych sesjach).
+
+**Część A — model danych** (`schema.prisma`+`schema.production.prisma`, identycznie): nowa,
+RÓWNOLEGŁA do `Expedition` rodzina modeli — `Lobby`/`LobbyMember`/`LobbyExpedition`/
+`LobbyExpeditionMemberResult` (nie rozszerzenie `Expedition`, bo `CombatEvent` nie ma pola aktora
+i cały solo-pipeline zakłada dokładnie jedną postać na wynik — reużycie groziłoby regresją
+wszędzie dla zerowej korzyści). `Character.activeLobbyId` (nullable, `@unique`, ten sam wzorzec
+wzajemnego wykluczenia co `activeExpeditionId`). `CharacterClass.combatRole` (`@default("dps")`).
+`PassiveSkillType` dostał `targetStat`/`scalingStat`/`scalingFactor`/`magnitudePctPerLevel` (mirror
+trójki pól z `ClassSkill`) — pozwala umiejętności bez `gatherKind` (czysto książkowej, np. "Walka w
+grupie") wpinać się w te same staty walki co umiejętności klasowe. `CharacterPassiveSkill.
+bookCombatMagnitudePct` (akumulator z książek, ten sam wzorzec co `bookMagnitudePct`). Ustawienia
+lobby (`LobbySettingsSchema` w nowym `packages/shared/src/schemas/lobby.ts`: `maxMembers`,
+`monsterConcurrency`, `lureExtraMonsterSlotsPerLureMember`, `bonusTiers[]`) w istniejącej
+generycznej tabeli `Settings` (klucz `"lobby.settings"`), dokładnie ten sam `get/setXSettings`
+wzorzec co `ReferralSettings` w `settings/service.ts`.
+
+Przy okazji naprawiony faktyczny gap w `readBook` (`passiveSkills/service.ts`): gałąź dla
+umiejętności BEZ `gatherKind` (czysto książkowych) dotąd ignorowała `bookGateFromLevel`/
+`bookRequirements`/`pendingBooksRead` całkowicie — płaski rzut "1 książka = 1 poziom" niezależnie
+od konfiguracji admina. Teraz honoruje te same wielo-książkowe wymagania per poziom co gałąź
+zbieracka (bez sprawdzania gotowości XP, bo takiej ścieżki dla tych umiejętności i tak nie ma).
+Admin UI: `ClassesAdminPage.tsx` dostał selektor "Rola bojowa", `PassiveSkillsAdminPage.tsx` 4 nowe
+pola bojowe (`disabled={!!form.gatherKind}` — odwrotnie niż pola zbierackie) i naprawioną
+widoczność sekcji nadpisań per-poziom dla umiejętności książkowych (wcześniej ukryta całkowicie dla
+`gatherKind: null`, mimo że teraz jest dla nich w pełni funkcjonalna), `ItemsAdminPage.tsx` dostał
+opcję efektu książki "moc" dla umiejętności pasywnej, gdy jej `gatherKind` to `null`.
+
+**Część B — silnik walki** (`apps/api/src/modules/expeditions/lobbyCombat.ts`, nowy plik,
+równoległy do `combat.ts` — reużywa z niego bez zmian tylko `computeDerivedStats`/
+`pickWeighted`/`randomInt`, oba ostatnie odkryte jako nieeksportowane i stąd dociągnięte
+`export`). Model współbieżności: `monsterConcurrency` (domyślnie 2) niezależnych slotów potworów
+naraz + `lureExtraMonsterSlotsPerLureMember` dodatkowych slotów na każdą postać `lure` w lobby.
+Każda runda, każdy żywy slot NIEZALEŻNIE losuje jedną żywą postać `dps` do walki tej rundy (ta sama
+postać może zostać wylosowana przez więcej niż jeden slot naraz — to świadomie oddaje "więcej
+potworów atakuje resztę drużyny"). Postacie `lure` nigdy nie są celem ani atakującym. Brak żywej
+postaci `dps` = `lobby_wiped`, walka kończy się natychmiast, nawet jeśli `lure` wciąż żyje (nie
+może walczyć sama). Nagrody: pełna wysokość exp/gold dla KAŻDEGO żywego członka (bez dzielenia)
+razy `(1 + classCompositionBonusPct)` (wspólny) razy własny `expMultiplier`/`goldMultiplier`
+członka (event + jego personalne bonusy — te zostają per-postać, nie wspólne dla lobby). Loot:
+niezależne rzuty per żywy członek. Nowy `LobbyCombatEventSchema`
+(`packages/shared/src/schemas/lobbyCombatEvent.ts`) — osobny od `CombatEventSchema` (który nie ma
+pola aktora), warianty z `actorCharacterId`/`monsterSlotIndex`.
+
+`gatherCombatBuild` (expeditions/service.ts) dostał opcjonalny `{includeGroupCombatBonus}` —
+`false` domyślnie (każdy istniejący solo-caller bez zmian), `true` tylko z przyszłej ścieżki
+budowania members lobby — dokłada bonus z poziomów "Walka w grupie" (jeśli character ma > 0) do
+tej samej tablicy `PassiveSkillBonus[]` którą `computeDerivedStats` już konsumuje, zero zmian w
+matematyce `combat.ts`.
+
+Zweryfikowane izolowanym skryptem (`_test_lobby_combat.ts`, usunięty po teście, bez DB/serwera —
+czyste wywołanie `simulateLobbyExpedition` z ręcznie zbudowanymi danymi): 2-osobowe lobby dps+dps z
+`monsterConcurrency=2` faktycznie używa 2 równoległych slotów; dodanie postaci `lure` (z 1 HP, by
+udowodnić że nigdy nie jest celem) podnosi liczbę slotów do 3 i postać `lure` ani razu nie
+występuje jako aktor walki ani nie umiera, a mimo to dostaje pełną nagrodę jako żywy członek;
+pojedyncza postać `dps` z 1 HP kończy walkę `lobby_wiped` od razu. `pnpm --filter @mmo/api exec tsc
+--noEmit` i `pnpm --filter web exec tsc --noEmit` czyste po obu częściach.

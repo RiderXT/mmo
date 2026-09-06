@@ -123,6 +123,10 @@ model Character {
   unspentSkillPoints Int      @default(0)
   currentZoneId      String?
   activeExpeditionId String?  @unique
+  // Set from the moment a character creates/joins a Lobby (forming or in_progress) until the
+  // lobby disbands or its LobbyExpedition is claimed — same mutual-exclusion role as
+  // activeExpeditionId, just for the parallel group-combat pipeline (see modules/lobbies).
+  activeLobbyId String? @unique
   // Travel state — see docs/architecture.md "Etap 9". travelArrivesAt null = not traveling;
   // its presence is the source of truth for "in transit", independent of currentZoneId (which
   // only changes once arrival is resolved). travelDestinationZoneId null while traveling means
@@ -160,6 +164,8 @@ model Character {
   passiveSkills CharacterPassiveSkill[]
   sentMessages     Message[] @relation("MessagesSentByCharacter")
   receivedMessages Message[] @relation("MessagesReceivedByCharacter")
+  lobbyMembership       LobbyMember?
+  lobbyExpeditionResults LobbyExpeditionMemberResult[]
 
   @@index([userId])
   @@index([classId])
@@ -175,6 +181,12 @@ model CharacterClass {
 
   // Granted once, at character creation — see docs/architecture.md.
   startingGold Int @default(0)
+
+  // "dps" | "lure" — combat role inside a Lobby fight (see modules/lobbies). "lure" members deal
+  // and take no direct damage; they instead pull extra concurrent monster slots that target the
+  // lobby's "dps" members (see lobbyCombat.ts). Meaningless for solo expeditions — never read
+  // there. Any class can be flagged "lure" from the admin panel, not just a specific class name.
+  combatRole String @default("dps")
 
   skills       ClassSkill[]
   characters   Character[]
@@ -348,6 +360,15 @@ model PassiveSkillType {
   // Flat DEFAULT fallback — used for any level with no row in bookRequirements below. Kept as-is
   // so every existing configured skill keeps working unmigrated.
   booksRequiredPerLevel Int      @default(1)
+  // Combat-flavored passive skills only (gatherKind null) — mirrors ClassSkill's targetStat/
+  // scalingStat/scalingFactor trio so the SAME PassiveSkillBonus shape already consumed by
+  // computeDerivedStats (expeditions/combat.ts) can carry a skill like "Walka w grupie". Left
+  // null/0 (inert) for every gathering skill — computed bonus is
+  // level * magnitudePctPerLevel + CharacterPassiveSkill.bookCombatMagnitudePct.
+  targetStat           String? // StatKey
+  scalingStat          String? // CoreStatKey
+  scalingFactor        Float    @default(0)
+  magnitudePctPerLevel Float    @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -385,6 +406,9 @@ model CharacterPassiveSkill {
   // level*speedBonusPerLevel terms (which stay unchanged, driving PRE-gate XP levels only).
   bookChanceBonus Float @default(0)
   bookSpeedBonus  Float @default(0)
+  // Same accumulator principle, for combat-flavored (gatherKind null) skills' "magnitude" book
+  // effect — see PassiveSkillType.magnitudePctPerLevel and lobbyCombat.ts's includeGroupCombatBonus.
+  bookCombatMagnitudePct Float @default(0)
 
   character Character        @relation(fields: [characterId], references: [id], onDelete: Cascade)
   skillType PassiveSkillType @relation(fields: [skillTypeId], references: [id], onDelete: Cascade)
@@ -418,6 +442,8 @@ model Zone {
   npcs                 Npc[]
   fishingSpot          FishingSpot?
   mine                 Mine?
+  lobbies              Lobby[]
+  lobbyExpeditions     LobbyExpedition[]
 
   @@index([minLevel, maxLevel])
 }
@@ -739,6 +765,80 @@ model Expedition {
   zone        Zone      @relation(fields: [zoneId], references: [id])
 
   @@index([characterId, status])
+}
+
+// Group-combat pipeline, parallel to Expedition (not an extension of it — see
+// docs/architecture.md "System wspólnego lobby" for why: Expedition/Character.activeExpeditionId/
+// checkRewardPlausibility/CombatEvent all hard-assume exactly one character per result, and
+// reworking all of that in place would touch every solo-expedition code path for no benefit to
+// solo play). A character is in at most one Lobby at a time via Character.activeLobbyId.
+model Lobby {
+  id                String   @id @default(cuid())
+  zoneId            String
+  leaderCharacterId String
+  status            String   @default("forming") // "forming" | "in_progress" | "completed" | "disbanded"
+  maxMembers        Int      @default(3)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  zone        Zone              @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  members     LobbyMember[]
+  expeditions LobbyExpedition[]
+}
+
+model LobbyMember {
+  id          String   @id @default(cuid())
+  lobbyId     String
+  characterId String   @unique // a character is an active member of at most one lobby at a time
+  ready       Boolean  @default(false)
+  joinedAt    DateTime @default(now())
+
+  lobby     Lobby     @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+// One instant-simulated group fight (see lobbyCombat.ts) — computed in full server-side the
+// moment the lobby's leader starts it, same "simulate once, replay client-side" model as
+// Expedition, just for N characters at once instead of one.
+model LobbyExpedition {
+  id                       String   @id @default(cuid())
+  lobbyId                  String
+  zoneId                   String
+  status                   String   @default("in_progress") // "in_progress" | "completed"
+  startedAt                DateTime @default(now())
+  endsAt                   DateTime
+  eventLog                 String // JSON: LobbyCombatEvent[]
+  selectedMonsterIds       String @default("[]") // JSON: string[]
+  // Snapshot of the class-composition bonus applied (see LobbySettings.bonusTiers) — kept here,
+  // not recomputed later, so it stays consistent even if the admin changes the tiers afterward.
+  classCompositionBonusPct Float  @default(0)
+  monsterConcurrency       Int    @default(2) // snapshot of the setting used at start time
+  appliedExpMultiplier     Float  @default(1)
+  appliedGoldMultiplier    Float  @default(1)
+  // JSON: {characterId, classId, combatRole}[] — composition at start time, for display + the
+  // class-composition bonus calculation (frozen even if a member's class changes afterward).
+  memberSnapshot           String @default("[]")
+
+  lobby   Lobby                          @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
+  zone    Zone                           @relation(fields: [zoneId], references: [id])
+  results LobbyExpeditionMemberResult[]
+
+  @@index([lobbyId, status])
+}
+
+// One row per member, since different players may log in and claim their own reward at different
+// times — mirrors Expedition.status/result but scoped per character instead of being the whole row.
+model LobbyExpeditionMemberResult {
+  id                String  @id @default(cuid())
+  lobbyExpeditionId String
+  characterId       String
+  status            String  @default("in_progress") // "in_progress" | "claimed" | "flagged"
+  result            String? // JSON: ExpeditionResult — same shape solo rewards already use
+
+  lobbyExpedition LobbyExpedition @relation(fields: [lobbyExpeditionId], references: [id], onDelete: Cascade)
+  character       Character       @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([lobbyExpeditionId, characterId])
 }
 
 // Time-boxed exp/gold multiplier, configured by an admin (see docs/architecture.md "Etap 16").

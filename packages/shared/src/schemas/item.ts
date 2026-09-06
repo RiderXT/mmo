@@ -111,7 +111,10 @@ export const CreateItemSchema = z
   .refine(
     (val) =>
       !val.bookEffect ||
-      (val.bookSkillTypeId ? ["chance", "speed"].includes(val.bookEffect) : ["magnitude", "cost", "cooldown"].includes(val.bookEffect)),
+      // "magnitude" for bookSkillTypeId only makes sense for a combat-flavored (non-gathering)
+      // PassiveSkillType (e.g. "Walka w grupie") — that check needs the referenced row's
+      // gatherKind, so it's enforced server-side in admin/items/service.ts, not here.
+      (val.bookSkillTypeId ? ["chance", "speed", "magnitude"].includes(val.bookEffect) : ["magnitude", "cost", "cooldown"].includes(val.bookEffect)),
     { message: "Efekt książki nie pasuje do wybranego celu", path: ["bookEffect"] },
   )
   .refine(

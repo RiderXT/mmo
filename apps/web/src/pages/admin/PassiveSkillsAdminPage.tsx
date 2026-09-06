@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CreatePassiveSkillTypeSchema, type CreatePassiveSkillTypeInput, type GatherKind } from "@mmo/shared";
+import {
+  CreatePassiveSkillTypeSchema,
+  StatKeySchema,
+  CoreStatKeySchema,
+  type CreatePassiveSkillTypeInput,
+  type GatherKind,
+} from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ConfirmModal } from "../../components/common/ConfirmModal";
 import { ApiError } from "../../lib/apiClient";
@@ -16,6 +22,8 @@ const GATHER_KIND_LABELS: Record<string, string> = {
   fishing: "Łowienie",
   mining: "Kopanie",
 };
+const TARGET_STATS = StatKeySchema.options;
+const SCALING_STATS = CoreStatKeySchema.options;
 
 // Stable form-local id, same reasoning as ClassesAdminPage.tsx's newFormKey — `level` itself is
 // user-editable, so keying rows by it would remount the input (and lose focus) on every keystroke.
@@ -39,6 +47,10 @@ function emptyForm(): FormValue {
     bookGateFromLevel: null,
     booksRequiredPerLevel: 1,
     bookRequirements: [],
+    targetStat: null,
+    scalingStat: null,
+    scalingFactor: 0,
+    magnitudePctPerLevel: 0,
   };
 }
 
@@ -55,6 +67,10 @@ function fromDto(skill: PassiveSkillTypeDto): FormValue {
     bookGateFromLevel: skill.bookGateFromLevel,
     booksRequiredPerLevel: skill.booksRequiredPerLevel,
     bookRequirements: skill.bookRequirements.map((r) => ({ _key: newFormKey(), level: r.level, booksRequired: r.booksRequired })),
+    targetStat: skill.targetStat,
+    scalingStat: skill.scalingStat,
+    scalingFactor: skill.scalingFactor,
+    magnitudePctPerLevel: skill.magnitudePctPerLevel,
   };
 }
 
@@ -222,9 +238,15 @@ export function PassiveSkillsAdminPage() {
               <select
                 className={inputClass}
                 value={form.gatherKind ?? ""}
-                onChange={(e) => setForm({ ...form, gatherKind: (e.target.value || null) as GatherKind | null })}
+                onChange={(e) => {
+                  const gatherKind = (e.target.value || null) as GatherKind | null;
+                  // Zbieractwo i staty bojowe się wykluczają (patrz CreatePassiveSkillTypeSchema) —
+                  // przełączenie na zbieractwo czyści pola bojowe, żeby nie utknąć z niewalidującym
+                  // się formularzem.
+                  setForm({ ...form, gatherKind, ...(gatherKind ? { targetStat: null } : {}) });
+                }}
               >
-                <option value="">Brak (bez efektu)</option>
+                <option value="">Brak — umiejętność bojowa, tylko z ksiąg</option>
                 <option value="fishing">Łowienie</option>
                 <option value="mining">Kopanie</option>
               </select>
@@ -294,12 +316,74 @@ export function PassiveSkillsAdminPage() {
                 className={inputClass}
                 value={form.booksRequiredPerLevel}
                 onChange={(e) => setForm({ ...form, booksRequiredPerLevel: Number(e.target.value) })}
-                disabled={!form.gatherKind || form.bookGateFromLevel == null}
+                disabled={!!form.gatherKind && form.bookGateFromLevel == null}
               />
             </Field>
           </div>
 
-          {form.gatherKind && form.bookGateFromLevel != null && (
+          <div className="grid gap-3 border-t border-line-soft/40 pt-3 sm:grid-cols-2">
+            <p className="text-xs font-medium text-parchment-dim sm:col-span-2">
+              Bonus bojowy — tylko dla umiejętności bez rodzaju zbieractwa (trenowanych wyłącznie
+              książką), np. "Walka w grupie". Bonus = poziom × wartość poniżej + suma bonusów z
+              udanie przeczytanych książek (efekt "moc" w edytorze itemu).
+            </p>
+            <Field label="Docelowy staty">
+              <select
+                className={inputClass}
+                value={form.targetStat ?? ""}
+                onChange={(e) => setForm({ ...form, targetStat: (e.target.value || null) as CreatePassiveSkillTypeInput["targetStat"] })}
+                disabled={!!form.gatherKind}
+              >
+                <option value="">— brak —</option>
+                {TARGET_STATS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Skalujący staty postaci">
+              <select
+                className={inputClass}
+                value={form.scalingStat ?? ""}
+                onChange={(e) => setForm({ ...form, scalingStat: (e.target.value || null) as CreatePassiveSkillTypeInput["scalingStat"] })}
+                disabled={!!form.gatherKind}
+              >
+                <option value="">— brak —</option>
+                {SCALING_STATS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Mnożnik skalowania">
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                max={100}
+                className={inputClass}
+                value={form.scalingFactor}
+                onChange={(e) => setForm({ ...form, scalingFactor: Number(e.target.value) })}
+                disabled={!!form.gatherKind}
+              />
+            </Field>
+            <Field label="% mocy za poziom">
+              <input
+                type="number"
+                step="0.001"
+                min={0}
+                max={5}
+                className={inputClass}
+                value={form.magnitudePctPerLevel}
+                onChange={(e) => setForm({ ...form, magnitudePctPerLevel: Number(e.target.value) })}
+                disabled={!!form.gatherKind}
+              />
+            </Field>
+          </div>
+
+          {(!form.gatherKind || form.bookGateFromLevel != null) && (
             <div className="border-t border-line-soft/40 pt-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-parchment-dim">
@@ -312,7 +396,9 @@ export function PassiveSkillsAdminPage() {
                       ...form,
                       bookRequirements: [
                         ...form.bookRequirements,
-                        { _key: newFormKey(), level: form.bookGateFromLevel!, booksRequired: 1 },
+                        // Book-only skills (no bramka) have no natural "starting" level — default
+                        // to 1 (the first book-driven level); gatherKind skills default to the gate.
+                        { _key: newFormKey(), level: form.bookGateFromLevel ?? 1, booksRequired: 1 },
                       ],
                     })
                   }

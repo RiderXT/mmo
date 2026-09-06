@@ -47,6 +47,18 @@ async function assertClassExists(classId: string | null | undefined) {
   if (count === 0) throw new ItemError("Wskazana klasa nie istnieje", 400);
 }
 
+// "magnitude" is valid for bookSkillTypeId only when the target is a combat-flavored (non-
+// gathering) PassiveSkillType (e.g. "Walka w grupie") — the Zod schema can't express this because
+// it needs the referenced row's gatherKind, so it's enforced here instead (see item.ts's refine).
+async function assertBookMagnitudeTargetValid(input: CreateItemInput) {
+  if (input.bookEffect !== "magnitude" || !input.bookSkillTypeId) return;
+  const skillType = await prisma.passiveSkillType.findUnique({ where: { id: input.bookSkillTypeId } });
+  if (!skillType) throw new ItemError("Wskazana umiejętność pasywna nie istnieje", 400);
+  if (skillType.gatherKind != null) {
+    throw new ItemError("Efekt 'moc' dostępny tylko dla umiejętności bojowych (bez zbieractwa)", 400);
+  }
+}
+
 function potionData(input: CreateItemInput) {
   const p = input.potion;
   return {
@@ -123,6 +135,7 @@ export async function createItem(input: CreateItemInput, actorUserId: string, re
   await assertUpgradeItemsExist(input);
   await assertChestLootItemsExist(input);
   await assertClassExists(input.classId);
+  await assertBookMagnitudeTargetValid(input);
 
   const item = await prisma.item.create({
     data: {
@@ -191,6 +204,7 @@ export async function updateItem(
   await assertUpgradeItemsExist(input, id);
   await assertChestLootItemsExist(input, id);
   await assertClassExists(input.classId);
+  await assertBookMagnitudeTargetValid(input);
 
   const item = await prisma.$transaction(async (tx) => {
     await tx.itemUpgradeRequirement.deleteMany({ where: { itemId: id } });

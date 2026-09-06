@@ -20,5 +20,7 @@ export * from "./schemas/bots.js";
 export * from "./schemas/mail.js";
 export * from "./schemas/supportTicket.js";
 export * from "./schemas/changelog.js";
+export * from "./schemas/lobby.js";
+export * from "./schemas/lobbyCombatEvent.js";
 export * from "./lib/upgradeSuccess.js";
 export * from "./lib/leveling.js";

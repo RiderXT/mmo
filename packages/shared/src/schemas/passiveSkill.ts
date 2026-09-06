@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GatherKindSchema } from "./enums.js";
+import { GatherKindSchema, StatKeySchema, CoreStatKeySchema } from "./enums.js";
 
 // Per-level override of booksRequiredPerLevel below — no entry for a level falls back to that
 // flat default. Mirrors ClassSkillBookRequirementInputSchema in characterClass.ts.
@@ -24,6 +24,13 @@ export const CreatePassiveSkillTypeSchema = z.object({
   bookGateFromLevel: z.number().int().min(1).max(1000).nullable().optional(),
   booksRequiredPerLevel: z.number().int().min(1).max(100).default(1),
   bookRequirements: z.array(PassiveSkillBookRequirementInputSchema).default([]),
+  // Combat-flavored skills only (meaningful when gatherKind is null) — mirrors ClassSkill's
+  // targetStat/scalingStat/scalingFactor trio, e.g. for a book-only "Walka w grupie" skill applied
+  // only inside Lobby fights (see modules/lobbies, lobbyCombat.ts). Inert for gathering skills.
+  targetStat: StatKeySchema.nullable().optional(),
+  scalingStat: CoreStatKeySchema.nullable().optional(),
+  scalingFactor: z.number().min(0).max(100).default(0),
+  magnitudePctPerLevel: z.number().min(0).max(5).default(0),
 })
   .refine(
     (s) => {
@@ -31,7 +38,11 @@ export const CreatePassiveSkillTypeSchema = z.object({
       return new Set(levels).size === levels.length;
     },
     { message: "Wymagania książek mają zduplikowany poziom", path: ["bookRequirements"] },
-  );
+  )
+  .refine((s) => s.gatherKind == null || s.targetStat == null, {
+    message: "Umiejętność zbieracka nie może mieć docelowego statu bojowego",
+    path: ["targetStat"],
+  });
 export type CreatePassiveSkillTypeInput = z.infer<typeof CreatePassiveSkillTypeSchema>;
 export const UpdatePassiveSkillTypeSchema = CreatePassiveSkillTypeSchema;
 export type UpdatePassiveSkillTypeInput = z.infer<typeof UpdatePassiveSkillTypeSchema>;
@@ -54,6 +65,11 @@ export const PassiveSkillDtoSchema = z.object({
   pendingBooksRead: z.number().int(),
   bookChanceBonus: z.number(),
   bookSpeedBonus: z.number(),
+  targetStat: StatKeySchema.nullable(),
+  scalingStat: CoreStatKeySchema.nullable(),
+  scalingFactor: z.number(),
+  magnitudePctPerLevel: z.number(),
+  bookCombatMagnitudePct: z.number(),
 });
 export type PassiveSkillDto = z.infer<typeof PassiveSkillDtoSchema>;
 

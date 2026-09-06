@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../lib/authGuard.js";
-import { GatheringSettingsSchema, ReferralSettingsSchema } from "@mmo/shared";
+import { GatheringSettingsSchema, ReferralSettingsSchema, LobbySettingsSchema } from "@mmo/shared";
 import {
   getExpeditionDurationMinutes,
   setExpeditionDurationMinutes,
@@ -11,6 +11,8 @@ import {
   setReferralSettings,
   getBotsMaxConcurrent,
   setBotsMaxConcurrent,
+  getLobbySettings,
+  setLobbySettings,
   SettingsError,
 } from "./service.js";
 
@@ -26,6 +28,12 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   // Public — players need the catch/mine time ranges to size the gathering countdown UI.
   app.get("/gathering-settings", { preHandler: requireAuth }, async (_request, reply) => {
     return reply.send(await getGatheringSettings());
+  });
+
+  // Public — players need maxMembers to size the lobby UI (and could infer the bonus tiers from
+  // combat results anyway, so no reason to admin-gate reading them).
+  app.get("/lobby-settings", { preHandler: requireAuth }, async (_request, reply) => {
+    return reply.send(await getLobbySettings());
   });
 }
 
@@ -70,5 +78,15 @@ export async function adminSettingsRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof SettingsError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;
     }
+  });
+
+  app.get("/lobby-settings", { preHandler: requireRole("admin") }, async (_request, reply) => {
+    return reply.send(await getLobbySettings());
+  });
+
+  app.put("/lobby-settings", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const input = LobbySettingsSchema.parse(request.body);
+    const saved = await setLobbySettings(input, request.user!.sub, request.id);
+    return reply.send(saved);
   });
 }

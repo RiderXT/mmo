@@ -41,6 +41,10 @@ export async function createPassiveSkillType(
       xpPerGatherAction: input.xpPerGatherAction,
       bookGateFromLevel: input.bookGateFromLevel ?? null,
       booksRequiredPerLevel: input.booksRequiredPerLevel,
+      targetStat: input.targetStat ?? null,
+      scalingStat: input.scalingStat ?? null,
+      scalingFactor: input.scalingFactor,
+      magnitudePctPerLevel: input.magnitudePctPerLevel,
       bookRequirements: { create: input.bookRequirements },
     },
     include: skillTypeInclude,
@@ -85,6 +89,10 @@ export async function updatePassiveSkillType(
         xpPerGatherAction: input.xpPerGatherAction,
         bookGateFromLevel: input.bookGateFromLevel ?? null,
         booksRequiredPerLevel: input.booksRequiredPerLevel,
+        targetStat: input.targetStat ?? null,
+        scalingStat: input.scalingStat ?? null,
+        scalingFactor: input.scalingFactor,
+        magnitudePctPerLevel: input.magnitudePctPerLevel,
       },
     });
     // Book-level requirements are just curve parameters, not something a player "unlocks" — no

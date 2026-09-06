@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CreateCharacterClassSchema,
   CoreStatKeySchema,
+  CombatRoleSchema,
   SkillKindSchema,
   SkillEffectTypeSchema,
   StatKeySchema,
@@ -27,6 +28,11 @@ import {
 } from "../../lib/adminApi";
 
 const CORE_STATS = CoreStatKeySchema.options;
+const COMBAT_ROLES = CombatRoleSchema.options;
+const COMBAT_ROLE_LABELS: Record<(typeof COMBAT_ROLES)[number], string> = {
+  dps: "DPS (zadaje obrażenia)",
+  lure: "Lure (luruje potwory)",
+};
 const SKILL_KINDS = SkillKindSchema.options;
 const EFFECT_TYPES = SkillEffectTypeSchema.options;
 const TARGET_STATS = StatKeySchema.options;
@@ -115,6 +121,7 @@ function emptyForm(): FormValue {
     name: "",
     description: "",
     primaryStat: "strength",
+    combatRole: "dps",
     skills: Array.from({ length: 6 }, emptySkill),
     startingGold: 0,
     starterItems: [],
@@ -126,6 +133,7 @@ function fromDto(cls: ClassDto): FormValue {
     name: cls.name,
     description: cls.description,
     primaryStat: cls.primaryStat,
+    combatRole: cls.combatRole,
     skills: cls.skills.map((s) => {
       const nodeNameById = new Map(s.nodes.map((n) => [n.id, n.name]));
       return {
@@ -265,6 +273,7 @@ export function ClassesAdminPage() {
             <tr>
               <th className="px-3 py-2">Nazwa</th>
               <th className="px-3 py-2">Główny staty</th>
+              <th className="px-3 py-2">Rola bojowa</th>
               <th className="px-3 py-2">Umiejętności</th>
               <th className="px-3 py-2">Start: złoto/itemy</th>
               <th className="px-3 py-2" />
@@ -275,6 +284,7 @@ export function ClassesAdminPage() {
               <tr key={cls.id}>
                 <td className="px-3 py-2 text-parchment">{cls.name}</td>
                 <td className="px-3 py-2 text-parchment-dim">{cls.primaryStat}</td>
+                <td className="px-3 py-2 text-parchment-dim">{COMBAT_ROLE_LABELS[cls.combatRole]}</td>
                 <td className="px-3 py-2 text-parchment-dim">{cls.skills.length}</td>
                 <td className="px-3 py-2 text-parchment-dim">
                   {cls.startingGold} / {cls.starterItems.length}
@@ -332,6 +342,19 @@ export function ClassesAdminPage() {
                 {CORE_STATS.map((s) => (
                   <option key={s} value={s}>
                     {s}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Rola bojowa (lobby)">
+              <select
+                className={inputClass}
+                value={form.combatRole}
+                onChange={(e) => setForm({ ...form, combatRole: e.target.value as CreateCharacterClassInput["combatRole"] })}
+              >
+                {COMBAT_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {COMBAT_ROLE_LABELS[r]}
                   </option>
                 ))}
               </select>
