@@ -329,6 +329,9 @@ export async function startExpedition(
   if (owner.activeExpeditionId) {
     throw new ExpeditionError("Postać jest już na ekspedycji", 409);
   }
+  if (owner.activeLobbyId) {
+    throw new ExpeditionError("Postać jest w lobby — najpierw je opuść", 409);
+  }
   if (owner.travelArrivesAt) {
     throw new ExpeditionError("Postać jest w drodze — poczekaj na przybycie", 409);
   }
@@ -529,7 +532,7 @@ function deriveResultFromEvents(events: CombatEvent[]): ExpeditionResult {
 const LEVEL_HEADROOM = 15;
 const SAFETY_MARGIN = 1.5;
 
-function checkRewardPlausibility(
+export function checkRewardPlausibility(
   character: { exp: number; level: number },
   result: ExpeditionResult,
   appliedExpMultiplier: number,

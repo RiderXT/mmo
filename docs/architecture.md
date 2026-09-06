@@ -4670,3 +4670,52 @@ udowodnić że nigdy nie jest celem) podnosi liczbę slotów do 3 i postać `lur
 występuje jako aktor walki ani nie umiera, a mimo to dostaje pełną nagrodę jako żywy członek;
 pojedyncza postać `dps` z 1 HP kończy walkę `lobby_wiped` od razu. `pnpm --filter @mmo/api exec tsc
 --noEmit` i `pnpm --filter web exec tsc --noEmit` czyste po obu częściach.
+
+## System wspólnego lobby — Część C (backend cyklu życia)
+
+Nowy moduł `apps/api/src/modules/lobbies/` (`service.ts`+`routes.ts`, zarejestrowany w `app.ts`
+pod `/api/lobbies`): `createLobby`/`joinLobby`/`leaveLobby`/`kickMember`/`setReady`/
+`startLobbyExpedition`/`getActiveLobby`/`getLobbyExpedition`/`claimLobbyExpeditionReward` — ten sam
+`assertCharacterOwnership` wzorzec co `inventory`/`mail`/`characters`, te same guardy wzajemnego
+wykluczenia co `startExpedition` (podróż/ekspedycja/zbieractwo, teraz też odwrotnie: `startTravel`,
+`startExpedition`, `startGathering` odrzucają gdy `activeLobbyId` jest ustawiony). `startLobbyExpedition`
+buduje per-postać `LobbyMemberBuild` przez `gatherCombatBuild(characterId, {includeGroupCombatBonus:
+true})` + `computeDerivedStats`, liczy `classCompositionBonusPct` z `LobbySettings.bonusTiers` po
+`(liczbaCzłonków, uniqueClassCount)`, woła `simulateLobbyExpedition` i zapisuje wynik jako
+`LobbyExpedition` + jeden `LobbyExpeditionMemberResult` na członka (ta sama atomowa
+`updateMany`-guard przeciw podwójnemu startowi co `startExpedition`). `claimLobbyExpeditionReward`
+reużywa `checkRewardPlausibility` (dociągnięty `export` z `expeditions/service.ts`) i tę samą
+logikę nagrody co `applyExpeditionReward` (exp/poziom/gold/punkty, `tryPayReferralReward` przy
+awansie), tylko per `LobbyExpeditionMemberResult` zamiast per `Expedition` — różni gracze mogą
+odebrać nagrodę w różnym czasie.
+
+**Dwa błędy znalezione i naprawione podczas weryfikacji API (nie tylko izolowanym testem silnika,
+ale prawdziwym cyklem HTTP z dwoma kontami testowymi):**
+1. `Character.activeLobbyId` było omyłkowo `@unique` (skopiowane 1:1 z `activeExpeditionId`, które
+   faktycznie MUSI być unikalne, bo jedna ekspedycja = jedna postać) — ale lobby ma DO 3 postaci
+   wskazujących na TO SAMO `lobbyId` naraz, więc unique constraint blokował dołączenie już drugiej
+   postaci (`P2002` na `join`). Naprawione: zwykłe nullable `String` bez `@unique` (poprawny
+   odpowiednik jedyności to `LobbyMember.characterId` — TA relacja faktycznie jest 1:1, "postać
+   jest aktywnym członkiem co najwyżej jednego lobby naraz", i tam `@unique` zostaje).
+2. `LobbyMember` (będące źródłem TEJ jedyności z punktu 1) nie było czyszczone po zakończeniu
+   walki — członek, który odebrał nagrodę, nie mógł potem stworzyć/dołączyć do NOWEGO lobby
+   (`P2002` na `characterId` przy kolejnym `create`). Naprawione: `applyLobbyMemberReward` usuwa
+   teraz własny wiersz `LobbyMember` tej postaci w tej samej transakcji co przyznanie nagrody —
+   każdy gracz odblokowuje się do gry dalej NATYCHMIAST po własnym odbiorze, nie czekając aż
+   wszyscy w grupie też odbiorą.
+
+Zweryfikowane end-to-end przez curl na dwóch kontach testowych (Wojownik jako `dps`, Łotrzyk
+tymczasowo oflagowany jako `lure`, w prawdziwej krainie "Wilcze Uroczysko"): pełny cykl
+stwórz→dołącz→gotowość obu→start (lider) — 338 zdarzeń, 3 równoległe sloty potworów (2 bazowe + 1
+za `lure`), WYŁĄCZNIE Wojownik jako `actorCharacterId` w zdarzeniach `round` (Łotrzyk/`lure` ani
+razu), `classCompositionBonusPct=0.15` (2 różne klasy, zgodnie z domyślnym progiem), lobby
+zakończone `lobby_wiped` po śmierci jedynego `dps`; odbiór nagrody przez oboje graczy niezależnie
+(identyczny exp/gold, RÓŻNE listy lootu — potwierdza niezależne rzuty per członek), podwójny odbiór
+odrzucony, `Lobby`/`LobbyExpedition` poprawnie przeszły w `"completed"`. Osobno: blokada startu przy
+< 2 członkach, join/kick/rejoin-po-kicku, przekazanie przywództwa najwcześniej dołączonemu członkowi
+po wyjściu lidera — wszystko zgodne z oczekiwaniami. `tsc --noEmit` czysto na `api`/`web`. Dane
+testowe (2 konta, 2 postacie, lobby, `Łotrzyk.combatRole` przywrócony na `dps`) usunięte po
+weryfikacji.
+
+Część D (admin UI ustawień lobby) i Część E (UI gracza — punkt wejścia w `WorldMapTab.tsx`,
+poczekalnia, podgląd walki grupowej) zostają na kolejny krok.

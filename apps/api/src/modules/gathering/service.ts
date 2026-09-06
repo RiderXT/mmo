@@ -127,6 +127,9 @@ export async function startGathering(input: StartGatheringInput, userId: string,
   if (character.activeExpeditionId) {
     throw new GatheringError("Postać jest na ekspedycji", 409);
   }
+  if (character.activeLobbyId) {
+    throw new GatheringError("Postać jest w lobby — najpierw je opuść", 409);
+  }
   if (character.travelArrivesAt) {
     throw new GatheringError("Postać jest w drodze — poczekaj na przybycie", 409);
   }

@@ -38,6 +38,9 @@ export async function startTravel(
   if (owner.activeExpeditionId) {
     throw new TravelError("Postać walczy — najpierw zakończ lub opuść ekspedycję", 409);
   }
+  if (owner.activeLobbyId) {
+    throw new TravelError("Postać jest w lobby — najpierw je opuść", 409);
+  }
   if (owner.travelArrivesAt) {
     throw new TravelError("Postać jest już w drodze", 409);
   }

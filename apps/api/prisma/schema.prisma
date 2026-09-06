@@ -125,8 +125,10 @@ model Character {
   activeExpeditionId String?  @unique
   // Set from the moment a character creates/joins a Lobby (forming or in_progress) until the
   // lobby disbands or its LobbyExpedition is claimed — same mutual-exclusion role as
-  // activeExpeditionId, just for the parallel group-combat pipeline (see modules/lobbies).
-  activeLobbyId String? @unique
+  // activeExpeditionId (a character is in at most one lobby), EXCEPT NOT @unique — unlike an
+  // Expedition (always exactly one character), a Lobby has UP TO 3 members all pointing at the
+  // SAME lobby id at once, so uniqueness here would wrongly block the 2nd/3rd member from joining.
+  activeLobbyId String?
   // Travel state — see docs/architecture.md "Etap 9". travelArrivesAt null = not traveling;
   // its presence is the source of truth for "in transit", independent of currentZoneId (which
   // only changes once arrival is resolved). travelDestinationZoneId null while traveling means
