@@ -5,8 +5,9 @@ import { CreateCharacterSchema, type CoreStatKey } from "@mmo/shared";
 import { AppShell } from "../components/AppShell";
 import { PanelFrame } from "../components/common/PanelFrame";
 import { ProgressBar } from "../components/common/ProgressBar";
+import { DeleteCharacterModal } from "../components/character/DeleteCharacterModal";
 import { ApiError } from "../lib/apiClient";
-import { listCharacters, createCharacter } from "../lib/charactersApi";
+import { listCharacters, createCharacter, deleteCharacter } from "../lib/charactersApi";
 import { listPlayerClasses } from "../lib/classesApi";
 import { useCharacterStore } from "../store/characterStore";
 
@@ -37,6 +38,7 @@ function PortraitBackdrop({ className = "" }: { className?: string }) {
 export function CharactersPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const activeCharacterId = useCharacterStore((s) => s.activeCharacterId);
   const setActiveCharacterId = useCharacterStore((s) => s.setActiveCharacterId);
   const charactersQuery = useQuery({ queryKey: ["characters"], queryFn: listCharacters });
   const classesQuery = useQuery({ queryKey: ["player-classes"], queryFn: listPlayerClasses });
@@ -49,6 +51,8 @@ export function CharactersPage() {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // First load: jump straight into character showcase if one exists, otherwise straight into
   // creation — there's nothing useful to show on an empty "select a character" screen.
@@ -79,6 +83,18 @@ export function CharactersPage() {
       setSelectedCharacterId(character.id);
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się utworzyć postaci"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (password: string) => deleteCharacter(selectedCharacterId!, password),
+    onSuccess: async () => {
+      setIsDeleting(false);
+      setDeleteError(null);
+      if (activeCharacterId === selectedCharacterId) setActiveCharacterId(null);
+      setSelectedCharacterId(null);
+      await queryClient.invalidateQueries({ queryKey: ["characters"] });
+    },
+    onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Nie udało się usunąć postaci"),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -295,6 +311,15 @@ export function CharactersPage() {
                 <p className="mt-1 text-sm text-parchment-dim">
                   {selectedCharacter.exp} exp · {selectedCharacter.gold} złota
                 </p>
+                <button
+                  onClick={() => {
+                    setDeleteError(null);
+                    setIsDeleting(true);
+                  }}
+                  className="mt-2 text-xs text-red-400 hover:underline"
+                >
+                  Usuń postać
+                </button>
               </div>
               <button
                 onClick={enterWorld}
@@ -308,6 +333,19 @@ export function CharactersPage() {
           <p className="text-sm text-parchment-faint">Wybierz postać z listy.</p>
         )}
       </div>
+
+      {isDeleting && selectedCharacter && (
+        <DeleteCharacterModal
+          characterName={selectedCharacter.name}
+          error={deleteError}
+          isPending={deleteMutation.isPending}
+          onConfirm={(password) => deleteMutation.mutate(password)}
+          onCancel={() => {
+            setIsDeleting(false);
+            setDeleteError(null);
+          }}
+        />
+      )}
     </AppShell>
   );
 }

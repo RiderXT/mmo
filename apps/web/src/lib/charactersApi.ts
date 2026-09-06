@@ -5,6 +5,8 @@ export const listCharacters = () => apiFetch<Character[]>("/api/characters");
 export const getCharacter = (id: string) => apiFetch<Character>(`/api/characters/${id}`);
 export const createCharacter = (input: CreateCharacterInput) =>
   apiFetch<Character>("/api/characters", { method: "POST", body: JSON.stringify(input) });
+export const deleteCharacter = (characterId: string, password: string) =>
+  apiFetch<{ ok: true }>(`/api/characters/${characterId}`, { method: "DELETE", body: JSON.stringify({ password }) });
 
 export const allocateStat = (characterId: string, stat: CoreStatKey) =>
   apiFetch<Character>(`/api/characters/${characterId}/allocate-stat`, {

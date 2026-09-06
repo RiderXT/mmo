@@ -4564,3 +4564,42 @@ reset poziomu do bramy) działające zgodnie z projektem. `pnpm --filter shared 
 `tsc --noEmit` na `shared`/`api`/`web` czyste. Cała testowa konfiguracja (konto, postać, 5
 tymczasowych itemów, nadpisania `maxLevel`/`bookGateFromLevel`/wymagań na "Moc Umysłu" i "Rybak")
 usunięta po weryfikacji.
+
+## Usuwanie postaci (hasło do konta) + limit 4 postaci
+
+User poprosił o przycisk usunięcia postaci w zakładce Postacie, z potwierdzeniem przez wpisanie
+hasła do konta (nie samo kliknięcie potwierdzenia), oraz o obniżenie limitu postaci na konto z
+5 do 4. Gracz nigdy wcześniej nie mógł usunąć postaci w ogóle — istniał tylko limit tworzenia
+(`MAX_CHARACTERS_PER_USER` w `characters/service.ts`), zero ścieżki `delete` poza adminem (którego
+też nie było dla postaci, tylko dla klas).
+
+- **`deleteCharacter()`** (nowa funkcja, `characters/service.ts`) — dokładnie ten sam wzorzec co
+  `auth/service.ts`'s `requestAccountDeletion`: `verifyPassword(user.passwordHash, password)`,
+  401 "Nieprawidłowe hasło" przy niezgodności, inaczej `prisma.character.delete()`. Wszystkie
+  bezpośrednie relacje do `Character` w schemacie mają już `onDelete: Cascade` (ekwipunek,
+  umiejętności, ekspedycje, sesja zbieractwa, nagrody dzienne...) poza `Message.senderCharacterId`/
+  `recipientCharacterId`, które celowo mają `SetNull` (patrz poprzednia sekcja) — więc pojedyncze
+  `delete` na postaci czyści cały jej dorobek bez ręcznego wieloetapowego czyszczenia. Nowa trasa
+  `DELETE /api/characters/:id` (body: `{ password }`, `DeleteCharacterSchema` w
+  `packages/shared/src/schemas/character.ts`).
+- **`MAX_CHARACTERS_PER_USER`** obniżony z 5 na 4 (jedna linia, `characters/service.ts`).
+- **`DeleteCharacterModal.tsx`** (nowy, `components/character/`) — osobny od generycznego
+  `ConfirmModal.tsx`, bo ten nie ma miejsca na pole tekstowe: formularz z jednym polem hasła,
+  czerwony przycisk "Usuń postać" wyłączony do czasu wpisania czegokolwiek, komunikat błędu (złe
+  hasło) pod polem zamiast zamykania modala.
+- **`CharactersPage.tsx`** — czerwony link "Usuń postać" pod nazwą/expem wybranej postaci, obok
+  głównego przycisku "Wejdź do gry". Po udanym usunięciu: jeśli usuwana postać była aktualnie
+  aktywną (`useCharacterStore`), czyści `activeCharacterId` (żeby `/game` nie próbowało później
+  wczytać nieistniejącej postaci), odznacza wybór na liście — gracz wraca do "Wybierz postać z
+  listy", bez auto-przeskakiwania na inną postać (świadomie, żeby zniszczenie czegoś nie
+  przechodziło płynnie w wybór czegoś innego).
+
+Zweryfikowane end-to-end w przeglądarce na koncie testowym: utworzenie 4 postaci powiodło się,
+próba 5. zablokowana komunikatem "Limit postaci to 4" (dokładnie tak jak wcześniej przy 5 — sam
+limit, nowa wartość); usunięcie z BŁĘDNYM hasłem odrzucone ("Nieprawidłowe hasło", postać
+zostaje); usunięcie z POPRAWNYM hasłem powiodło się — postać zniknęła z listy, panel wrócił do
+stanu wyboru. (Jedna runda testu w przeglądarce natrafiła na wygasły token dostępu w trakcie
+długiego ręcznego klikania — potwierdzone przez curl, że backend działał poprawnie cały czas;
+powtórzone na świeżej sesji zalogowania z tym samym wynikiem, więc to nie był bug funkcji.)
+`tsc --noEmit` czysto na `api` i `web`. Konto testowe i pozostałe postacie usunięte po
+weryfikacji.

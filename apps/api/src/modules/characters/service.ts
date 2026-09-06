@@ -4,6 +4,7 @@ import { resolveTravelArrival } from "../../lib/travelResolution.js";
 import { addLootToInventory } from "../inventory/service.js";
 import { tryPayReferralReward } from "../../lib/referralRewards.js";
 import { checkBookCooldown } from "../../lib/bookCooldown.js";
+import { verifyPassword } from "../../lib/password.js";
 import type { CreateCharacterInput, CoreStatKey, ReadSkillBookInput } from "@mmo/shared";
 
 export class CharacterError extends Error {
@@ -15,7 +16,7 @@ export class CharacterError extends Error {
   }
 }
 
-const MAX_CHARACTERS_PER_USER = 5;
+const MAX_CHARACTERS_PER_USER = 4;
 
 export async function listCharacters(userId: string) {
   const characters = await prisma.character.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
@@ -53,6 +54,36 @@ async function assertOwnership(characterId: string, userId: string) {
     throw new CharacterError("Nie znaleziono postaci", 404);
   }
   return character;
+}
+
+/** Permanent — the same "type your account password to confirm" gate as
+ * auth/service.ts's requestAccountDeletion, just scoped to one character instead of the whole
+ * account. Everything the character owns (inventory, skills, expeditions, ...) cascades away with
+ * it at the DB level (see schema.prisma) except mail, which only SetNulls the character reference
+ * so the other side of a conversation keeps their own copy. */
+export async function deleteCharacter(
+  characterId: string,
+  userId: string,
+  password: string,
+  requestId?: string,
+): Promise<void> {
+  const character = await assertOwnership(characterId, userId);
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  if (!(await verifyPassword(user.passwordHash, password))) {
+    throw new CharacterError("Nieprawidłowe hasło", 401);
+  }
+
+  await prisma.character.delete({ where: { id: characterId } });
+
+  await logAction({
+    module: "characters",
+    action: "delete",
+    actorUserId: userId,
+    actorCharacterId: characterId,
+    requestId,
+    payload: { characterName: character.name },
+  });
 }
 
 export async function createCharacter(

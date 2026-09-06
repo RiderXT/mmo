@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { CreateCharacterSchema, AllocateStatSchema, UnlockSkillSchema, UnlockNodeSchema, ReadSkillBookSchema } from "@mmo/shared";
+import { CreateCharacterSchema, AllocateStatSchema, UnlockSkillSchema, UnlockNodeSchema, ReadSkillBookSchema, DeleteCharacterSchema } from "@mmo/shared";
 import { requireAuth } from "../../lib/authGuard.js";
 import { getCharacterCombatStats, getCharacterCombatStatsBreakdown, ExpeditionError } from "../expeditions/service.js";
 import {
@@ -12,6 +12,7 @@ import {
   unlockSkill,
   unlockNode,
   readSkillBook,
+  deleteCharacter,
   CharacterError,
 } from "./service.js";
 
@@ -120,6 +121,18 @@ export async function charactersRoutes(app: FastifyInstance): Promise<void> {
     try {
       const result = await readSkillBook({ characterId: id, inventoryItemId }, request.user!.sub, request.id);
       return reply.send(result);
+    } catch (err) {
+      if (err instanceof CharacterError) return reply.code(err.statusCode).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.delete("/:id", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { password } = DeleteCharacterSchema.parse(request.body);
+    try {
+      await deleteCharacter(id, request.user!.sub, password, request.id);
+      return reply.send({ ok: true });
     } catch (err) {
       if (err instanceof CharacterError) return reply.code(err.statusCode).send({ error: err.message });
       throw err;
