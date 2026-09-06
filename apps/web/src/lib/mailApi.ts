@@ -1,7 +1,7 @@
 import { apiFetch } from "./apiClient";
 
 export interface ConversationSummaryDto {
-  partnerUserId: string;
+  partnerCharacterId: string;
   partnerCharacterName: string | null;
   lastMessage: string;
   lastMessageAt: string;
@@ -13,21 +13,24 @@ export interface ConversationMessageDto {
   body: string;
   createdAt: string;
   fromMe: boolean;
+  characterName: string;
 }
 
 export interface SentMessageDto {
   id: string;
   body: string;
   createdAt: string;
-  recipientUserId: string;
+  recipientCharacterId: string;
 }
 
-export const listConversations = () => apiFetch<ConversationSummaryDto[]>("/api/mail/conversations");
-export const getConversation = (partnerUserId: string) =>
-  apiFetch<ConversationMessageDto[]>(`/api/mail/conversations/${partnerUserId}`);
-export const deleteConversation = (partnerUserId: string) =>
-  apiFetch<{ ok: true }>(`/api/mail/conversations/${partnerUserId}`, { method: "DELETE" });
-export const getUnreadMailCount = () => apiFetch<{ count: number }>("/api/mail/unread-count");
+export const listConversations = (characterId: string) =>
+  apiFetch<ConversationSummaryDto[]>(`/api/mail/${characterId}/conversations`);
+export const getConversation = (characterId: string, partnerCharacterId: string) =>
+  apiFetch<ConversationMessageDto[]>(`/api/mail/${characterId}/conversations/${partnerCharacterId}`);
+export const deleteConversation = (characterId: string, partnerCharacterId: string) =>
+  apiFetch<{ ok: true }>(`/api/mail/${characterId}/conversations/${partnerCharacterId}`, { method: "DELETE" });
+export const getUnreadMailCount = (characterId: string) =>
+  apiFetch<{ count: number }>(`/api/mail/${characterId}/unread-count`);
 
-export const sendMessage = (input: { recipientCharacterName: string; body: string }) =>
-  apiFetch<SentMessageDto>("/api/mail", { method: "POST", body: JSON.stringify(input) });
+export const sendMessage = (characterId: string, input: { recipientCharacterName: string; body: string }) =>
+  apiFetch<SentMessageDto>(`/api/mail/${characterId}`, { method: "POST", body: JSON.stringify(input) });

@@ -255,9 +255,16 @@ function CharacterNavLinks({ onNavigate }: { onNavigate?: () => void }) {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate();
   const { user, clearSession } = useAuthStore();
+  const characterId = useCharacterStore((s) => s.activeCharacterId);
   // 30s poll — frequent enough that an unread badge feels current without hammering the API the
   // way ServerAdminPage's 2-5s dashboards do (those are admin-only and already accepted as busy).
-  const unreadMailQuery = useQuery({ queryKey: ["mail-unread-count"], queryFn: getUnreadMailCount, refetchInterval: 30000 });
+  // Mail is per-character — no active character (e.g. still on /characters) means no badge yet.
+  const unreadMailQuery = useQuery({
+    queryKey: ["mail-unread-count", characterId],
+    queryFn: () => getUnreadMailCount(characterId!),
+    enabled: !!characterId,
+    refetchInterval: 30000,
+  });
   const unreadMailCount = unreadMailQuery.data?.count ?? 0;
 
   async function handleLogout() {

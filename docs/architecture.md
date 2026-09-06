@@ -3727,6 +3727,55 @@ istniejącego rozmówcy trafiło do tego samego wątku (nie zduplikowało konwer
 konwersacji wyczyściło widok nadawcy przy zachowaniu widoku odbiorcy. Konta testowe usunięte po
 teście. `tsc --noEmit` czysto na `api`, `web` i `shared` (przebudowany po zmianie schematu Zod).
 
+### Poczta per postać, nie per konto (post-poczta-konwersacje)
+
+User zgłosił: "po zmianie postaci można otworzyć i odpowiedzieć inną postacią na konwersację innej
+postaci, poczta powinna być chyba przypisana do postaci nie do konta" + "w oknie rozmowy małą
+czcionką można zaznaczyć który dymek czatu należy do której postaci czyli dać jej nick". Oba trafne:
+`Message.senderId`/`recipientId` wskazywały na `User`, więc `listConversations(userId)` pokazywało
+DOKŁADNIE to samo dla każdej postaci na koncie — przełączenie postaci nie zmieniało widoku poczty
+wcale, mimo że reszta gry (ekwipunek, staty, umiejętności) jest już od dawna per-postać. Drugie
+zgłoszenie było naturalną konsekwencją braku danych: skoro żadna wiadomość nie wiedziała KTÓRA
+postać ją wysłała, front nie miał czym podpisać dymka.
+
+- **`Message`** (oba pliki schematu) dostał `senderCharacterId`/`recipientCharacterId` (nullable —
+  wiadomości sprzed tej zmiany nie mają wiarygodnego pochodzenia per-postać do odzyskania).
+  Istniejące `senderId`/`recipientId` (User) zostają bez zmian — nadal potrzebne do
+  `onDelete: Cascade` przy usunięciu konta i do `sender`/`recipient` relacji.
+- **`scripts/_backfill_message_characters.ts`** (nowy, one-off, nie wpięty w deploy.sh — ten sam
+  wzorzec co `_delete_orphaned_inventory_items.ts`) uzupełnia stare wiersze najlepszą dostępną
+  wiedzą: reprezentatywna (najwyższy poziom) postać danego konta — dokładna wartość dla konta z
+  jedną postacią, zgadywanie dla wielo-postaciowych (ta sama heurystyka co lista znajomych/profil).
+  Bezpieczny do wielokrotnego uruchomienia (dotyka tylko wierszy z `null`). **Do uruchomienia
+  ręcznie na produkcji po wdrożeniu tej zmiany.**
+- **`mail/service.ts`** przepisany na skalowanie po `characterId` zamiast `userId`:
+  `listConversations`/`getConversation`/`deleteConversation`/`getUnreadCount`/`sendMessage`
+  przyjmują teraz `characterId` (+ `userId` do weryfikacji własności postaci, ten sam
+  `assertCharacterOwnership` wzorzec co `inventory/service.ts`), grupowanie po
+  `senderCharacterId`/`recipientCharacterId` zamiast `senderId`/`recipientId`. Blokada wysyłania do
+  samego siebie zostaje na poziomie KONTA (`targetCharacter.userId === userId`) — bez zmian
+  polityki, nie było o to zgłoszenia.
+- **Trasy**: `/api/mail/conversations/*` → `/api/mail/:characterId/conversations/*` (ten sam
+  wzorzec `:characterId` w ścieżce co `/api/inventory/:characterId`).
+- **`getConversation`** zwraca teraz `characterName` przy KAŻDEJ wiadomości (rozwiązane w całości
+  po stronie serwera — nazwa mojej postaci brana z już zweryfikowanego właściciela, nazwa
+  rozmówcy z jego rekordu — front nie musi niczego doklejać), pokazane w
+  [MailPage.tsx](../apps/web/src/pages/MailPage.tsx) jako mały napis nad każdym dymkiem.
+- **Front**: `MailPage.tsx`/`AppShell.tsx`'s licznik nieprzeczytanych czytają aktywną postać z
+  `useCharacterStore` (ten sam store co `GamePage.tsx`), zapytania kluczowane po `characterId` —
+  przełączenie postaci na `/characters` teraz faktycznie odświeża widok poczty zamiast pokazywać tę
+  samą, zamrożoną listę.
+
+Zweryfikowane end-to-end: dwa konta testowe (konto A z dwiema postaciami MailTestA1/MailTestA2,
+konto B z MailTestB), wiadomość B→A1 przez API — `GET .../conversations` dla A1 pokazał wątek, dla
+A2 (to samo konto) pustą listę `[]`, potwierdzając zamknięcie wycieku. W przeglądarce: zalogowano
+się jako konto A, wybrano MailTestA1, otwarto wątek z MailTestB — etykieta "MailTestB" nad
+przychodzącym dymkiem, po odpowiedzi etykieta "MailTestA1" nad własnym; przełączenie na MailTestA2
+(`/characters` → "WEJDŹ DO GRY") i wejście w Pocztę pokazało "Brak konwersacji" — konwersacja
+MailTestA1↔MailTestB niewidoczna z drugiej postaci tego samego konta. `pnpm --filter @mmo/api exec
+tsc --noEmit` i `pnpm --filter web exec tsc --noEmit` czyste. Dane testowe (2 konta, 3 postacie,
+wiadomości) usunięte po weryfikacji.
+
 ### Edycja itemu w panelu admina jako wyskakujące okno
 
 Formularz edycji/tworzenia itemu (bardzo długi — grafika, staty bazowe, losowe zakresy, wymagania

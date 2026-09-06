@@ -159,6 +159,8 @@ model Character {
   expeditions Expedition[]    @relation("CharacterExpeditions")
   gatherSession GatherSession?
   passiveSkills CharacterPassiveSkill[]
+  sentMessages     Message[] @relation("MessagesSentByCharacter")
+  receivedMessages Message[] @relation("MessagesReceivedByCharacter")
 
   @@index([userId])
   @@index([classId])
@@ -878,6 +880,12 @@ model Message {
   id                 String   @id @default(cuid())
   senderId           String
   recipientId        String
+  // Which CHARACTER sent/received this message — mail is per-character, not per-account, so
+  // switching to another character on the same account must not expose someone else's
+  // conversations. Nullable+backfilled (see scripts/_backfill_message_characters.ts) because
+  // messages sent before this field existed have no reliable per-character origin to recover.
+  senderCharacterId    String?
+  recipientCharacterId String?
   subject            String
   body               String
   read               Boolean  @default(false)
@@ -887,9 +895,13 @@ model Message {
 
   sender    User @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
   recipient User @relation("MessagesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  senderCharacter    Character? @relation("MessagesSentByCharacter", fields: [senderCharacterId], references: [id], onDelete: SetNull)
+  recipientCharacter Character? @relation("MessagesReceivedByCharacter", fields: [recipientCharacterId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, read])
   @@index([senderId])
+  @@index([recipientCharacterId, read])
+  @@index([senderCharacterId])
 }
 
 // Zgłoszenie do administracji (bug, pytanie itd.) — treść startowa w samym tickecie, dalsza

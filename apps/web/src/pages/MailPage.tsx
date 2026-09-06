@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/AppShell";
 import { PanelFrame } from "../components/common/PanelFrame";
 import { ConfirmModal } from "../components/common/ConfirmModal";
 import { ApiError } from "../lib/apiClient";
+import { useCharacterStore } from "../store/characterStore";
 import {
   listConversations,
   getConversation,
@@ -19,6 +20,7 @@ function formatTimestamp(iso: string) {
 
 export function MailPage() {
   const queryClient = useQueryClient();
+  const characterId = useCharacterStore((s) => s.activeCharacterId);
   // ?to=CharacterName (e.g. the "Wiadomość" button on the Friends page) opens straight into that
   // person's conversation — existing thread if one already exists, otherwise a fresh compose
   // addressed to them. Read once (handledToParam guards against re-triggering while browsing).
@@ -33,11 +35,15 @@ export function MailPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
 
-  const conversationsQuery = useQuery({ queryKey: ["mail-conversations"], queryFn: listConversations });
+  const conversationsQuery = useQuery({
+    queryKey: ["mail-conversations", characterId],
+    queryFn: () => listConversations(characterId!),
+    enabled: !!characterId,
+  });
   const conversationQuery = useQuery({
-    queryKey: ["mail-conversation", selectedPartnerId],
-    queryFn: () => getConversation(selectedPartnerId!),
-    enabled: !!selectedPartnerId,
+    queryKey: ["mail-conversation", characterId, selectedPartnerId],
+    queryFn: () => getConversation(characterId!, selectedPartnerId!),
+    enabled: !!characterId && !!selectedPartnerId,
   });
 
   useEffect(() => {
@@ -45,7 +51,7 @@ export function MailPage() {
     const existing = conversationsQuery.data.find(
       (c) => c.partnerCharacterName?.toLowerCase() === toParam.toLowerCase(),
     );
-    if (existing) setSelectedPartnerId(existing.partnerUserId);
+    if (existing) setSelectedPartnerId(existing.partnerCharacterId);
     else setNewRecipientName(toParam);
     setHandledToParam(true);
   }, [toParam, handledToParam, conversationsQuery.data]);
@@ -63,25 +69,25 @@ export function MailPage() {
     threadEndRef.current?.scrollIntoView({ block: "end" });
   }, [conversationQuery.data, selectedPartnerId]);
 
-  const selectedConversation = conversationsQuery.data?.find((c) => c.partnerUserId === selectedPartnerId);
+  const selectedConversation = conversationsQuery.data?.find((c) => c.partnerCharacterId === selectedPartnerId);
   const recipientName = newRecipientName ?? selectedConversation?.partnerCharacterName ?? null;
 
   const sendMutation = useMutation({
-    mutationFn: (body: string) => sendMessage({ recipientCharacterName: recipientName!.trim(), body }),
+    mutationFn: (body: string) => sendMessage(characterId!, { recipientCharacterName: recipientName!.trim(), body }),
     onSuccess: (sent) => {
       setSendError(null);
       setMessageBody("");
       setNewRecipientName(null);
-      setSelectedPartnerId(sent.recipientUserId);
+      setSelectedPartnerId(sent.recipientCharacterId);
       queryClient.invalidateQueries({ queryKey: ["mail-conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["mail-conversation", sent.recipientUserId] });
+      queryClient.invalidateQueries({ queryKey: ["mail-conversation", characterId, sent.recipientCharacterId] });
       queryClient.invalidateQueries({ queryKey: ["mail-unread-count"] });
     },
     onError: (err) => setSendError(err instanceof ApiError ? err.message : "Nie udało się wysłać wiadomości"),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteConversation(selectedPartnerId!),
+    mutationFn: () => deleteConversation(characterId!, selectedPartnerId!),
     onSuccess: () => {
       setSelectedPartnerId(null);
       queryClient.invalidateQueries({ queryKey: ["mail-conversations"] });
@@ -89,7 +95,7 @@ export function MailPage() {
   });
 
   function openConversation(c: ConversationSummaryDto) {
-    setSelectedPartnerId(c.partnerUserId);
+    setSelectedPartnerId(c.partnerCharacterId);
     setNewRecipientName(null);
     setSendError(null);
   }
@@ -110,6 +116,10 @@ export function MailPage() {
   const conversations = conversationsQuery.data ?? [];
   const showThread = selectedPartnerId !== null || newRecipientName !== null;
 
+  if (!characterId) {
+    return <Navigate to="/characters" replace />;
+  }
+
   return (
     <AppShell>
       <div className="grid gap-4 md:grid-cols-[300px_1fr] md:items-start">
@@ -129,9 +139,9 @@ export function MailPage() {
           ) : (
             <ul className="flex flex-col gap-1">
               {conversations.map((c) => {
-                const active = c.partnerUserId === selectedPartnerId;
+                const active = c.partnerCharacterId === selectedPartnerId;
                 return (
-                  <li key={c.partnerUserId}>
+                  <li key={c.partnerCharacterId}>
                     <button
                       onClick={() => openConversation(c)}
                       className={`w-full border p-2.5 text-left transition ${
@@ -189,7 +199,11 @@ export function MailPage() {
               {selectedPartnerId && (
                 <div className="flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1">
                   {(conversationQuery.data ?? []).map((m) => (
-                    <div key={m.id} className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}>
+                    <div
+                      key={m.id}
+                      className={`flex flex-col ${m.fromMe ? "items-end" : "items-start"}`}
+                    >
+                      <span className="px-1 text-[10px] text-parchment-faint">{m.characterName}</span>
                       <div
                         className={`max-w-[75%] px-3 py-2 text-sm ${
                           m.fromMe ? "bg-gold/15 text-parchment" : "bg-panel-raised text-parchment"
