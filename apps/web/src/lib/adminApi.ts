@@ -157,6 +157,7 @@ export interface ClassSkillDto {
   scalingFactor: number;
   unlockCost: number;
   targetStat: StatKey | null;
+  appliesToGroup: boolean;
   effectType: SkillEffectType | null;
   cooldownSeconds: number | null;
   baseManaCost: number | null;

@@ -5,7 +5,7 @@ import { hasActiveGatherSession } from "../../lib/gatherGuard.js";
 import { getActiveEventMultipliers } from "../../lib/gameEvents.js";
 import { getActivePersonalBuffMultipliers } from "../../lib/personalBuffs.js";
 import { tryPayReferralReward } from "../../lib/referralRewards.js";
-import { getExpeditionDurationMinutes } from "../settings/service.js";
+import { getExpeditionDurationMinutes, getRegenSettings } from "../settings/service.js";
 import { addLootToInventory } from "../inventory/service.js";
 import {
   computeDerivedStats,
@@ -118,14 +118,30 @@ export async function gatherCombatBuild(characterId: string, opts: { includeGrou
     sumNodePct(cs.classSkill, nodeLevels, "magnitude") +
     cs.bookMagnitudePct;
 
-  const passiveSkills: PassiveSkillBonus[] = characterSkills
+  const ownPassiveSkills: PassiveSkillBonus[] = characterSkills
     .filter((cs) => cs.classSkill.kind === "passive" && cs.level > 0 && cs.classSkill.targetStat)
     .map((cs) => ({
       scalingStat: cs.classSkill.scalingStat as CoreStatKey,
       scalingFactor: cs.classSkill.scalingFactor,
       targetStat: cs.classSkill.targetStat as StatKey,
       magnitudeMultiplier: skillMagnitudeMultiplier(cs),
-    }))
+    }));
+
+  // Subset of the character's own passives flagged appliesToGroup (see CombatRoleSchema's
+  // "support" comment) — exposed separately so a Lobby fight (modules/lobbies
+  // startLobbyExpedition) can project these onto every OTHER member too, on top of applying
+  // normally to their own caster via ownPassiveSkills below. Always empty in solo play's own
+  // passiveSkills usage — nothing here changes solo behavior, it's an additional export.
+  const groupPassiveSkills: PassiveSkillBonus[] = characterSkills
+    .filter((cs) => cs.classSkill.kind === "passive" && cs.level > 0 && cs.classSkill.targetStat && cs.classSkill.appliesToGroup)
+    .map((cs) => ({
+      scalingStat: cs.classSkill.scalingStat as CoreStatKey,
+      scalingFactor: cs.classSkill.scalingFactor,
+      targetStat: cs.classSkill.targetStat as StatKey,
+      magnitudeMultiplier: skillMagnitudeMultiplier(cs),
+    }));
+
+  const passiveSkills: PassiveSkillBonus[] = ownPassiveSkills
     .concat(
       groupCombatSkills.map((gs) => ({
         scalingStat: gs.skillType.scalingStat as CoreStatKey,
@@ -184,7 +200,7 @@ export async function gatherCombatBuild(characterId: string, opts: { includeGrou
     quantity: inv.quantity,
   }));
 
-  return { character, core, equipmentStats, passiveSkills, activeSkills, potions, activeSlotsSnapshot };
+  return { character, core, equipmentStats, passiveSkills, groupPassiveSkills, activeSkills, potions, activeSlotsSnapshot };
 }
 
 /** Computes a character's current derived combat stats (HP/MP/attack/defense/...) from their build — independent of any zone, used for the character sheet readout outside of an expedition. */
@@ -298,6 +314,7 @@ async function buildAndSimulate(
 
   const eventMultipliers = await getActiveEventMultipliers();
   const personalBuffs = getActivePersonalBuffMultipliers(character);
+  const regenSettings = await getRegenSettings();
   // Personal item buffs MULTIPLY with the event multiplier, they don't replace it — see
   // lib/personalBuffs.ts. The combined value is what gets stored on the Expedition below, so
   // checkRewardPlausibility's anti-cheat margin (which scales off appliedExpMultiplier) stays
@@ -310,6 +327,7 @@ async function buildAndSimulate(
     activeSkills,
     potions,
     durationMinutes,
+    regenSettings,
     expMultiplier,
     goldMultiplier,
     eventMultipliers.bonusDrop,

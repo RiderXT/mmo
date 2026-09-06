@@ -206,6 +206,10 @@ model ClassSkill {
   scalingStat     String // CoreStatKey
   scalingFactor   Float   @default(1)
   targetStat      String? // StatKey — passive only
+  // Passive only — see @mmo/shared CombatRoleSchema's "support" comment. When true, this skill's
+  // bonus (already applied to its own caster like any passive) is ALSO projected onto every OTHER
+  // member of the caster's Lobby during a group fight — see modules/lobbies startLobbyExpedition.
+  appliesToGroup  Boolean @default(false)
   effectType      String? // SkillEffectType (@mmo/shared enums.ts) — active only
   cooldownSeconds Int? // active only, BASE cooldown (nodes with effect "cooldown" reduce it)
   // unlockCost is the FLAT cost per level (same at every level, like SkillTreeNode.pointCost —

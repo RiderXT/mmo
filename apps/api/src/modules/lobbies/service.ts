@@ -6,7 +6,7 @@ import { getActiveEventMultipliers } from "../../lib/gameEvents.js";
 import { getActivePersonalBuffMultipliers } from "../../lib/personalBuffs.js";
 import { tryPayReferralReward } from "../../lib/referralRewards.js";
 import { addLootToInventory } from "../inventory/service.js";
-import { getExpeditionDurationMinutes, getLobbySettings } from "../settings/service.js";
+import { getExpeditionDurationMinutes, getLobbySettings, getRegenSettings } from "../settings/service.js";
 import {
   gatherCombatBuild,
   clearStaleActiveExpeditionPointer,
@@ -286,10 +286,22 @@ export async function startLobbyExpedition(
 
   const settings = await getLobbySettings();
   const eventMultipliers = await getActiveEventMultipliers();
+  const regenSettings = await getRegenSettings();
   const durationMinutes = await getExpeditionDurationMinutes();
 
-  const memberBuilds: LobbyMemberBuild[] = [];
-  const memberCharacters: { characterId: string; classId: string | null; combatRole: CombatRole }[] = [];
+  // First pass: gather each member's own raw build (not yet turned into DerivedStats — a support
+  // member's group-wide passives still need folding into every OTHER member's array first).
+  const rawBuilds: {
+    characterId: string;
+    character: (typeof lobby.members)[number]["character"];
+    combatRole: CombatRole;
+    core: Awaited<ReturnType<typeof gatherCombatBuild>>["core"];
+    equipmentStats: Awaited<ReturnType<typeof gatherCombatBuild>>["equipmentStats"];
+    passiveSkills: Awaited<ReturnType<typeof gatherCombatBuild>>["passiveSkills"];
+    groupPassiveSkills: Awaited<ReturnType<typeof gatherCombatBuild>>["groupPassiveSkills"];
+    activeSkills: Awaited<ReturnType<typeof gatherCombatBuild>>["activeSkills"];
+    potions: Awaited<ReturnType<typeof gatherCombatBuild>>["potions"];
+  }[] = [];
   for (const m of lobby.members) {
     const character = m.character;
     const maxLevelOk = zone.allowRevisitAboveLevel || character.level <= zone.maxLevel;
@@ -300,19 +312,39 @@ export async function startLobbyExpedition(
       );
     }
     const build = await gatherCombatBuild(m.characterId, { includeGroupCombatBonus: true });
-    const stats = computeDerivedStats(build.core, build.equipmentStats, build.passiveSkills);
-    const personalBuffs = getActivePersonalBuffMultipliers(character);
-    memberBuilds.push({
+    rawBuilds.push({
       characterId: m.characterId,
+      character,
       combatRole: (character.class?.combatRole ?? "dps") as CombatRole,
-      stats,
+      core: build.core,
+      equipmentStats: build.equipmentStats,
+      passiveSkills: build.passiveSkills,
+      groupPassiveSkills: build.groupPassiveSkills,
       activeSkills: build.activeSkills,
       potions: build.potions,
+    });
+  }
+
+  // Second pass: project every OTHER member's group-wide ("support") passives onto this member's
+  // own passives before computing their final derived stats — a member's own group-wide skill is
+  // already in their own passiveSkills, so only OTHERS' contributions are appended here.
+  const memberBuilds: LobbyMemberBuild[] = [];
+  const memberCharacters: { characterId: string; classId: string | null; combatRole: CombatRole }[] = [];
+  for (const rb of rawBuilds) {
+    const othersGroupBonuses = rawBuilds.filter((other) => other.characterId !== rb.characterId).flatMap((other) => other.groupPassiveSkills);
+    const stats = computeDerivedStats(rb.core, rb.equipmentStats, rb.passiveSkills.concat(othersGroupBonuses));
+    const personalBuffs = getActivePersonalBuffMultipliers(rb.character);
+    memberBuilds.push({
+      characterId: rb.characterId,
+      combatRole: rb.combatRole,
+      stats,
+      activeSkills: rb.activeSkills,
+      potions: rb.potions,
       expMultiplier: eventMultipliers.expMultiplier * personalBuffs.expMultiplier,
       goldMultiplier: eventMultipliers.goldMultiplier * personalBuffs.goldMultiplier,
       dropChanceMultiplier: personalBuffs.dropMultiplier,
     });
-    memberCharacters.push({ characterId: m.characterId, classId: character.classId, combatRole: (character.class?.combatRole ?? "dps") as CombatRole });
+    memberCharacters.push({ characterId: rb.characterId, classId: rb.character.classId, combatRole: rb.combatRole });
   }
 
   const uniqueClassCount = new Set(memberCharacters.map((m) => m.classId).filter((id): id is string => !!id)).size;
@@ -327,6 +359,7 @@ export async function startLobbyExpedition(
     settings.lureExtraMonsterSlotsPerLureMember,
     classCompositionBonusPct,
     eventMultipliers.bonusDrop,
+    regenSettings,
   );
 
   const startedAt = new Date();

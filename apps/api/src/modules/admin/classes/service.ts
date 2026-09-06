@@ -38,6 +38,7 @@ function skillData(skill: ClassSkillInput) {
     scalingFactor: skill.scalingFactor,
     unlockCost: skill.unlockCost,
     targetStat: skill.targetStat ?? null,
+    appliesToGroup: skill.appliesToGroup,
     effectType: skill.effectType ?? null,
     cooldownSeconds: skill.cooldownSeconds ?? null,
     baseManaCost: skill.baseManaCost ?? null,

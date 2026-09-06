@@ -11,6 +11,10 @@ export const STAT_LABELS: Record<StatKey, string> = {
   evasion: "Unik",
   damageReduction: "Redukcja obrażeń",
   movementSpeed: "Prędkość ruchu",
+  hpRegenPct: "Regeneracja zdrowia",
+  hpRegenSpeedPct: "Szybkość regeneracji zdrowia",
+  manaRegenPct: "Regeneracja many",
+  manaRegenSpeedPct: "Szybkość regeneracji many",
 };
 
 /**
@@ -33,6 +37,10 @@ export const STAT_FORMAT: Record<StatKey, "flat" | "percent"> = {
   evasion: "percent",
   damageReduction: "percent",
   movementSpeed: "percent",
+  hpRegenPct: "percent",
+  hpRegenSpeedPct: "percent",
+  manaRegenPct: "percent",
+  manaRegenSpeedPct: "percent",
 };
 
 /** Formats a single stat value as a whole number, in Polish, sign-prefixed for item bonuses. */
@@ -68,6 +76,10 @@ export const COMBAT_STAT_TO_STAT_KEY = {
   evasion: "evasion",
   damageReduction: "damageReduction",
   movementSpeedPct: "movementSpeed",
+  hpRegenPct: "hpRegenPct",
+  hpRegenSpeedPct: "hpRegenSpeedPct",
+  manaRegenPct: "manaRegenPct",
+  manaRegenSpeedPct: "manaRegenSpeedPct",
 } as const satisfies Record<string, StatKey>;
 
 /** Formats a raw base/equipment/passive/total value from the stat breakdown — unlike

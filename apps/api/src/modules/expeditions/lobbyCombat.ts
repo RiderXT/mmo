@@ -1,4 +1,4 @@
-import type { ExpeditionResult, CombatRole } from "@mmo/shared";
+import type { ExpeditionResult, CombatRole, RegenSettings } from "@mmo/shared";
 import type { LobbyCombatEvent } from "@mmo/shared";
 import {
   randomInt,
@@ -33,7 +33,6 @@ export interface LobbySimulationOutcome {
   potionsConsumedByMember: Map<string, Map<string, number>>;
 }
 
-const MANA_REGEN_PER_SECOND_PCT = 0.001;
 const DEFAULT_BUFF_DURATION_SECONDS = 60;
 const THRESHOLD_POTION_COOLDOWN_SECONDS = 5;
 const ROUND_SECONDS = 3;
@@ -70,6 +69,14 @@ interface MemberState {
   hpHotPerSecond: number;
   manaHotUntil: number;
   manaHotPerSecond: number;
+  // Discrete regen ticks, same model as solo combat.ts (see its simulateExpedition comment) —
+  // precomputed once per member since they depend on that member's own stats.
+  hpRegenIntervalSeconds: number;
+  manaRegenIntervalSeconds: number;
+  hpRegenTickPct: number;
+  manaRegenTickPct: number;
+  nextHpRegenTick: number;
+  nextManaRegenTick: number;
 }
 
 interface SlotState {
@@ -79,11 +86,19 @@ interface SlotState {
   poisonDamagePerRound: number;
 }
 
-function newMemberState(build: LobbyMemberBuild): MemberState {
+function newMemberState(build: LobbyMemberBuild, regenSettings: RegenSettings): MemberState {
+  const hpRegenIntervalSeconds = regenSettings.baseHpRegenIntervalSeconds / (1 + build.stats.hpRegenSpeedPct);
+  const manaRegenIntervalSeconds = regenSettings.baseManaRegenIntervalSeconds / (1 + build.stats.manaRegenSpeedPct);
   return {
     build,
     hp: build.stats.maxHp,
     mana: build.stats.maxMana,
+    hpRegenIntervalSeconds,
+    manaRegenIntervalSeconds,
+    hpRegenTickPct: regenSettings.baseHpRegenPct * (1 + build.stats.hpRegenPct),
+    manaRegenTickPct: regenSettings.baseManaRegenPct * (1 + build.stats.manaRegenPct),
+    nextHpRegenTick: hpRegenIntervalSeconds,
+    nextManaRegenTick: manaRegenIntervalSeconds,
     alive: true,
     result: { expGained: 0, goldGained: 0, monstersDefeated: 0, loot: [] },
     lootMap: new Map(),
@@ -192,10 +207,11 @@ function tryConsumePotion(member: MemberState, p: PotionSlot, t: number, events:
  * nothing else calls solo combat with N=1 through this path.
  *
  * Aggro model: each round, EACH live monster slot independently picks a random currently-alive
- * "dps"-role member to fight this round (a member can be picked by more than one slot the same
- * round — that's intentional, it's what "more monsters attacking the group" means). "lure"-role
- * members are never picked, deal no damage, and take none. If no dps member is alive, the whole
- * lobby is considered wiped (lure members can't fight alone) even if lure members are still "up".
+ * fighting member ("dps" or "support" — see CombatRoleSchema, both fight identically) to fight
+ * this round (a member can be picked by more than one slot the same round — that's intentional,
+ * it's what "more monsters attacking the group" means). "lure"-role members are never picked, deal
+ * no damage, and take none. If no fighting member is alive, the whole lobby is considered wiped
+ * (lure alone can't fight) even if a lure member is still "up".
  */
 export function simulateLobbyExpedition(
   zone: SimZone,
@@ -205,8 +221,9 @@ export function simulateLobbyExpedition(
   lureExtraMonsterSlotsPerLureMember: number,
   classCompositionBonusPct: number,
   eventBonusDrop: EventBonusDrop | null,
+  regenSettings: RegenSettings,
 ): LobbySimulationOutcome {
-  const members = memberBuilds.map(newMemberState);
+  const members = memberBuilds.map((build) => newMemberState(build, regenSettings));
   const lureCount = members.filter((m) => m.build.combatRole === "lure").length;
   const slotCount = Math.max(1, monsterConcurrency + lureExtraMonsterSlotsPerLureMember * lureCount);
   const slots: SlotState[] = Array.from({ length: slotCount }, () => ({ monster: null, hp: 0, poisonRoundsLeft: 0, poisonDamagePerRound: 0 }));
@@ -216,8 +233,10 @@ export function simulateLobbyExpedition(
   let t = 0;
   let roundsEmitted = 0;
 
-  function aliveDpsMembers(): MemberState[] {
-    return members.filter((m) => m.alive && m.build.combatRole === "dps");
+  // "support" fights exactly like "dps" (see CombatRoleSchema comment) — only "lure" is excluded
+  // from being targeted/targeting.
+  function aliveFightingMembers(): MemberState[] {
+    return members.filter((m) => m.alive && m.build.combatRole !== "lure");
   }
 
   function grantKillRewards(monster: SimMonster, monsterSlotIndex: number) {
@@ -284,12 +303,19 @@ export function simulateLobbyExpedition(
         }
       }
 
-      member.mana = Math.min(member.build.stats.maxMana, member.mana + member.build.stats.maxMana * MANA_REGEN_PER_SECOND_PCT * ROUND_SECONDS);
+      if (t >= member.nextHpRegenTick) {
+        member.hp = Math.min(member.build.stats.maxHp, member.hp + member.build.stats.maxHp * member.hpRegenTickPct);
+        member.nextHpRegenTick += member.hpRegenIntervalSeconds;
+      }
+      if (t >= member.nextManaRegenTick) {
+        member.mana = Math.min(member.build.stats.maxMana, member.mana + member.build.stats.maxMana * member.manaRegenTickPct);
+        member.nextManaRegenTick += member.manaRegenIntervalSeconds;
+      }
       if (t <= member.hpHotUntil) member.hp = Math.min(member.build.stats.maxHp, member.hp + member.hpHotPerSecond * ROUND_SECONDS);
       if (t <= member.manaHotUntil) member.mana = Math.min(member.build.stats.maxMana, member.mana + member.manaHotPerSecond * ROUND_SECONDS);
     }
 
-    if (aliveDpsMembers().length === 0) {
+    if (aliveFightingMembers().length === 0) {
       events.push({ t, type: "lobby_wiped" });
       break outer;
     }
@@ -314,7 +340,7 @@ export function simulateLobbyExpedition(
         });
       }
 
-      const candidates = aliveDpsMembers();
+      const candidates = aliveFightingMembers();
       if (candidates.length === 0) {
         events.push({ t, type: "lobby_wiped" });
         break outer;

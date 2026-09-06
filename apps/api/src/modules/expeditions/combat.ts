@@ -1,4 +1,4 @@
-import type { StatBlock, StatKey, CoreStatKey, ExpeditionResult, CombatEvent, SkillEffectType } from "@mmo/shared";
+import type { StatBlock, StatKey, CoreStatKey, ExpeditionResult, CombatEvent, SkillEffectType, RegenSettings } from "@mmo/shared";
 
 /**
  * Interpolates an item's stats between +0 (base) and +9 (maxUpgradeStats) by its current
@@ -42,6 +42,13 @@ export interface DerivedStats {
   damageReduction: number;
   /** Out-of-combat only: shortens travel time to/from a zone. See startExpedition in service.ts. */
   movementSpeedPct: number;
+  /** Bonus to the % of maxHp/maxMana regenerated PER TICK (equipment/passive-skill only, no core-
+   * stat baseline — same as movementSpeedPct) — combined with RegenSettings' base rate in the
+   * regen tick logic inside simulateExpedition/lobbyCombat.ts, not here. */
+  hpRegenPct: number;
+  hpRegenSpeedPct: number;
+  manaRegenPct: number;
+  manaRegenSpeedPct: number;
 }
 
 export interface PassiveSkillBonus {
@@ -132,6 +139,10 @@ export function computeDerivedStats(
     damageReduction: Math.min(0.7, Math.max(0, bonus("damageReduction"))),
     // Equipment/passive-skill only — no core-stat baseline, unlike attackSpeed.
     movementSpeedPct: Math.min(0.75, Math.max(0, bonus("movementSpeed"))),
+    hpRegenPct: Math.max(0, bonus("hpRegenPct")),
+    hpRegenSpeedPct: Math.max(0, bonus("hpRegenSpeedPct")),
+    manaRegenPct: Math.max(0, bonus("manaRegenPct")),
+    manaRegenSpeedPct: Math.max(0, bonus("manaRegenSpeedPct")),
   };
 }
 
@@ -204,6 +215,10 @@ export function computeDerivedStatsBreakdown(
     movementSpeedPct: contribution(0, sumEquip("movementSpeed"), sumPassive("movementSpeed"), (v) =>
       Math.min(0.75, Math.max(0, v)),
     ),
+    hpRegenPct: contribution(0, sumEquip("hpRegenPct"), sumPassive("hpRegenPct"), (v) => Math.max(0, v)),
+    hpRegenSpeedPct: contribution(0, sumEquip("hpRegenSpeedPct"), sumPassive("hpRegenSpeedPct"), (v) => Math.max(0, v)),
+    manaRegenPct: contribution(0, sumEquip("manaRegenPct"), sumPassive("manaRegenPct"), (v) => Math.max(0, v)),
+    manaRegenSpeedPct: contribution(0, sumEquip("manaRegenSpeedPct"), sumPassive("manaRegenSpeedPct"), (v) => Math.max(0, v)),
   };
 }
 
@@ -226,7 +241,6 @@ export function pickWeighted<T>(items: T[], weight: (item: T) => number): T | nu
   return items[items.length - 1];
 }
 
-const MANA_REGEN_PER_SECOND_PCT = 0.001; // 0.1% of maxMana per second
 const DEFAULT_BUFF_DURATION_SECONDS = 60;
 const THRESHOLD_POTION_COOLDOWN_SECONDS = 5;
 // One round = one exchange of blows (player hits, monster hits back if it survived) — ticks
@@ -263,6 +277,7 @@ export function simulateExpedition(
   activeSkills: ActiveSkillDef[],
   potions: PotionSlot[],
   durationMinutes: number,
+  regenSettings: RegenSettings,
   expMultiplier = 1,
   goldMultiplier = 1,
   eventBonusDrop: EventBonusDrop | null = null,
@@ -270,6 +285,16 @@ export function simulateExpedition(
 ): SimulationOutcome {
   let hp = stats.maxHp;
   let mana = stats.maxMana;
+  // Discrete regen ticks (not continuous per-second) so hpRegenSpeedPct/manaRegenSpeedPct can
+  // visibly shorten the interval between ticks, distinct from hpRegenPct/manaRegenPct enlarging
+  // each tick — see RegenSettingsSchema. Same "next scheduled timestamp" pattern as
+  // potionNextInterval below.
+  const hpRegenIntervalSeconds = regenSettings.baseHpRegenIntervalSeconds / (1 + stats.hpRegenSpeedPct);
+  const manaRegenIntervalSeconds = regenSettings.baseManaRegenIntervalSeconds / (1 + stats.manaRegenSpeedPct);
+  const hpRegenTickPct = regenSettings.baseHpRegenPct * (1 + stats.hpRegenPct);
+  const manaRegenTickPct = regenSettings.baseManaRegenPct * (1 + stats.manaRegenPct);
+  let nextHpRegenTick = hpRegenIntervalSeconds;
+  let nextManaRegenTick = manaRegenIntervalSeconds;
   let expGained = 0;
   let goldGained = 0;
   let monstersDefeated = 0;
@@ -411,7 +436,14 @@ export function simulateExpedition(
       }
     }
 
-    mana = Math.min(stats.maxMana, mana + stats.maxMana * MANA_REGEN_PER_SECOND_PCT * ROUND_SECONDS);
+    if (t >= nextHpRegenTick) {
+      hp = Math.min(stats.maxHp, hp + stats.maxHp * hpRegenTickPct);
+      nextHpRegenTick += hpRegenIntervalSeconds;
+    }
+    if (t >= nextManaRegenTick) {
+      mana = Math.min(stats.maxMana, mana + stats.maxMana * manaRegenTickPct);
+      nextManaRegenTick += manaRegenIntervalSeconds;
+    }
     if (t <= hpHotUntil) hp = Math.min(stats.maxHp, hp + hpHotPerSecond * ROUND_SECONDS);
     if (t <= manaHotUntil) mana = Math.min(stats.maxMana, mana + manaHotPerSecond * ROUND_SECONDS);
 

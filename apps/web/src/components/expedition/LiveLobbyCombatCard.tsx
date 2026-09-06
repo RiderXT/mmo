@@ -22,7 +22,7 @@ import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 import { ItemTooltip } from "../inventory/ItemTooltip";
 import { ConfirmModal } from "../common/ConfirmModal";
 
-const COMBAT_ROLE_LABELS = { dps: "DPS", lure: "Lure" } as const;
+const COMBAT_ROLE_LABELS = { dps: "DPS", lure: "Lure", support: "Support" } as const;
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));

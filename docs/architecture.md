@@ -4772,3 +4772,75 @@ weryfikacji.
 
 To domyka pełny plan systemu wspólnego lobby (Części A-E) — gracze mogą teraz faktycznie tworzyć i
 dołączać do wspólnych walk z poziomu Mapy świata.
+
+## Staty regeneracji HP/many + rola bojowa "support" (buff grupowy)
+
+User poprosił o dwie rzeczy naraz: (1) nowe staty "regeneracja" i "szybkość regeneracji", osobne
+dla HP i many (4 staty łącznie — potwierdzone przez usera wprost, zamiast jednego wspólnego statu
+dla obu pul), gdzie "regeneracja" zwiększa % puli odnawiane na tyknięcie, a "szybkość" skraca
+odstęp między tyknięciami (przykład usera: "10hp/5s → 10hp/4,3s" — to konkretnie odpowiada +16%
+szybkości, `5/1.16≈4.31`, sprawdzone ręcznie); (2) trzecia rola bojowa (obok `dps`/`lure` z
+poprzedniej sesji) z umiejętnością buffującą te staty NIE TYLKO rzucającemu, ale całej grupie w
+lobby — potwierdzone wprost, że obie rzeczy wchodzą w tym samym kroku.
+
+**Odkrycie z rekonesansu**: dziś regeneruje się WYŁĄCZNIE mana, i to w sposób ciągły, na sztywno
+zakodowany (`MANA_REGEN_PER_SECOND_PCT = 0.001`, bez żadnego statu/ustawienia) — HP w walce nie
+regeneruje się samo z siebie w ogóle (tylko mikstury/umiejętności leczą). Żeby "szybkość" mogła być
+OBSERWOWALNIE różna od "ilości" (wymóg usera), model musiał przejść z ciągłego (`+=rate*ROUND_SECONDS`
+co rundę) na DYSKRETNY — tyknięcie co N sekund o X% puli — bo w modelu ciągłym "50% więcej ilości"
+i "50% więcej częstotliwości" matematycznie kolapsują do identycznej krzywej. Dokładnie ten sam
+"zaplanowany znacznik czasu" wzorzec co istniejące potiony typu `interval` w `combat.ts`.
+
+- **4 nowe `StatKey`** (`hpRegenPct`/`hpRegenSpeedPct`/`manaRegenPct`/`manaRegenSpeedPct`,
+  `packages/shared/src/schemas/enums.ts`) — ekwipunek/umiejętności pasywne only, bez bazowej
+  formuły z core-statów (ten sam wzorzec co `movementSpeed`). `DerivedStats`/
+  `computeDerivedStats`/`computeDerivedStatsBreakdown` (`combat.ts`) dostały odpowiadające pola —
+  zero zmian w istniejących wywołaniach (nowe pola, nie zmieniona sygnatura).
+- **Nowe admin-konfigurowalne `RegenSettings`** (`packages/shared/src/schemas/regen.ts`,
+  `Settings` klucz `"regen.settings"`, ten sam `get/setXSettings` wzorzec co `LobbySettings`) —
+  bazowe tempo (% na tyknięcie + odstęp w sekundach), osobno dla HP i many. Domyślne wartości
+  dobrane tak, żeby ISTNIEJĄCE tempo regeneracji many (0.1%/s ciągle) zostało DOKŁADNIE zachowane
+  gdy żadna postać nie ma bonusowych statów (`baseManaRegenPct=0.005` co 5s = to samo 0.1%/s) —
+  wprowadzenie mechanizmu samo w sobie nie zmienia balansu nikomu, kto nie ma tych statów. HP
+  dostaje nowy, umiarkowany domyślny baseline (2%/5s), bo wcześniej nie regenerowało wcale.
+  `simulateExpedition`/`simulateLobbyExpedition` dostały nowy parametr `regenSettings`,
+  `buildAndSimulate`/`startLobbyExpedition` dociągają go przez `getRegenSettings()`.
+- **`CombatRoleSchema`** dostał trzecią wartość `"support"` — bojowo IDENTYCZNA z `"dps"` (nadal
+  normalnie walczy, zadaje i przyjmuje obrażenia; `lobbyCombat.ts`'s `aliveDpsMembers` przemianowane
+  na `aliveFightingMembers`, filtr `!== "lure"` zamiast `=== "dps"`) — to co robi z niej "support"
+  to WYŁĄCZNIE posiadanie pasywnej umiejętności z nowym polem `appliesToGroup`.
+- **`ClassSkill.appliesToGroup`** (Boolean, tylko dla `kind: "passive"`, walidowane refine w
+  `characterClass.ts`) — gdy `true`, bonus tej umiejętności (który i tak działa normalnie na
+  własnego rzucającego) jest DODATKOWO projektowany na KAŻDEGO INNEGO członka lobby podczas walki
+  grupowej. Bez efektu solo (nie ma na kogo projektować).
+- **Mechanizm projekcji** (`gatherCombatBuild` w `expeditions/service.ts` + `startLobbyExpedition`
+  w `lobbies/service.ts`): `gatherCombatBuild` eksportuje teraz DODATKOWO `groupPassiveSkills` —
+  podzbiór własnych pasywnych bonusów postaci, gdzie `appliesToGroup=true` (obok niezmienionego
+  `passiveSkills`, które już i tak je zawiera — projekcja NIE zastępuje działania na siebie, tylko
+  je uzupełnia). `startLobbyExpedition` buduje surowe dane KAŻDEGO członka w pierwszym przebiegu,
+  potem w drugim przebiegu dla każdego członka dokleja `groupPassiveSkills` WSZYSTKICH POZOSTAŁYCH
+  członków (nie własne — te już są we własnym `passiveSkills`) przed policzeniem `computeDerivedStats`
+  — dopiero wtedy powstają finalne `LobbyMemberBuild.stats` użyte w symulacji.
+- Admin UI: `ClassesAdminPage.tsx` — nowa opcja "Support" w select "Rola bojowa", nowy checkbox
+  "działa na całą grupę (lobby)" pod "docelowy staty" (tylko dla `kind: "passive"`); nowe staty
+  automatycznie pojawiły się we WSZYSTKICH istniejących selectach `StatKeySchema.options`
+  (`PassiveSkillsAdminPage.tsx` też, bez żadnej zmiany kodu tam) — zero dodatkowej pracy. Nowy
+  blok "Regeneracja HP/many — bazowe tempo" w `SettingsAdminPage.tsx` (zakładka "Ogólne"), ten sam
+  fetch/save/2s-"Zapisano" wzorzec co istniejący blok Zbieractwa.
+- Frontend: `SkillsPanel.tsx` miał WŁASNĄ, osobną kopię etykiet statów (dopełniacz, "+3 do X") —
+  dopisane tam też, nie tylko w `statFormat.ts`. `LiveLobbyCombatCard.tsx`/`LobbyEntryPanel.tsx`
+  miały każdy własną kopię `COMBAT_ROLE_LABELS` — dopisane "Support" w obu.
+
+Zweryfikowane trzema niezależnymi sposobami: (1) skrypt wywołujący PRAWDZIWE `gatherCombatBuild`/
+`computeDerivedStats` (nie reimplementację) na dwóch prawdziwych postaciach (Mag tymczasowo jako
+`support` z testową umiejętnością `appliesToGroup` celującą w `hpRegenPct`, skalującą z
+inteligencją) — potwierdzone: DPS sam ma `hpRegenPct=0`, DPS ZE wsparciem w tej samej kompozycji ma
+dokładnie oczekiwaną wartość (`scalingFactor 0.02 × INT 50 = 1`), a support sam też ma tę samą
+wartość (działa i na siebie); (2) pełny cykl przez prawdziwe HTTP API (stwórz lobby → dołącz →
+gotowość → start) zakończony bez błędów, 192 zdarzenia, obie postacie (w tym `support`) poprawnie
+występujące jako `actorCharacterId` w zdarzeniach `round` (support faktycznie walczy jak dps); (3)
+przeglądarka — panel "Regeneracja HP/many" pokazuje poprawne domyślne wartości, edytor klasy Mag
+pokazuje "Support" w liście ról i realnie zapisaną testową umiejętność z checkboxem "działa na
+całą grupę" oraz 4 nowe opcje w "docelowy staty". `tsc --noEmit` czysto na `shared`/`api`/`web`.
+Cała testowa konfiguracja (2 konta, 2 postacie, tymczasowa umiejętność, `Mag.combatRole` przywrócony
+na `dps`) usunięta po weryfikacji.

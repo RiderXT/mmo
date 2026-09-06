@@ -1,4 +1,4 @@
-import type { GatheringSettings, LobbySettings } from "@mmo/shared";
+import type { GatheringSettings, LobbySettings, RegenSettings } from "@mmo/shared";
 import { apiFetch } from "./apiClient";
 
 export const getExpeditionDurationSetting = () =>
@@ -22,6 +22,14 @@ export const getLobbySettingsAdmin = () => apiFetch<LobbySettings>("/api/admin/s
 
 export const setLobbySettingsAdmin = (input: LobbySettings) =>
   apiFetch<LobbySettings>("/api/admin/settings/lobby-settings", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+
+export const getRegenSettingsAdmin = () => apiFetch<RegenSettings>("/api/admin/settings/regen-settings");
+
+export const setRegenSettingsAdmin = (input: RegenSettings) =>
+  apiFetch<RegenSettings>("/api/admin/settings/regen-settings", {
     method: "PUT",
     body: JSON.stringify(input),
   });

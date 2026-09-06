@@ -7,6 +7,8 @@ import {
   type ReferralSettings,
   LobbySettingsSchema,
   type LobbySettings,
+  RegenSettingsSchema,
+  type RegenSettings,
 } from "@mmo/shared";
 
 export const EXPEDITION_DURATION_KEY = "expedition.defaultDurationMinutes";
@@ -204,6 +206,40 @@ export async function setLobbySettings(
     actorUserId,
     requestId,
     payload: { key: LOBBY_SETTINGS_KEY, ...validated },
+  });
+
+  return validated;
+}
+
+export const REGEN_SETTINGS_KEY = "regen.settings";
+const REGEN_SETTINGS_DEFAULT: RegenSettings = RegenSettingsSchema.parse({});
+
+export async function getRegenSettings(): Promise<RegenSettings> {
+  const row = await prisma.settings.findUnique({ where: { key: REGEN_SETTINGS_KEY } });
+  if (!row) return REGEN_SETTINGS_DEFAULT;
+  const parsed = RegenSettingsSchema.safeParse(JSON.parse(row.value));
+  return parsed.success ? parsed.data : REGEN_SETTINGS_DEFAULT;
+}
+
+export async function setRegenSettings(
+  input: RegenSettings,
+  actorUserId: string,
+  requestId?: string,
+): Promise<RegenSettings> {
+  const validated = RegenSettingsSchema.parse(input);
+
+  await prisma.settings.upsert({
+    where: { key: REGEN_SETTINGS_KEY },
+    create: { key: REGEN_SETTINGS_KEY, value: JSON.stringify(validated) },
+    update: { value: JSON.stringify(validated) },
+  });
+
+  await logAction({
+    module: "admin:settings",
+    action: "update",
+    actorUserId,
+    requestId,
+    payload: { key: REGEN_SETTINGS_KEY, ...validated },
   });
 
   return validated;

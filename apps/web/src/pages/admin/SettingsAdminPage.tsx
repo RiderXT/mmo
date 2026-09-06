@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { GatheringSettings } from "@mmo/shared";
+import type { GatheringSettings, RegenSettings } from "@mmo/shared";
 import { Field, inputClass } from "../../components/admin/Field";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -8,6 +8,8 @@ import {
   setExpeditionDurationSetting,
   getGatheringSettingsAdmin,
   setGatheringSettingsAdmin,
+  getRegenSettingsAdmin,
+  setRegenSettingsAdmin,
 } from "../../lib/adminSettingsApi";
 
 const DEFAULT_GATHERING_SETTINGS: GatheringSettings = {
@@ -16,6 +18,13 @@ const DEFAULT_GATHERING_SETTINGS: GatheringSettings = {
   miningSearch: { minSeconds: 5, maxSeconds: 15 },
   maxCyclesPerResolve: 100,
   successesPerToolUpgrade: 100,
+};
+
+const DEFAULT_REGEN_SETTINGS: RegenSettings = {
+  baseHpRegenPct: 0.02,
+  baseHpRegenIntervalSeconds: 5,
+  baseManaRegenPct: 0.005,
+  baseManaRegenIntervalSeconds: 5,
 };
 
 export function SettingsAdminPage() {
@@ -61,6 +70,26 @@ export function SettingsAdminPage() {
       setTimeout(() => setGatheringSaved(false), 2000);
     },
     onError: (err) => setGatheringError(err instanceof ApiError ? err.message : "Nie udało się zapisać"),
+  });
+
+  const regenQuery = useQuery({ queryKey: ["regen-settings"], queryFn: getRegenSettingsAdmin });
+  const [regen, setRegen] = useState<RegenSettings>(DEFAULT_REGEN_SETTINGS);
+  const [regenSaved, setRegenSaved] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (regenQuery.data) setRegen(regenQuery.data);
+  }, [regenQuery.data]);
+
+  const saveRegenMutation = useMutation({
+    mutationFn: setRegenSettingsAdmin,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["regen-settings"] });
+      setRegenSaved(true);
+      setRegenError(null);
+      setTimeout(() => setRegenSaved(false), 2000);
+    },
+    onError: (err) => setRegenError(err instanceof ApiError ? err.message : "Nie udało się zapisać"),
   });
 
   return (
@@ -211,6 +240,70 @@ export function SettingsAdminPage() {
         <button
           onClick={() => saveGatheringMutation.mutate(gathering)}
           disabled={saveGatheringMutation.isPending}
+          className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
+        >
+          Zapisz
+        </button>
+      </div>
+
+      <div className="mt-4 max-w-sm space-y-3 panel p-4">
+        <h2 className="font-medium text-parchment">Regeneracja HP/many — bazowe tempo</h2>
+        <p className="text-xs text-parchment-faint">
+          Co ile sekund i o ile % maksimum postać regeneruje HP/manę w walce, zanim staty
+          "regeneracja"/"szybkość regeneracji" (ekwipunek, umiejętności pasywne) to zmodyfikują —
+          regeneracja zwiększa % na tyknięcie, szybkość skraca odstęp między tyknięciami.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Regeneracja HP na tyknięcie (0-1, np. 0.02 = 2%)">
+            <input
+              type="number"
+              step="0.001"
+              min={0}
+              max={1}
+              className={inputClass}
+              value={regen.baseHpRegenPct}
+              onChange={(e) => setRegen({ ...regen, baseHpRegenPct: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Odstęp regeneracji HP (s)">
+            <input
+              type="number"
+              min={1}
+              className={inputClass}
+              value={regen.baseHpRegenIntervalSeconds}
+              onChange={(e) => setRegen({ ...regen, baseHpRegenIntervalSeconds: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Regeneracja many na tyknięcie (0-1, np. 0.005 = 0.5%)">
+            <input
+              type="number"
+              step="0.001"
+              min={0}
+              max={1}
+              className={inputClass}
+              value={regen.baseManaRegenPct}
+              onChange={(e) => setRegen({ ...regen, baseManaRegenPct: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Odstęp regeneracji many (s)">
+            <input
+              type="number"
+              min={1}
+              className={inputClass}
+              value={regen.baseManaRegenIntervalSeconds}
+              onChange={(e) => setRegen({ ...regen, baseManaRegenIntervalSeconds: Number(e.target.value) })}
+            />
+          </Field>
+        </div>
+        {regenError && (
+          <p role="alert" className="text-sm text-red-400">
+            {regenError}
+          </p>
+        )}
+        {regenSaved && <p className="text-sm text-rarity-uncommon">Zapisano.</p>}
+        <button
+          onClick={() => saveRegenMutation.mutate(regen)}
+          disabled={saveRegenMutation.isPending}
           className=" bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-bright disabled:opacity-50"
         >
           Zapisz

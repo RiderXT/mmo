@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../lib/authGuard.js";
-import { GatheringSettingsSchema, ReferralSettingsSchema, LobbySettingsSchema } from "@mmo/shared";
+import { GatheringSettingsSchema, ReferralSettingsSchema, LobbySettingsSchema, RegenSettingsSchema } from "@mmo/shared";
 import {
   getExpeditionDurationMinutes,
   setExpeditionDurationMinutes,
@@ -13,6 +13,8 @@ import {
   setBotsMaxConcurrent,
   getLobbySettings,
   setLobbySettings,
+  getRegenSettings,
+  setRegenSettings,
   SettingsError,
 } from "./service.js";
 
@@ -35,6 +37,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/lobby-settings", { preHandler: requireAuth }, async (_request, reply) => {
     return reply.send(await getLobbySettings());
   });
+  // No public regen-settings route — unlike lobby/gathering settings, players never need the
+  // admin-configured BASE rate directly; their own effective regen already surfaces through
+  // combat-stats/breakdown (hpRegenPct/manaRegenPct etc.), a different endpoint.
 }
 
 export async function adminSettingsRoutes(app: FastifyInstance): Promise<void> {
@@ -87,6 +92,16 @@ export async function adminSettingsRoutes(app: FastifyInstance): Promise<void> {
   app.put("/lobby-settings", { preHandler: requireRole("admin") }, async (request, reply) => {
     const input = LobbySettingsSchema.parse(request.body);
     const saved = await setLobbySettings(input, request.user!.sub, request.id);
+    return reply.send(saved);
+  });
+
+  app.get("/regen-settings", { preHandler: requireRole("admin") }, async (_request, reply) => {
+    return reply.send(await getRegenSettings());
+  });
+
+  app.put("/regen-settings", { preHandler: requireRole("admin") }, async (request, reply) => {
+    const input = RegenSettingsSchema.parse(request.body);
+    const saved = await setRegenSettings(input, request.user!.sub, request.id);
     return reply.send(saved);
   });
 }

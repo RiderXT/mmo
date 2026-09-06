@@ -46,6 +46,11 @@ export const ClassSkillInputSchema = z
     bookRequirements: z.array(ClassSkillBookRequirementInputSchema).default([]),
     // passive only
     targetStat: StatKeySchema.optional(),
+    // Passive only — see enums.ts's CombatRoleSchema "support" comment. When true, this skill's
+    // bonus (already applied to its own caster like any passive) is ALSO projected onto every
+    // OTHER member of the caster's Lobby during a group fight — see lobbies/service.ts
+    // startLobbyExpedition. No effect in solo play (there's no group to project onto).
+    appliesToGroup: z.boolean().default(false),
     // active only
     effectType: SkillEffectTypeSchema.optional(),
     cooldownSeconds: z.number().int().min(1).max(3600).optional(),
@@ -64,6 +69,10 @@ export const ClassSkillInputSchema = z
   .refine((s) => s.kind !== "active" || (!!s.effectType && !!s.cooldownSeconds), {
     message: "Umiejętność aktywna musi mieć typ efektu i cooldown",
     path: ["effectType"],
+  })
+  .refine((s) => s.kind === "passive" || !s.appliesToGroup, {
+    message: "Działanie na całą grupę dostępne tylko dla umiejętności pasywnych",
+    path: ["appliesToGroup"],
   })
   .refine((s) => s.kind === "active" || s.nodes.every((n) => n.effect === "magnitude"), {
     message: "Węzły typu 'koszt many'/'odnowienie' dostępne tylko dla umiejętności aktywnych",

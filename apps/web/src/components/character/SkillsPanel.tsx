@@ -30,10 +30,24 @@ const STAT_LABELS: Record<StatKey, string> = {
   evasion: "uniku",
   damageReduction: "redukcji obrażeń",
   movementSpeed: "szybkości poruszania",
+  hpRegenPct: "regeneracji zdrowia",
+  hpRegenSpeedPct: "szybkości regeneracji zdrowia",
+  manaRegenPct: "regeneracji many",
+  manaRegenSpeedPct: "szybkości regeneracji many",
 };
 // These StatKeys are stored/added as 0..1 fractions (see computeDerivedStats in combat.ts) —
 // displayed as a percentage rather than a raw decimal.
-const FRACTIONAL_STATS = new Set<StatKey>(["critChance", "critDamage", "evasion", "damageReduction", "movementSpeed"]);
+const FRACTIONAL_STATS = new Set<StatKey>([
+  "critChance",
+  "critDamage",
+  "evasion",
+  "damageReduction",
+  "movementSpeed",
+  "hpRegenPct",
+  "hpRegenSpeedPct",
+  "manaRegenPct",
+  "manaRegenSpeedPct",
+]);
 
 // Noun phrase for each active-skill effectType, used the same way as STAT_LABELS above —
 // mirrors SKILL_EFFECT_DETAILS in CombatLog.tsx, which labels the same effects once they fire in

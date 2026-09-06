@@ -65,6 +65,15 @@ export const StatKeySchema = z.enum([
   // Out-of-combat only: shortens travel time to/from a zone. Equipment/passive-skill only, no
   // core-stat baseline (unlike attackSpeed) — see computeDerivedStats in combat.ts.
   "movementSpeed",
+  // Regen stats — equipment/passive-skill only, no core-stat baseline (same as movementSpeed).
+  // HP/mana passively regenerate in fixed-percent ticks every N seconds (admin-configured base
+  // rate/interval, see RegenSettingsSchema) — the "Pct" stat boosts the % regenerated PER TICK,
+  // the "SpeedPct" stat shortens the interval BETWEEN ticks (more frequent ticks, not bigger
+  // ones) — see computeDerivedStats/simulateExpedition in combat.ts for exactly how these combine.
+  "hpRegenPct",
+  "hpRegenSpeedPct",
+  "manaRegenPct",
+  "manaRegenSpeedPct",
 ]);
 export type StatKey = z.infer<typeof StatKeySchema>;
 
@@ -80,8 +89,12 @@ export type SkillKind = z.infer<typeof SkillKindSchema>;
 
 // A class's role inside a Lobby group fight (see modules/lobbies, lobbyCombat.ts). "lure" members
 // deal/take no direct combat damage; they pull extra concurrent monster slots that target the
-// lobby's "dps" members instead. Meaningless for solo expeditions. Admin-assignable to any class.
-export const CombatRoleSchema = z.enum(["dps", "lure"]);
+// lobby's "dps" members instead. "support" is combat-behaviorally identical to "dps" (still fights
+// normally) — the role itself does nothing special in lobbyCombat.ts; what makes it a support is
+// having a passive ClassSkill with appliesToGroup=true (see characterClass.ts), which projects
+// that skill's bonus onto every OTHER lobby member too, not just the caster. Meaningless for solo
+// expeditions. Admin-assignable to any class.
+export const CombatRoleSchema = z.enum(["dps", "lure", "support"]);
 export type CombatRole = z.infer<typeof CombatRoleSchema>;
 
 // Buff-style effects (attack_speed/defense/crit/block_chance/reflect) grant the caster a

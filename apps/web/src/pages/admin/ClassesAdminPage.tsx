@@ -32,6 +32,7 @@ const COMBAT_ROLES = CombatRoleSchema.options;
 const COMBAT_ROLE_LABELS: Record<(typeof COMBAT_ROLES)[number], string> = {
   dps: "DPS (zadaje obrażenia)",
   lure: "Lure (luruje potwory)",
+  support: "Support (walczy jak DPS, może wspierać grupę)",
 };
 const SKILL_KINDS = SkillKindSchema.options;
 const EFFECT_TYPES = SkillEffectTypeSchema.options;
@@ -79,6 +80,7 @@ function emptySkill(): SkillFormValue {
     bookGateFromLevel: undefined,
     bookRequirements: [],
     targetStat: "attack" as const,
+    appliesToGroup: false,
     effectType: undefined,
     cooldownSeconds: undefined,
     baseManaCost: undefined,
@@ -149,6 +151,7 @@ function fromDto(cls: ClassDto): FormValue {
         bookGateFromLevel: s.bookGateFromLevel ?? undefined,
         bookRequirements: s.bookRequirements.map((r) => ({ _key: newFormKey(), level: r.level, booksRequired: r.booksRequired })),
         targetStat: s.targetStat ?? undefined,
+        appliesToGroup: s.appliesToGroup,
         effectType: s.effectType ?? undefined,
         cooldownSeconds: s.cooldownSeconds ?? undefined,
         baseManaCost: s.baseManaCost ?? undefined,
@@ -590,7 +593,18 @@ export function ClassesAdminPage() {
                           ))}
                         </select>
                       </label>
-                    ) : (
+                    ) : null}
+                    {skill.kind === "passive" && (
+                      <label className="flex items-center gap-2 text-xs text-parchment-dim">
+                        <input
+                          type="checkbox"
+                          checked={skill.appliesToGroup}
+                          onChange={(e) => updateSkill(idx, { appliesToGroup: e.target.checked })}
+                        />
+                        działa na całą grupę (lobby)
+                      </label>
+                    )}
+                    {skill.kind !== "passive" && (
                       <label className="flex items-center gap-2 text-xs text-parchment-dim">
                         efekt
                         <select

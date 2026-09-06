@@ -4,7 +4,7 @@ import type { Character } from "@mmo/shared";
 import { ApiError } from "../../lib/apiClient";
 import { listOpenLobbiesInZone, createLobby, joinLobby } from "../../lib/lobbiesApi";
 
-const COMBAT_ROLE_LABELS = { dps: "DPS", lure: "Lure" } as const;
+const COMBAT_ROLE_LABELS = { dps: "DPS", lure: "Lure", support: "Support" } as const;
 
 /** Alternative to solo "Ruszaj" (MonsterAttackPanel) shown alongside it when a character stands
  * in an eligible combat zone — lists other open (still-forming) lobbies in this same zone to join,
