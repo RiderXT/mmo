@@ -28,6 +28,7 @@ export const CharacterSchema = z.object({
   unspentSkillPoints: z.number().int(),
   currentZoneId: z.string().nullable(),
   activeExpeditionId: z.string().nullable(),
+  activeLobbyId: z.string().nullable(),
   travelDestinationZoneId: z.string().nullable(),
   travelArrivesAt: z.string().nullable(),
   // Personal temporary-item buffs — see lib/personalBuffs.ts. Null/expired "*Until" = no active

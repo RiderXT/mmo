@@ -4719,3 +4719,56 @@ weryfikacji.
 
 Część D (admin UI ustawień lobby) i Część E (UI gracza — punkt wejścia w `WorldMapTab.tsx`,
 poczekalnia, podgląd walki grupowej) zostają na kolejny krok.
+
+## System wspólnego lobby — Część D (admin UI) i Część E (UI gracza)
+
+**Część D**: nowa zakładka "Lobby" w `AdminSettingsPage.tsx` (jedna linia w tablicy `TABS`, wzorem
+istniejących zakładek — żadnych zmian w routingu/sidebarze, `/admin/settings` obsługuje wszystkie
+zakładki generycznie przez `?tab=`). Nowy `LobbyAdminPage.tsx` mirror `ReferralAdminPage.tsx`:
+`maxMembers`/`monsterConcurrency`/`lureExtraMonsterSlotsPerLureMember` jako proste pola liczbowe,
+`bonusTiers` jako edytowalna lista wierszy (ten sam `_key`-owy wzorzec add/remove co
+`PassiveSkillBookRequirement` w `PassiveSkillsAdminPage.tsx`). `getLobbySettingsAdmin`/
+`setLobbySettingsAdmin` dopisane do `adminSettingsApi.ts` obok analogicznych funkcji dla
+`GatheringSettings`.
+
+**Część E**: nowy `apps/web/src/lib/lobbiesApi.ts` (mirror `expeditionsApi.ts`). Trzy nowe
+komponenty w `components/expedition/`:
+- **`LobbyEntryPanel.tsx`** — pod istniejącym solo `MonsterAttackPanel` w `WorldMapTab.tsx`, gdy
+  kraina jest bojowa i postać tam stoi: lista otwartych lobby w tej krainie (odświeżana co 5s) z
+  przyciskiem "Dołącz", plus "Stwórz lobby".
+- **`LiveLobbyCombatCard.tsx`** — przejmuje CAŁĄ zakładkę, gdy `character.activeLobbyId` jest
+  ustawione (dokładnie ten sam wzorzec co istniejące przejęcie przez `activeExpeditionId` →
+  `LiveCombatCard`, tuż obok niego). Dwie fazy: **formowanie** (lista członków z gotowością, dla
+  lidera: przycisk wyrzucenia + `MonsterAttackPanel` reużyty do wyboru potworów i startu — bez
+  `BattleTacticsModal`, bo `startLobbyExpedition` nie przyjmuje taktyk w tej wersji) i **w
+  trakcie/zakończone** (odliczanie do `endsAt`, log walki, przycisk odbioru nagrody gdy gotowe).
+- **`LobbyCombatLog.tsx`** — CELOWO nowy, nie rozszerzenie `CombatLog.tsx`: `LobbyCombatEvent` ma
+  inny kształt (`encounter_result.rewards[]` zamiast pojedynczych `expGained`/`goldGained`,
+  `actorCharacterId`/`monsterSlotIndex` na większości wariantów) i podział na dwie kolumny
+  gracz/wróg z `CombatLog.tsx` przestaje mieć sens przy kilku postaciach i kilku potworach naraz —
+  jeden chronologiczny log z nazwą aktora przy każdej linii, reużywający `CombatIcon`. Świadomie
+  uproszczone względem solo: brak per-postaciowych pasków HP/many i licznika cooldownu umiejętności
+  (`MonsterEncounterPanel`/`PlayerEncounterPanel`/`ActiveSkillCooldownBar` zostają nierozszerzone) —
+  log tekstowy w zupełności wystarcza do śledzenia walki i odebrania nagrody, dopracowanie wizualne
+  to osobny krok, nie blokuje działania funkcji.
+
+`CharacterSchema` (`packages/shared/src/schemas/character.ts`) dostał brakujące pole
+`activeLobbyId` — bez tego front nie miał jak w ogóle wiedzieć, że przejąć zakładkę.
+
+Zweryfikowane w przeglądarce end-to-end na dwóch prawdziwych kontach (sekwencyjne logowanie w tej
+samej karcie, jak przy wcześniejszych testach poczty w tej sesji — Wojownik + Mag, różne klasy):
+stworzenie lobby przez A, dołączenie przez B (widoczne w liście otwartych lobby "LobbyUiA (DPS) —
+1/3"), oznaczenie gotowości przez oboje, wybór wszystkich potworów i start przez lidera — od razu
+"Bonus za skład grupy: +15%" (zgodnie z progiem dla 2 różnych klas) i odliczanie; log walki
+odsłaniał się progresywnie w czasie rzeczywistym z poprawnym przypisaniem aktora do każdej rundy i
+udziałem obu postaci w różnych slotach potworów; po przesunięciu `endsAt` w bazie (żeby nie czekać
+kilku minut w czasie rzeczywistym) obie postacie odebrały nagrodę NIEZALEŻNIE przez własne konto —
+oboje awansowali (A: poz. 9, B: poz. 10), złoto zaktualizowane, `Lobby`/`LobbyExpedition` poprawnie
+`"completed"`. Panel admina `Lobby` zweryfikowany osobno (inne konto testowe z rolą `admin`):
+domyślne progi wczytują się poprawnie, zmiana `monsterConcurrency` i zapis trafia realnie do bazy
+(potwierdzone bezpośrednim odczytem `Settings` po zapisie). `tsc --noEmit` czysto na
+`shared`/`api`/`web`. Wszystkie konta testowe, postacie, tymczasowe wpisy `Settings` usunięte po
+weryfikacji.
+
+To domyka pełny plan systemu wspólnego lobby (Części A-E) — gracze mogą teraz faktycznie tworzyć i
+dołączać do wspólnych walk z poziomu Mapy świata.

@@ -12,6 +12,7 @@ import { NpcsAdminPage } from "./NpcsAdminPage";
 import { GatheringAdminPage } from "./GatheringAdminPage";
 import { PassiveSkillsAdminPage } from "./PassiveSkillsAdminPage";
 import { ReferralAdminPage } from "./ReferralAdminPage";
+import { LobbyAdminPage } from "./LobbyAdminPage";
 import { ServerAdminPage } from "./ServerAdminPage";
 import { SupportAdminPage } from "./SupportAdminPage";
 import { ChangelogAdminPage } from "./ChangelogAdminPage";
@@ -27,6 +28,7 @@ const TABS = [
   { key: "gathering", label: "Zbieractwo", Component: GatheringAdminPage },
   { key: "passive-skills", label: "Umiejętności pasywne", Component: PassiveSkillsAdminPage },
   { key: "referral", label: "Polecenia", Component: ReferralAdminPage },
+  { key: "lobby", label: "Lobby", Component: LobbyAdminPage },
   { key: "testing", label: "Testowanie", Component: GrantAdminPage },
   { key: "balance", label: "Statystyki balansu", Component: BalanceStatsPage },
   { key: "server", label: "Serwer", Component: ServerAdminPage },

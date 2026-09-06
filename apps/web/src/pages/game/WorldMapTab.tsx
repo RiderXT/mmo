@@ -12,6 +12,8 @@ import { ZoneInfoCard } from "../../components/expedition/ZoneInfoCard";
 import { MonsterAttackPanel } from "../../components/expedition/MonsterAttackPanel";
 import { BattleTacticsModal } from "../../components/expedition/BattleTacticsModal";
 import { LiveCombatCard } from "../../components/expedition/LiveCombatCard";
+import { LiveLobbyCombatCard } from "../../components/expedition/LiveLobbyCombatCard";
+import { LobbyEntryPanel } from "../../components/expedition/LobbyEntryPanel";
 import { CampfireGlyph, WildZoneGlyph } from "../../components/expedition/ZoneGlyphs";
 import { PanelFrame } from "../../components/common/PanelFrame";
 
@@ -194,6 +196,17 @@ export function WorldMapTab({
       <LiveCombatCard
         character={character}
         onClaimed={() => queryClient.invalidateQueries({ queryKey: ["character", character.id] })}
+      />
+    );
+  }
+
+  // Same full-tab takeover as activeExpeditionId above, for the parallel group-combat pipeline
+  // (see modules/lobbies) — covers both the waiting room and the fight itself.
+  if (character.activeLobbyId) {
+    return (
+      <LiveLobbyCombatCard
+        character={character}
+        onUpdate={() => queryClient.invalidateQueries({ queryKey: ["character", character.id] })}
       />
     );
   }
@@ -389,15 +402,18 @@ export function WorldMapTab({
             ) : selectedZone.monsters.length === 0 ? (
               <p className="text-sm text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
             ) : (
-              <MonsterAttackPanel
-                zone={selectedZone}
-                durationMinutes={durationQuery.data?.minutes ?? null}
-                confirmLabel="Ruszaj"
-                onConfirm={(ids) => {
-                  setPendingMonsterIds(ids);
-                  setError(null);
-                }}
-              />
+              <>
+                <MonsterAttackPanel
+                  zone={selectedZone}
+                  durationMinutes={durationQuery.data?.minutes ?? null}
+                  confirmLabel="Ruszaj"
+                  onConfirm={(ids) => {
+                    setPendingMonsterIds(ids);
+                    setError(null);
+                  }}
+                />
+                <LobbyEntryPanel character={character} zoneId={selectedZone.id} />
+              </>
             )}
             {error && (
               <p role="alert" className="mt-2 text-sm text-red-400">
