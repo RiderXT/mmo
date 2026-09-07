@@ -21,6 +21,7 @@ import { LobbyCombatLog } from "./LobbyCombatLog";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 import { ItemTooltip } from "../inventory/ItemTooltip";
 import { ConfirmModal } from "../common/ConfirmModal";
+import { PanelFrame } from "../common/PanelFrame";
 
 const COMBAT_ROLE_LABELS = { dps: "DPS", lure: "Lure", support: "Support" } as const;
 
@@ -180,87 +181,115 @@ export function LiveLobbyCombatCard({ character, onUpdate }: { character: Charac
     return <p className="py-10 text-center text-sm text-parchment-dim">Wczytywanie lobby…</p>;
   }
 
-  // Forming: waiting room — member list, ready toggle, leader picks monsters and starts.
+  // Forming: waiting room — "Członkowie" popup from the mockup (bordered member slots, LIDER
+  // badge, corner-braceted PanelFrame), shown as a floating window rather than inline chrome.
+  // Ready toggle, leader's monster picker and leave button all unchanged underneath.
   if (lobby.status === "forming") {
+    const slots = Array.from({ length: lobby.maxMembers }, (_, i) => lobby.members[i] ?? null);
     return (
-      <div>
-        <p className="text-[11px] uppercase tracking-[0.2em] text-gold">Lobby — formowanie</p>
-        <p className="font-display text-lg font-semibold text-parchment">{zone?.name ?? lobby.zoneId}</p>
-
-        <div className="mt-3 flex flex-col gap-1.5">
-          {lobby.members.map((m) => (
-            <div key={m.characterId} className="flex items-center justify-between gap-2 rounded-md border border-line px-3 py-2 text-sm">
-              <span className="text-parchment">
-                {m.name} {m.isLeader && <span className="text-gold-bright">(lider)</span>}
-                <span className="ml-1.5 text-xs text-parchment-faint">
-                  poz. {m.level} · {m.className ?? "brak klasy"} · {COMBAT_ROLE_LABELS[m.combatRole]}
-                </span>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60" />
+        <div className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <PanelFrame
+            title="Członkowie"
+            headerRight={
+              <span className="text-[11px] text-parchment-faint">
+                {lobby.members.length}/{lobby.maxMembers} miejsc
               </span>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-medium ${m.ready ? "text-emerald-400" : "text-parchment-faint"}`}>
-                  {m.ready ? "Gotowy" : "Nie gotowy"}
-                </span>
-                {isLeader && m.characterId !== characterId && (
-                  <button
-                    onClick={() => kickMutation.mutate(m.characterId)}
-                    disabled={kickMutation.isPending}
-                    className="text-xs text-red-400 hover:underline disabled:opacity-50"
-                  >
-                    Wyrzuć
-                  </button>
+            }
+          >
+            <p className="text-[11px] uppercase tracking-[0.2em] text-gold">Grupa ekspedycyjna</p>
+            <p className="font-display text-lg font-semibold text-parchment">{zone?.name ?? lobby.zoneId}</p>
+
+            <div className="mt-3 flex flex-col gap-1.5">
+              {slots.map((m, i) =>
+                m ? (
+                  <div key={m.characterId} className="flex items-center gap-3 border border-line-soft bg-panel-raised px-3 py-2.5">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-line-soft bg-panel font-display text-sm text-parchment-dim">
+                      {m.name.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-parchment">{m.name}</p>
+                      <p className="text-[11px] text-parchment-faint">
+                        Lv. {m.level} {m.className ?? "brak klasy"} · {COMBAT_ROLE_LABELS[m.combatRole]}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 text-[11px] font-medium ${m.ready ? "text-emerald-400" : "text-parchment-faint"}`}>
+                      {m.ready ? "Gotowy" : "Nie gotowy"}
+                    </span>
+                    {m.isLeader ? (
+                      <span className="shrink-0 border border-line-soft px-2 py-1 text-[10px] tracking-wide text-gold">LIDER</span>
+                    ) : (
+                      isLeader && (
+                        <button
+                          onClick={() => kickMutation.mutate(m.characterId)}
+                          disabled={kickMutation.isPending}
+                          className="shrink-0 border border-line-soft px-2.5 py-1 text-[11px] text-parchment-faint hover:border-red-400/60 hover:text-red-400 disabled:opacity-50"
+                        >
+                          Usuń
+                        </button>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <div key={`empty-${i}`} className="flex items-center gap-3 border border-dashed border-line-soft px-3 py-2.5">
+                    <div className="h-11 w-11 shrink-0 border border-dashed border-line-soft" />
+                    <p className="flex-1 text-xs text-parchment-faint">Wolne miejsce</p>
+                  </div>
+                ),
+              )}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => readyMutation.mutate(!me?.ready)}
+                disabled={readyMutation.isPending}
+                className={`rounded-md border px-4 py-1.5 text-sm font-medium disabled:opacity-50 ${
+                  me?.ready ? "border-line-soft text-parchment-dim hover:bg-panel-raised" : "border-gold text-gold-bright hover:bg-gold/10"
+                }`}
+              >
+                {me?.ready ? "Cofnij gotowość" : "Jestem gotowy"}
+              </button>
+              <button
+                onClick={() => setConfirmingLeave(true)}
+                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
+              >
+                Opuść lobby
+              </button>
+            </div>
+
+            {isLeader && (
+              <div className="mt-4 border-t border-line-soft/40 pt-3">
+                {lobby.members.length < 2 ? (
+                  <p className="text-xs text-parchment-faint">Potrzeba co najmniej 2 postaci, żeby rozpocząć walkę.</p>
+                ) : !lobby.members.every((m) => m.ready) ? (
+                  <p className="text-xs text-parchment-faint">Czekaj, aż wszyscy członkowie będą gotowi.</p>
+                ) : zone && zone.monsters.length > 0 ? (
+                  <MonsterAttackPanel
+                    zone={zone}
+                    durationMinutes={null}
+                    confirmLabel="Start ekspedycji"
+                    onConfirm={(ids) => startMutation.mutate(ids)}
+                  />
+                ) : (
+                  <p className="text-xs text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => readyMutation.mutate(!me?.ready)}
-            disabled={readyMutation.isPending}
-            className={`rounded-md border px-4 py-1.5 text-sm font-medium disabled:opacity-50 ${
-              me?.ready ? "border-line-soft text-parchment-dim hover:bg-panel-raised" : "border-gold text-gold-bright hover:bg-gold/10"
-            }`}
-          >
-            {me?.ready ? "Cofnij gotowość" : "Jestem gotowy"}
-          </button>
-          <button
-            onClick={() => setConfirmingLeave(true)}
-            className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
-          >
-            Wyjdź z lobby
-          </button>
-        </div>
-
-        {isLeader && (
-          <div className="mt-4 border-t border-line-soft/40 pt-3">
-            {lobby.members.length < 2 ? (
-              <p className="text-xs text-parchment-faint">Potrzeba co najmniej 2 postaci, żeby rozpocząć walkę.</p>
-            ) : !lobby.members.every((m) => m.ready) ? (
-              <p className="text-xs text-parchment-faint">Czekaj, aż wszyscy członkowie będą gotowi.</p>
-            ) : zone && zone.monsters.length > 0 ? (
-              <MonsterAttackPanel
-                zone={zone}
-                durationMinutes={null}
-                confirmLabel="Rozpocznij walkę lobby"
-                onConfirm={(ids) => startMutation.mutate(ids)}
-              />
-            ) : (
-              <p className="text-xs text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
             )}
-          </div>
-        )}
 
-        {error && (
-          <p role="alert" className="mt-2 text-sm text-red-400">
-            {error}
-          </p>
-        )}
+            {error && (
+              <p role="alert" className="mt-2 text-sm text-red-400">
+                {error}
+              </p>
+            )}
+          </PanelFrame>
+        </div>
 
         {confirmingLeave && (
           <ConfirmModal
-            title="Wyjść z lobby?"
+            title="Opuścić lobby?"
             message="Opuścisz grupę. Jeśli jesteś liderem, przywództwo przejmie kolejna dołączona postać."
+            confirmLabel="Opuść lobby"
             danger
             onCancel={() => setConfirmingLeave(false)}
             onConfirm={() => {
