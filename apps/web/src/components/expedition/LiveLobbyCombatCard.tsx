@@ -11,12 +11,10 @@ import {
   leaveLobby,
   kickLobbyMember,
   setLobbyReady,
-  startLobbyExpedition,
   getLobbyExpedition,
   claimLobbyExpeditionReward,
   type LobbyClaimResult,
 } from "../../lib/lobbiesApi";
-import { MonsterAttackPanel } from "./MonsterAttackPanel";
 import { LobbyCombatLog } from "./LobbyCombatLog";
 import { ItemTypeIcon } from "../inventory/ItemTypeIcon";
 import { ItemTooltip } from "../inventory/ItemTooltip";
@@ -56,19 +54,26 @@ function LootIcon({ item, quantity }: { item: ItemDto | undefined; quantity: num
 
 /** Takes over the whole World Map tab while character.activeLobbyId is set — mirrors how
  * LiveCombatCard takes over for a solo activeExpeditionId. Two phases: "forming" (waiting room —
- * member list, ready toggle, leader picks monsters and starts) and "in_progress" (the group fight,
- * already fully simulated server-side — this just reveals LobbyCombatLog progressively and lets
- * this character claim their own reward once the real-time countdown catches up). */
+ * member list and ready toggle; the fight auto-starts server-side once everyone is ready, see
+ * maybeAutoStartLobby) and "in_progress" (the group fight, already fully simulated server-side —
+ * this just reveals LobbyCombatLog progressively and lets this character claim their own reward
+ * once the real-time countdown catches up). */
 export function LiveLobbyCombatCard({ character, onUpdate }: { character: Character; onUpdate: () => void }) {
   const characterId = character.id;
   const queryClient = useQueryClient();
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
-  const [pendingMonsterIds, setPendingMonsterIds] = useState<string[] | null>(null);
   const [claimResult, setClaimResult] = useState<LobbyClaimResult | null>(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
 
-  const lobbyQuery = useQuery({ queryKey: ["active-lobby", characterId], queryFn: () => getActiveLobby(characterId) });
+  const lobbyQuery = useQuery({
+    queryKey: ["active-lobby", characterId],
+    queryFn: () => getActiveLobby(characterId),
+    // Polls only while forming — the fight now auto-starts server-side the instant every member
+    // is ready, so this is what notices another member (not this client) triggering that and
+    // flips this view over to the fight-reveal branch below without the player having to act.
+    refetchInterval: (query) => (query.state.data?.status === "forming" ? 3000 : false),
+  });
   const zonesQuery = useQuery({ queryKey: ["player-zones"], queryFn: listPlayerZones });
   const itemsQuery = useQuery({ queryKey: ["player-items"], queryFn: listPlayerItems });
 
@@ -126,15 +131,6 @@ export function LiveLobbyCombatCard({ character, onUpdate }: { character: Charac
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się opuścić lobby"),
   });
-  const startMutation = useMutation({
-    mutationFn: (selectedMonsterIds: string[]) => startLobbyExpedition(lobby!.id, characterId, selectedMonsterIds),
-    onSuccess: () => {
-      setError(null);
-      setPendingMonsterIds(null);
-      invalidateAll();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Nie udało się rozpocząć walki"),
-  });
   const claimMutation = useMutation({
     mutationFn: () => claimLobbyExpeditionReward(lobby!.activeLobbyExpeditionId!, characterId),
     onSuccess: (data) => {
@@ -181,109 +177,98 @@ export function LiveLobbyCombatCard({ character, onUpdate }: { character: Charac
     return <p className="py-10 text-center text-sm text-parchment-dim">Wczytywanie lobby…</p>;
   }
 
-  // Forming: waiting room — "Członkowie" popup from the mockup (bordered member slots, LIDER
-  // badge, corner-braceted PanelFrame), shown as a floating window rather than inline chrome.
-  // Ready toggle, leader's monster picker and leave button all unchanged underneath.
+  // Forming: waiting room — "Członkowie" panel from the mockup (bordered member slots, LIDER
+  // badge, corner-braceted PanelFrame), rendered inline rather than as a full-viewport popup so
+  // it never covers AppShell's nav bar — a fixed inset-0 overlay tried that earlier and blocked
+  // every other click on the page. The fight now starts itself the instant everyone is ready
+  // (see maybeAutoStartLobby on the backend), so there's no leader-only monster picker or Start
+  // button here anymore — nothing to babysit while waiting for the rest of the group.
   if (lobby.status === "forming") {
     const slots = Array.from({ length: lobby.maxMembers }, (_, i) => lobby.members[i] ?? null);
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/60" />
-        <div className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-          <PanelFrame
-            title="Członkowie"
-            headerRight={
-              <span className="text-[11px] text-parchment-faint">
-                {lobby.members.length}/{lobby.maxMembers} miejsc
-              </span>
-            }
-          >
-            <p className="text-[11px] uppercase tracking-[0.2em] text-gold">Grupa ekspedycyjna</p>
-            <p className="font-display text-lg font-semibold text-parchment">{zone?.name ?? lobby.zoneId}</p>
+      <div>
+        <PanelFrame
+          title="Członkowie"
+          headerRight={
+            <span className="text-[11px] text-parchment-faint">
+              {lobby.members.length}/{lobby.maxMembers} miejsc
+            </span>
+          }
+        >
+          <p className="text-[11px] uppercase tracking-[0.2em] text-gold">Grupa ekspedycyjna</p>
+          <p className="font-display text-lg font-semibold text-parchment">{zone?.name ?? lobby.zoneId}</p>
 
-            <div className="mt-3 flex flex-col gap-1.5">
-              {slots.map((m, i) =>
-                m ? (
-                  <div key={m.characterId} className="flex items-center gap-3 border border-line-soft bg-panel-raised px-3 py-2.5">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-line-soft bg-panel font-display text-sm text-parchment-dim">
-                      {m.name.slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-parchment">{m.name}</p>
-                      <p className="text-[11px] text-parchment-faint">
-                        Lv. {m.level} {m.className ?? "brak klasy"} · {COMBAT_ROLE_LABELS[m.combatRole]}
-                      </p>
-                    </div>
-                    <span className={`shrink-0 text-[11px] font-medium ${m.ready ? "text-emerald-400" : "text-parchment-faint"}`}>
-                      {m.ready ? "Gotowy" : "Nie gotowy"}
-                    </span>
-                    {m.isLeader ? (
-                      <span className="shrink-0 border border-line-soft px-2 py-1 text-[10px] tracking-wide text-gold">LIDER</span>
-                    ) : (
-                      isLeader && (
-                        <button
-                          onClick={() => kickMutation.mutate(m.characterId)}
-                          disabled={kickMutation.isPending}
-                          className="shrink-0 border border-line-soft px-2.5 py-1 text-[11px] text-parchment-faint hover:border-red-400/60 hover:text-red-400 disabled:opacity-50"
-                        >
-                          Usuń
-                        </button>
-                      )
-                    )}
+          <div className="mt-3 flex flex-col gap-1.5">
+            {slots.map((m, i) =>
+              m ? (
+                <div key={m.characterId} className="flex items-center gap-3 border border-line-soft bg-panel-raised px-3 py-2.5">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-line-soft bg-panel font-display text-sm text-parchment-dim">
+                    {m.name.slice(0, 1).toUpperCase()}
                   </div>
-                ) : (
-                  <div key={`empty-${i}`} className="flex items-center gap-3 border border-dashed border-line-soft px-3 py-2.5">
-                    <div className="h-11 w-11 shrink-0 border border-dashed border-line-soft" />
-                    <p className="flex-1 text-xs text-parchment-faint">Wolne miejsce</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-parchment">{m.name}</p>
+                    <p className="text-[11px] text-parchment-faint">
+                      Lv. {m.level} {m.className ?? "brak klasy"} · {COMBAT_ROLE_LABELS[m.combatRole]}
+                    </p>
                   </div>
-                ),
-              )}
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => readyMutation.mutate(!me?.ready)}
-                disabled={readyMutation.isPending}
-                className={`rounded-md border px-4 py-1.5 text-sm font-medium disabled:opacity-50 ${
-                  me?.ready ? "border-line-soft text-parchment-dim hover:bg-panel-raised" : "border-gold text-gold-bright hover:bg-gold/10"
-                }`}
-              >
-                {me?.ready ? "Cofnij gotowość" : "Jestem gotowy"}
-              </button>
-              <button
-                onClick={() => setConfirmingLeave(true)}
-                className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
-              >
-                Opuść lobby
-              </button>
-            </div>
-
-            {isLeader && (
-              <div className="mt-4 border-t border-line-soft/40 pt-3">
-                {lobby.members.length < 2 ? (
-                  <p className="text-xs text-parchment-faint">Potrzeba co najmniej 2 postaci, żeby rozpocząć walkę.</p>
-                ) : !lobby.members.every((m) => m.ready) ? (
-                  <p className="text-xs text-parchment-faint">Czekaj, aż wszyscy członkowie będą gotowi.</p>
-                ) : zone && zone.monsters.length > 0 ? (
-                  <MonsterAttackPanel
-                    zone={zone}
-                    durationMinutes={null}
-                    confirmLabel="Start ekspedycji"
-                    onConfirm={(ids) => startMutation.mutate(ids)}
-                  />
-                ) : (
-                  <p className="text-xs text-parchment-faint">Ta kraina nie ma jeszcze potworów.</p>
-                )}
-              </div>
+                  <span className={`shrink-0 text-[11px] font-medium ${m.ready ? "text-emerald-400" : "text-parchment-faint"}`}>
+                    {m.ready ? "Gotowy" : "Nie gotowy"}
+                  </span>
+                  {m.isLeader ? (
+                    <span className="shrink-0 border border-line-soft px-2 py-1 text-[10px] tracking-wide text-gold">LIDER</span>
+                  ) : (
+                    isLeader && (
+                      <button
+                        onClick={() => kickMutation.mutate(m.characterId)}
+                        disabled={kickMutation.isPending}
+                        className="shrink-0 border border-line-soft px-2.5 py-1 text-[11px] text-parchment-faint hover:border-red-400/60 hover:text-red-400 disabled:opacity-50"
+                      >
+                        Usuń
+                      </button>
+                    )
+                  )}
+                </div>
+              ) : (
+                <div key={`empty-${i}`} className="flex items-center gap-3 border border-dashed border-line-soft px-3 py-2.5">
+                  <div className="h-11 w-11 shrink-0 border border-dashed border-line-soft" />
+                  <p className="flex-1 text-xs text-parchment-faint">Wolne miejsce</p>
+                </div>
+              ),
             )}
+          </div>
 
-            {error && (
-              <p role="alert" className="mt-2 text-sm text-red-400">
-                {error}
-              </p>
-            )}
-          </PanelFrame>
-        </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => readyMutation.mutate(!me?.ready)}
+              disabled={readyMutation.isPending}
+              className={`rounded-md border px-4 py-1.5 text-sm font-medium disabled:opacity-50 ${
+                me?.ready ? "border-line-soft text-parchment-dim hover:bg-panel-raised" : "border-gold text-gold-bright hover:bg-gold/10"
+              }`}
+            >
+              {me?.ready ? "Cofnij gotowość" : "Jestem gotowy"}
+            </button>
+            <button
+              onClick={() => setConfirmingLeave(true)}
+              className="rounded-md border border-line-soft px-4 py-1.5 text-sm text-parchment-dim hover:bg-panel-raised"
+            >
+              Opuść lobby
+            </button>
+          </div>
+
+          <p className="mt-3 text-xs text-parchment-faint">
+            {lobby.members.length < 2
+              ? "Potrzeba co najmniej 2 postaci — możesz spokojnie robić inne rzeczy, walka wystartuje automatycznie, gdy grupa będzie gotowa."
+              : !lobby.members.every((m) => m.ready)
+                ? "Czekaj, aż wszyscy członkowie będą gotowi — możesz spokojnie robić inne rzeczy w międzyczasie."
+                : "Wszyscy gotowi — walka rusza automatycznie."}
+          </p>
+
+          {error && (
+            <p role="alert" className="mt-2 text-sm text-red-400">
+              {error}
+            </p>
+          )}
+        </PanelFrame>
 
         {confirmingLeave && (
           <ConfirmModal

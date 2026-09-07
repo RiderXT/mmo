@@ -204,6 +204,39 @@ export async function kickMember(
   await logAction({ module: "lobbies", action: "kick", actorUserId: userId, actorCharacterId: characterId, requestId, payload: { lobbyId, targetCharacterId } });
 }
 
+/** Starts the fight the moment the lobby is full-ready, so nobody has to sit on the "Członkowie"
+ * popup babysitting a Start button — called from setReady right after a member readies up. Reuses
+ * startLobbyExpedition itself (attributed to the leader, same as a manual start) with an empty
+ * monster selection, which buildSimZone treats as "fight everything in the zone" — the sane
+ * default now that nobody picks monsters by hand. Failures (e.g. a zone with no monsters, or a
+ * member outleveling it) are logged and swallowed rather than thrown — the ready toggle that
+ * triggered this already succeeded and shouldn't roll back or surface someone else's problem to
+ * whichever member happened to ready up last; members simply stay "ready" and can retry once
+ * whatever blocked it (e.g. an admin seeding monsters) is fixed. */
+async function maybeAutoStartLobby(lobbyId: string, requestId?: string): Promise<void> {
+  const lobby = await getLobbyOrThrow(lobbyId);
+  if (lobby.status !== "forming") return;
+  if (lobby.members.length < 2) return;
+  if (!lobby.members.every((m) => m.ready)) return;
+
+  const leader = await prisma.character.findUnique({ where: { id: lobby.leaderCharacterId } });
+  if (!leader) return;
+
+  try {
+    await startLobbyExpedition(lobbyId, lobby.leaderCharacterId, [], leader.userId, requestId);
+  } catch (err) {
+    await logAction({
+      module: "lobbies",
+      level: "warn",
+      action: "auto_start_failed",
+      actorUserId: leader.userId,
+      actorCharacterId: lobby.leaderCharacterId,
+      requestId,
+      payload: { lobbyId, error: err instanceof Error ? err.message : String(err) },
+    });
+  }
+}
+
 export async function setReady(lobbyId: string, characterId: string, ready: boolean, userId: string, requestId?: string) {
   await assertCharacterOwnership(characterId, userId);
   const lobby = await getLobbyOrThrow(lobbyId);
@@ -213,6 +246,7 @@ export async function setReady(lobbyId: string, characterId: string, ready: bool
 
   await prisma.lobbyMember.update({ where: { characterId }, data: { ready } });
   await logAction({ module: "lobbies", action: "set_ready", actorUserId: userId, actorCharacterId: characterId, requestId, payload: { lobbyId, ready } });
+  if (ready) await maybeAutoStartLobby(lobbyId, requestId);
   return toLobbyDto(await getLobbyOrThrow(lobbyId));
 }
 

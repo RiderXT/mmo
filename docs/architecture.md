@@ -4844,3 +4844,42 @@ pokazuje "Support" w liście ról i realnie zapisaną testową umiejętność z 
 całą grupę" oraz 4 nowe opcje w "docelowy staty". `tsc --noEmit` czysto na `shared`/`api`/`web`.
 Cała testowa konfiguracja (2 konta, 2 postacie, tymczasowa umiejętność, `Mag.combatRole` przywrócony
 na `dps`) usunięta po weryfikacji.
+
+## Lobby jako popupy + auto-start walki (2026-09-07)
+
+Trzy iteracje na UI/UX systemu lobby (patrz sekcja "System wspólnego lobby" wyżej dla modelu
+danych/silnika walki — bez zmian tutaj):
+
+1. Przycisk "Wspólna walka" w `WorldMapTab` otwiera `LobbyBrowserModal` (popup) z listą otwartych
+   lobby w krainie — każdy wiersz pokazuje WSZYSTKICH członków z ich poziomem i klasą
+   (`Lider: X · Y/3 miejsc` osobno). Dołączenie/stworzenie zamyka ten popup.
+2. `LiveLobbyCombatCard`'s stan `forming` ("Członkowie") był PIERWSZE zaimplementowany jako
+   `fixed inset-0 z-50` z ciemnym tłem — okazało się to błędem: ten overlay ma wyższy z-index niż
+   sticky nav bar `AppShell` (`z-20`) i fizycznie zasłania/blokuje całą resztę strony, więc po
+   dołączeniu do lobby nie dało się kliknąć NIC innego (nawet nawigacji). Naprawione: panel
+   "Członkowie" renderuje się teraz W LINII (zwykły element potomny `WorldMapTab`, bez
+   `position: fixed`) — wciąż stylizowany jak w mockupie (`PanelFrame` ze złotymi rogami, plakietka
+   LIDER, boks-awatar, przekreślane puste sloty), ale nawigacja/reszta UI pozostaje w pełni
+   klikalna. Nawigacja do innej zakładki nadal w pełni unmountuje `WorldMapTab` (i to lobby-czekanie
+   razem z nim) — to już działało wcześniej, bo `GamePage` renderuje jedną zakładkę na raz; jedyny
+   realny problem był z samym overlayem.
+3. Ręczny wybór potworów + przycisk "Start ekspedycji" (dostępny tylko dla lidera) USUNIĘTY.
+   Zamiast tego: `setReady` (`apps/api/src/modules/lobbies/service.ts`) wywołuje po ustawieniu
+   `ready=true` nowy `maybeAutoStartLobby(lobbyId)` — jeśli lobby ma ≥2 członków i WSZYSCY są
+   gotowi, automatycznie odpala `startLobbyExpedition` (tę samą funkcję co dawny ręczny start,
+   przypisaną do lidera) z PUSTĄ listą `selectedMonsterIds` — `buildSimZone` już wcześniej
+   traktowało pustą listę jako "walcz ze wszystkimi potworami w krainie", więc to naturalny,
+   bezpieczny domyślny wybór bez dodatkowego kodu. Błąd auto-startu (np. kraina bez potworów) jest
+   logowany (`logAction` level `warn`, akcja `auto_start_failed`) i POCHŁANIANY, nie rzucany — sam
+   `setReady` się powiódł, więc nie ma powodu cofać stanu "gotowy" ani psuć odpowiedzi temu, kto
+   akurat kliknął ostatni. Frontend: `lobbyQuery` w `LiveLobbyCombatCard` dostał
+   `refetchInterval` aktywny TYLKO w stanie `forming` (3s) — łapie sytuację, gdy to INNY członek
+   (nie ten klient) wywoła auto-start, i przełącza widok na fazę walki bez akcji użytkownika.
+
+Zweryfikowane: (1) `tsc --noEmit` czysto na `web`/`api`; (2) przeglądarka — po dołączeniu do lobby
+nav bar (`Postać`, `Ekwipunek`, ...) pozostaje w `read_page`/klikalny, nawigacja do innej zakładki
+faktycznie działa mimo aktywnego lobby; (3) bezpośrednio przez HTTP API — dwie postacie
+(lider + członek) dołączają do lobby, ustawienie `ready=true` na członku NIE startuje walki
+(`status: "forming"`), ustawienie `ready=true` na liderze NATYCHMIAST zwraca
+`status: "in_progress"` i `getActiveLobby` pokazuje wypełnione `activeLobbyExpeditionId` — bez
+żadnego wywołania `/start`. Dane testowe usunięte po weryfikacji.
