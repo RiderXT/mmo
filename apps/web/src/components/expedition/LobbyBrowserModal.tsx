@@ -83,7 +83,9 @@ export function LobbyBrowserModal({
                 <div key={lobby.id} className="flex items-center gap-3 border border-line-soft bg-panel-raised px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-parchment">
-                      {lobby.members.map((m) => `${m.name} — ${m.className ?? "brak klasy"}`).join(" · ")}
+                      {lobby.members
+                        .map((m) => `${m.name} — Lv. ${m.level} ${m.className ?? "brak klasy"}`)
+                        .join(" · ")}
                     </p>
                     <p className="mt-0.5 text-[11px] text-parchment-faint">
                       Lider: {lobby.members.find((m) => m.isLeader)?.name ?? "?"} · {lobby.members.length}/
